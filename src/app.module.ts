@@ -11,6 +11,8 @@ import { PointsModule } from './points/points.module';
 import { TiersModule } from './tiers/tiers.module';
 import { TenantsModule } from './tenants/tenants.module';
 import { ReportsModule } from './reports/reports.module';
+import { CustomersModule } from './customers/customer.module';
+import { BusinessUnitsModule } from './business_unit/business_unit.module';
 
 @Module({
   imports: [
@@ -27,6 +29,8 @@ import { ReportsModule } from './reports/reports.module';
     }),
     UsersModule,
     CampaignsModule,
+    CustomersModule,
+    BusinessUnitsModule,
     RewardsModule,
     PointsModule,
     TiersModule,
