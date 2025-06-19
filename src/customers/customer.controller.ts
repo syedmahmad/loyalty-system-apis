@@ -7,16 +7,16 @@ import {
   Delete,
   Put,
 } from '@nestjs/common';
-import { TiersService } from './tiers.service';
-import { CreateTierDto } from '../dto/create-tier.dto';
-import { UpdateTierDto } from '../dto/update-tier.dto';
+import { CustomersService } from './customer.service';
+import { CreateCustomerDto } from './dto/create-customer.dto';
+import { UpdateCustomerDto } from './dto/update-customer.dto';
 
-@Controller('tiers')
-export class TiersController {
-  constructor(private readonly service: TiersService) {}
+@Controller('customers')
+export class CustomersController {
+  constructor(private readonly service: CustomersService) {}
 
   @Post()
-  async create(@Body() dto: CreateTierDto) {
+  async create(@Body() dto: CreateCustomerDto) {
     return await this.service.create(dto);
   }
 
@@ -31,7 +31,7 @@ export class TiersController {
   }
 
   @Put(':id')
-  async update(@Param('id') id: string, @Body() dto: UpdateTierDto) {
+  async update(@Param('id') id: string, @Body() dto: UpdateCustomerDto) {
     return await this.service.update(+id, dto);
   }
 

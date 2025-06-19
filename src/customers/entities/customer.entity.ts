@@ -9,8 +9,8 @@ import {
   JoinColumn,
 } from 'typeorm';
 
-@Entity()
-export class Reward {
+@Entity('customers')
+export class Customer {
   @PrimaryGeneratedColumn()
   id: number;
 
@@ -24,23 +24,20 @@ export class Reward {
   @Column()
   name: string;
 
+  @Column({ unique: true })
+  phone: string;
+
   @Column({ nullable: true })
-  description: string;
+  email: string;
 
-  @Column('int')
-  points_required: number;
+  @Column({ default: 0 })
+  points_balance: number;
 
-  @Column({ default: true })
-  isActive: boolean;
-
-  @Column()
-  created_by: number;
+  @Column({ nullable: true })
+  external_id: string; // optional field to store source CRM ID
 
   @CreateDateColumn()
   created_at: Date;
-
-  @Column()
-  updated_by: number;
 
   @UpdateDateColumn()
   updated_at: Date;

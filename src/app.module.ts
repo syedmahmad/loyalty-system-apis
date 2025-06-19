@@ -1,7 +1,7 @@
-import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { TenantMiddleware } from './common/middleware/tenant.middleware';
+// import { TenantMiddleware } from './common/middleware/tenant.middleware';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { UsersModule } from './users/users.module';
@@ -25,7 +25,14 @@ import { ReportsModule } from './reports/reports.module';
       autoLoadEntities: true,
       synchronize: true,
     }),
-    UsersModule, CampaignsModule, RewardsModule, PointsModule, TiersModule, TenantsModule, ReportsModule],
+    UsersModule,
+    CampaignsModule,
+    RewardsModule,
+    PointsModule,
+    TiersModule,
+    TenantsModule,
+    ReportsModule,
+  ],
   controllers: [AppController],
   providers: [AppService],
 })

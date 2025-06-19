@@ -1,15 +1,28 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Tenant } from 'src/tenants/entities/tenant.entity';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  ManyToOne,
+  JoinColumn,
+} from 'typeorm';
 
 @Entity('tiers')
 export class Tier {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column()
-  tenant_id: number;  // Multi-tenant support
+  @ManyToOne(() => Tenant, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'tenant_id' })
+  tenant: Tenant;
 
   @Column()
-  name: string;      // Tier name (e.g., Bronze, Silver, Gold)
+  tenant_id: number; // Multi-tenant support
+
+  @Column()
+  name: string; // Tier name (e.g., Bronze, Silver, Gold)
 
   @Column('int')
   min_points: number; // Minimum points required for this tier
@@ -18,7 +31,7 @@ export class Tier {
   max_points: number; // Maximum points for this tier
 
   @Column({ nullable: true })
-  benefits: string;  // Description of benefits (optional)
+  benefits: string; // Description of benefits (optional)
 
   @Column('int')
   created_by: number;

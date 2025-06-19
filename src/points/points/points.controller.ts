@@ -1,9 +1,19 @@
-import { Controller, Get, Post, Body, Param, Patch, Delete, Headers, BadRequestException } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  Patch,
+  Delete,
+  Headers,
+  BadRequestException,
+} from '@nestjs/common';
 import { PointsService } from './points.service';
 import { CreatePointDto } from '../dto/create-point.dto';
 import { UpdatePointDto } from '../dto/update-point.dto';
 import { Tenant } from 'src/common/decorators/tenant.decorator';
-import { Tenant  as TenantEntity } from 'src/tenants/entities/tenant.entity';
+import { Tenant as TenantEntity } from 'src/tenants/entities/tenant.entity';
 
 @Controller('points')
 export class PointsController {
@@ -50,9 +60,9 @@ export class PointsController {
   @Get('tenantpoints')
   async findPointByTenant(@Headers('x-tenant-id') tenantId: string) {
     const id = Number(tenantId);
-  if (isNaN(id)) {
-    throw new BadRequestException('Invalid tenant ID');
-  }
-  return this.pointsService.findAllByTenant(id);
+    if (isNaN(id)) {
+      throw new BadRequestException('Invalid tenant ID');
+    }
+    return this.pointsService.findAllByTenant(id);
   }
 }

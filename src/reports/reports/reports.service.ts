@@ -32,26 +32,28 @@ export class ReportsService {
     return { totalPoints: Number(totalPoints.total) || 0 };
   }
 
-  async getCampaignPerformance(tenantId: number) {
-    const campaigns = await this.campaignsRepository.find({ where: { tenantId } });
-    // Example: count of campaigns and dummy participation count (expand as per your schema)
-    return {
-      campaignCount: campaigns.length,
-      // You can add more complex stats here if you have participation data
-    };
-  }
+  // async getCampaignPerformance(tenantId: number) {
+  //   const campaigns = await this.campaignsRepository.find({
+  //     where: { tenantId },
+  //   });
+  //   // Example: count of campaigns and dummy participation count (expand as per your schema)
+  //   return {
+  //     campaignCount: campaigns.length,
+  //     // You can add more complex stats here if you have participation data
+  //   };
+  // }
 
-  async getTierDistribution(tenantId: number) {
-    const tiers = await this.tiersRepository.find({ where: { tenantId } });
+  // async getTierDistribution(tenantId: number) {
+  //   const tiers = await this.tiersRepository.find({ where: { tenantId } });
 
-    // Example: return tiers with user counts (assuming you have user-tier mapping)
-    // For demo, just return tiers as-is
-    return tiers;
-  }
+  //   // Example: return tiers with user counts (assuming you have user-tier mapping)
+  //   // For demo, just return tiers as-is
+  //   return tiers;
+  // }
 
-  async getRewardRedemptions(tenantId: number) {
-    const rewards = await this.rewardsRepository.find({ where: { tenantId } });
-    // Extend with redemption stats if you track redemptions
-    return rewards;
-  }
+  // async getRewardRedemptions(tenantId: number) {
+  //   const rewards = await this.rewardsRepository.find({ where: { tenantId } });
+  //   // Extend with redemption stats if you track redemptions
+  //   return rewards;
+  // }
 }

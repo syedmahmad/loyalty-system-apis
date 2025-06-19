@@ -29,7 +29,10 @@ export class CampaignsService {
     return campaign;
   }
 
-  async update(id: number, updateCampaignDto: UpdateCampaignDto): Promise<Campaign> {
+  async update(
+    id: number,
+    updateCampaignDto: UpdateCampaignDto,
+  ): Promise<Campaign> {
     const campaign = await this.findOne(id);
     Object.assign(campaign, updateCampaignDto);
     return await this.campaignsRepository.save(campaign);

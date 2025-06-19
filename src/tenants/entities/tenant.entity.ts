@@ -1,4 +1,10 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+} from 'typeorm';
 
 @Entity()
 export class Tenant {
@@ -9,7 +15,7 @@ export class Tenant {
   name: string;
 
   @Column({ unique: true })
-  domain: string;  // e.g. tenant1.yourapp.com
+  domain: string; // e.g. tenant1.yourapp.com
 
   @Column()
   created_by: number;
@@ -19,7 +25,7 @@ export class Tenant {
 
   @Column()
   updated_by: number;
-  
+
   @UpdateDateColumn()
   updated_at: Date;
 }
