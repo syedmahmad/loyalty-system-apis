@@ -1,4 +1,6 @@
+import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
 import { Tenant } from 'src/tenants/entities/tenant.entity';
+
 import {
   Entity,
   PrimaryGeneratedColumn,
@@ -9,7 +11,7 @@ import {
   JoinColumn,
 } from 'typeorm';
 
-@Entity()
+@Entity('campaigns')
 export class Campaign {
   @PrimaryGeneratedColumn()
   id: number;
@@ -21,14 +23,30 @@ export class Campaign {
   @Column()
   tenant_id: number;
 
+  @ManyToOne(() => BusinessUnit, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'business_unit_id' })
+  business_unit: BusinessUnit;
+
+  @Column()
+  business_unit_id: number;
+
   @Column()
   name: string;
 
-  @Column({ nullable: true })
+  @Column({ nullable: true, type: 'text' })
   description: string;
 
   @Column({ type: 'datetime' })
   start_date: Date;
+
+  @Column({ nullable: true })
+  type: 'seasonal' | 'referral' | 'targeted';
+
+  @Column({ type: 'float', nullable: true })
+  budget: number;
+
+  @Column({ nullable: true })
+  color: string;
 
   @Column({ type: 'datetime' })
   end_date: Date;

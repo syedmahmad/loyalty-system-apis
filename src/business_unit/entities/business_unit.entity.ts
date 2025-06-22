@@ -1,4 +1,6 @@
+import { Campaign } from 'src/campaigns/entities/campaign.entity';
 import { Tenant } from 'src/tenants/entities/tenant.entity';
+import { Tier } from 'src/tiers/entities/tier.entity';
 import {
   Entity,
   PrimaryGeneratedColumn,
@@ -7,6 +9,7 @@ import {
   UpdateDateColumn,
   ManyToOne,
   JoinColumn,
+  OneToMany,
 } from 'typeorm';
 
 @Entity('business_units')
@@ -35,4 +38,10 @@ export class BusinessUnit {
 
   @UpdateDateColumn()
   updated_at: Date;
+
+  @OneToMany(() => Tier, (tier) => tier.business_unit)
+  tiers: Tier[];
+
+  @OneToMany(() => Campaign, (campaign) => campaign.business_unit)
+  campaigns: Campaign[];
 }

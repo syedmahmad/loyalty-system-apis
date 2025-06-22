@@ -18,11 +18,18 @@ export class TiersService {
   }
 
   async findAll() {
-    return await this.tiersRepository.find();
+    return await this.tiersRepository.find({
+      relations: { business_unit: true },
+      order: { created_at: 'DESC' },
+    });
   }
 
   async findOne(id: number) {
-    const tier = await this.tiersRepository.findOneBy({ id });
+    const tier = await this.tiersRepository.findOne({
+      where: { id },
+      relations: { business_unit: true },
+      order: { created_at: 'DESC' },
+    });
     if (!tier) throw new NotFoundException('Tier not found');
     return tier;
   }

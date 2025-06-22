@@ -1,3 +1,4 @@
+import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
 import { Tenant } from 'src/tenants/entities/tenant.entity';
 import {
   Entity,
@@ -19,19 +20,35 @@ export class Tier {
   tenant: Tenant;
 
   @Column()
-  tenant_id: number; // Multi-tenant support
+  tenant_id: number;
+
+  @ManyToOne(() => BusinessUnit, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'business_unit_id' })
+  business_unit: BusinessUnit;
 
   @Column()
-  name: string; // Tier name (e.g., Bronze, Silver, Gold)
+  business_unit_id: number;
 
-  @Column('int')
-  min_points: number; // Minimum points required for this tier
+  @Column()
+  name: string; // e.g., Bronze, Silver, Gold
 
-  @Column('int')
-  max_points: number; // Maximum points for this tier
+  @Column('int', { default: 1 })
+  level: number; // Order or rank
+
+  @Column({ default: true })
+  is_active: boolean;
 
   @Column({ nullable: true })
-  benefits: string; // Description of benefits (optional)
+  color: string; // Optional UI field
+
+  @Column('int')
+  min_points: number;
+
+  @Column('int')
+  max_points: number;
+
+  @Column({ nullable: true, type: 'text' })
+  benefits: string;
 
   @Column('int')
   created_by: number;
