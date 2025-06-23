@@ -14,7 +14,7 @@ export class Rule {
   id: number;
 
   @Column({ type: 'varchar' })
-  type: 'earn' | 'redeem' | 'condition' | 'downgrade';
+  type: string;
 
   @Column({ type: 'varchar' })
   condition_type: string; // e.g. total_spending, visit_count

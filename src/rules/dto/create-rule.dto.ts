@@ -1,8 +1,8 @@
-import { IsEnum, IsNumber, IsOptional, IsString } from 'class-validator';
+import { IsNumber, IsOptional, IsString } from 'class-validator';
 
 export class CreateRuleDto {
-  @IsEnum(['earn', 'redeem', 'condition', 'downgrade'])
-  type: 'earn' | 'redeem' | 'condition' | 'downgrade';
+  @IsString()
+  type: string;
 
   @IsString()
   condition_type: string;
