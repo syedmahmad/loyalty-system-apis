@@ -25,11 +25,5 @@ export class CreateRuleDto {
   @IsString()
   description?: string;
 
-  targets: {
-    target_type: 'tier' | 'campaign';
-    target_id: number;
-    id?: number; // Optional for updates
-  }[];
-
   created_by: number;
 }

@@ -26,11 +26,29 @@ export class BusinessUnitsService {
   }
 
   async update(id: number, dto: UpdateBusinessUnitDto) {
+    const unit = await this.repo.findOne({ where: { id } });
+    if (!unit) {
+      throw new Error(`Business Unit with id ${id} not found`);
+    }
+
+    if (unit.name === 'Default All Business Unit') {
+      throw new Error('Cannot update the default business unit');
+    }
+
     await this.repo.update(id, dto);
     return this.findOne(id);
   }
 
   async remove(id: number) {
+    const unit = await this.repo.findOne({ where: { id } });
+    if (!unit) {
+      throw new Error(`Business Unit with id ${id} not found`);
+    }
+
+    if (unit.name === 'Default All Business Unit') {
+      throw new Error('Cannot delete the default business unit');
+    }
+
     return await this.repo.delete(id);
   }
 }

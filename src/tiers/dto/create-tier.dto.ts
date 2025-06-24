@@ -18,4 +18,10 @@ export class CreateTierDto {
   @IsString()
   @IsOptional()
   benefits?: string;
+
+  created_by?: number;
+
+  rule_targets?: {
+    rule_id: number;
+  }[];
 }

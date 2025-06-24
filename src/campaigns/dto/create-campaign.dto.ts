@@ -1,4 +1,11 @@
-import { IsNotEmpty, IsString, IsDateString, IsBoolean, IsOptional, IsNumber } from 'class-validator';
+import {
+  IsNotEmpty,
+  IsString,
+  IsDateString,
+  IsBoolean,
+  IsOptional,
+  IsNumber,
+} from 'class-validator';
 
 export class CreateCampaignDto {
   @IsNumber()
@@ -21,4 +28,10 @@ export class CreateCampaignDto {
   @IsBoolean()
   @IsOptional()
   is_active?: boolean;
+
+  created_by?: number;
+
+  rule_targets?: {
+    rule_id: number;
+  }[];
 }
