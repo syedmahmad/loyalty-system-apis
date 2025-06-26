@@ -15,6 +15,10 @@ export class CreateTierDto {
   @Min(0)
   max_points: number;
 
+  @IsInt()
+  @Min(0)
+  points_conversion_rate: number;
+
   @IsString()
   @IsOptional()
   benefits?: string;

@@ -17,12 +17,14 @@ export class RulesService {
       dto.created_by && dto.created_by !== 0 ? dto.created_by : 2;
 
     const rule = this.ruleRepository.create({
-      type: dto.type,
-      condition_type: dto.condition_type,
-      operator: dto.operator,
-      value: dto.value,
-      reward_value: dto.reward_value,
-      unit_type: dto.unit_type,
+      name: dto.name,
+      rule_type: dto.rule_type,
+      min_transaction_amount: dto.min_transaction_amount,
+      max_points_limit: dto.max_points_limit,
+      earn_conversion_factor: dto.earn_conversion_factor,
+      burn_factor: dto.burn_factor,
+      max_burn_percent: dto.max_burn_percent,
+      min_points_to_burn: dto.min_points_to_burn,
       description: dto.description,
       created_by: createdBy,
       updated_by: createdBy,
@@ -44,14 +46,18 @@ export class RulesService {
 
     if (!rule) throw new Error('Rule not found');
 
-    rule.type = dto.type;
-    rule.condition_type = dto.condition_type;
-    rule.operator = dto.operator;
-    rule.value = dto.value;
-    rule.reward_value = dto.reward_value;
-    rule.unit_type = dto.unit_type;
-    rule.description = dto.description;
-    rule.updated_by = dto.updated_by;
+    rule.name = dto.name ?? rule.name;
+    rule.rule_type = dto.rule_type ?? rule.rule_type;
+    rule.min_transaction_amount =
+      dto.min_transaction_amount ?? rule.min_transaction_amount;
+    rule.max_points_limit = dto.max_points_limit ?? rule.max_points_limit;
+    rule.earn_conversion_factor =
+      dto.earn_conversion_factor ?? rule.earn_conversion_factor;
+    rule.burn_factor = dto.burn_factor ?? rule.burn_factor;
+    rule.max_burn_percent = dto.max_burn_percent ?? rule.max_burn_percent;
+    rule.min_points_to_burn = dto.min_points_to_burn ?? rule.min_points_to_burn;
+    rule.description = dto.description ?? rule.description;
+    rule.updated_by = dto.updated_by ?? rule.updated_by;
 
     await this.ruleRepository.save(rule);
 

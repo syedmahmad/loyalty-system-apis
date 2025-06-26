@@ -14,22 +14,28 @@ export class Rule {
   id: number;
 
   @Column({ type: 'varchar' })
-  type: string;
+  name: string;
 
   @Column({ type: 'varchar' })
-  condition_type: string; // e.g. total_spending, visit_count
-
-  @Column({ type: 'varchar' })
-  operator: string; // e.g. '=', '>=', '<='
-
-  @Column({ type: 'float' })
-  value: number;
+  rule_type: string; // 'earn' or 'burn'
 
   @Column({ type: 'float', nullable: true })
-  reward_value: number;
+  min_transaction_amount: number;
 
-  @Column({ type: 'varchar', nullable: true })
-  unit_type: string; // points, cashback, coupon
+  @Column({ type: 'int', nullable: true })
+  max_points_limit: number;
+
+  @Column({ type: 'float', nullable: true })
+  earn_conversion_factor: number; // for earn
+
+  @Column({ type: 'float', nullable: true })
+  burn_factor: number; // for burn
+
+  @Column({ type: 'float', nullable: true })
+  max_burn_percent: number; // for burn
+
+  @Column({ type: 'int', nullable: true })
+  min_points_to_burn: number; // for burn
 
   @Column({ type: 'text', nullable: true })
   description: string;
