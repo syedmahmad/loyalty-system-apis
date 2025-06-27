@@ -19,12 +19,12 @@ export class RulesService {
     const rule = this.ruleRepository.create({
       name: dto.name,
       rule_type: dto.rule_type,
-      min_transaction_amount: dto.min_transaction_amount,
-      max_points_limit: dto.max_points_limit,
-      earn_conversion_factor: dto.earn_conversion_factor,
-      burn_factor: dto.burn_factor,
-      max_burn_percent: dto.max_burn_percent,
-      min_points_to_burn: dto.min_points_to_burn,
+      min_amount_spent: dto.min_amount_spent,
+      reward_points: dto.reward_points,
+      event_triggerer: dto.event_triggerer,
+      max_redeemption_points_limit: dto.max_redeemption_points_limit,
+      points_conversion_factor: dto.points_conversion_factor,
+      max_burn_percent_on_invoice: dto.max_burn_percent_on_invoice,
       description: dto.description,
       created_by: createdBy,
       updated_by: createdBy,
@@ -43,19 +43,19 @@ export class RulesService {
 
   async update(id: number, dto: UpdateRuleDto) {
     const rule = await this.ruleRepository.findOne({ where: { id } });
-
     if (!rule) throw new Error('Rule not found');
 
     rule.name = dto.name ?? rule.name;
     rule.rule_type = dto.rule_type ?? rule.rule_type;
-    rule.min_transaction_amount =
-      dto.min_transaction_amount ?? rule.min_transaction_amount;
-    rule.max_points_limit = dto.max_points_limit ?? rule.max_points_limit;
-    rule.earn_conversion_factor =
-      dto.earn_conversion_factor ?? rule.earn_conversion_factor;
-    rule.burn_factor = dto.burn_factor ?? rule.burn_factor;
-    rule.max_burn_percent = dto.max_burn_percent ?? rule.max_burn_percent;
-    rule.min_points_to_burn = dto.min_points_to_burn ?? rule.min_points_to_burn;
+    rule.min_amount_spent = dto.min_amount_spent ?? rule.min_amount_spent;
+    rule.reward_points = dto.reward_points ?? rule.reward_points;
+    rule.event_triggerer = dto.event_triggerer ?? rule.event_triggerer;
+    rule.max_redeemption_points_limit =
+      dto.max_redeemption_points_limit ?? rule.max_redeemption_points_limit;
+    rule.points_conversion_factor =
+      dto.points_conversion_factor ?? rule.points_conversion_factor;
+    rule.max_burn_percent_on_invoice =
+      dto.max_burn_percent_on_invoice ?? rule.max_burn_percent_on_invoice;
     rule.description = dto.description ?? rule.description;
     rule.updated_by = dto.updated_by ?? rule.updated_by;
 

@@ -13,32 +13,35 @@ export class CreateRuleDto {
   name: string;
 
   @IsString()
-  @IsIn(['earn', 'burn'])
+  @IsIn(['event based earn', 'spend and earn', 'burn'])
   rule_type: string;
 
   @IsOptional()
   @IsNumber()
-  min_transaction_amount?: number;
+  min_amount_spent?: number;
 
-  @ValidateIf((o) => o.rule_type === 'earn' || o.rule_type === 'burn')
+  @ValidateIf(
+    (o) =>
+      o.rule_type === 'event based earn' || o.rule_type === 'spend and earn',
+  )
   @IsNumber()
-  max_points_limit: number;
+  reward_points?: number;
 
-  @ValidateIf((o) => o.rule_type === 'earn')
-  @IsNumber()
-  earn_conversion_factor?: number;
-
-  @ValidateIf((o) => o.rule_type === 'burn')
-  @IsNumber()
-  burn_factor?: number;
-
-  @ValidateIf((o) => o.rule_type === 'burn')
-  @IsNumber()
-  max_burn_percent?: number;
+  @ValidateIf((o) => o.rule_type === 'event based earn')
+  @IsString()
+  event_triggerer?: string; // e.g., 'signup', 'birthday'
 
   @ValidateIf((o) => o.rule_type === 'burn')
   @IsNumber()
-  min_points_to_burn?: number;
+  max_redeemption_points_limit?: number;
+
+  @ValidateIf((o) => o.rule_type === 'burn')
+  @IsNumber()
+  points_conversion_factor?: number;
+
+  @ValidateIf((o) => o.rule_type === 'burn')
+  @IsNumber()
+  max_burn_percent_on_invoice?: number;
 
   @IsOptional()
   @IsString()

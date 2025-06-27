@@ -17,25 +17,25 @@ export class Rule {
   name: string;
 
   @Column({ type: 'varchar' })
-  rule_type: string; // 'earn' or 'burn'
+  rule_type: string; // 'event based earn' or 'spend and earn' or 'burn'
 
   @Column({ type: 'float', nullable: true })
-  min_transaction_amount: number;
+  min_amount_spent: number;
+
+  @Column({ type: 'float', nullable: true })
+  reward_points: number;
+
+  @Column({ type: 'varchar', nullable: true })
+  event_triggerer: string;
 
   @Column({ type: 'int', nullable: true })
-  max_points_limit: number;
+  max_redeemption_points_limit: number;
 
   @Column({ type: 'float', nullable: true })
-  earn_conversion_factor: number; // for earn
+  points_conversion_factor: number; // for burn
 
   @Column({ type: 'float', nullable: true })
-  burn_factor: number; // for burn
-
-  @Column({ type: 'float', nullable: true })
-  max_burn_percent: number; // for burn
-
-  @Column({ type: 'int', nullable: true })
-  min_points_to_burn: number; // for burn
+  max_burn_percent_on_invoice: number; // for burn
 
   @Column({ type: 'text', nullable: true })
   description: string;
