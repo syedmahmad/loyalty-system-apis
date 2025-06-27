@@ -94,6 +94,19 @@ export class TiersService {
 
   async update(id: number, dto: UpdateTierDto) {
     const tier = await this.findOne(id);
+
+    if (dto.business_unit_id) {
+      const bu = await this.businessUnitRepository.findOne({
+        where: { id: dto.business_unit_id },
+      });
+
+      if (!bu) {
+        throw new NotFoundException('Business Unit not found');
+      }
+
+      tier.business_unit = bu;
+    }
+
     Object.assign(tier, dto);
     // return this.tiersRepository.save(tier);
     const updatedTier = await this.tiersRepository.save(tier);
@@ -101,10 +114,10 @@ export class TiersService {
     // const updatedBy = dto.updated_by || 2;
 
     // Remove existing rule_targets linked to this tier
-    await this.ruleTargetRepository.delete({
-      target_type: 'tier',
-      target_id: id,
-    });
+    // await this.ruleTargetRepository.delete({
+    //   target_type: 'tier',
+    //   target_id: id,
+    // });
 
     // Add new rule_targets
     // if (dto.rule_targets?.length) {

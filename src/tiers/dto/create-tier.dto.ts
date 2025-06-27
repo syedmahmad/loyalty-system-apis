@@ -15,7 +15,8 @@ export class CreateTierDto {
   @Min(0)
   max_points: number;
 
-  // @IsInt()
+  @IsInt()
+  business_unit_id: number;
   // @Min(0)
   // points_conversion_rate: number;
 
