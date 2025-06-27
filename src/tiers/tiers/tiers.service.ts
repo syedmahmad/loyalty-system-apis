@@ -5,6 +5,7 @@ import { Tier } from '../entities/tier.entity';
 import { CreateTierDto } from '../dto/create-tier.dto';
 import { UpdateTierDto } from '../dto/update-tier.dto';
 import { RuleTarget } from '../../rules/entities/rule-target.entity'; // adjust path as needed
+import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
 
 @Injectable()
 export class TiersService {
@@ -13,6 +14,8 @@ export class TiersService {
     private tiersRepository: Repository<Tier>,
     @InjectRepository(RuleTarget)
     private ruleTargetRepository: Repository<RuleTarget>,
+    @InjectRepository(BusinessUnit)
+    private businessUnitRepository: Repository<BusinessUnit>, // adjust path as needed
   ) {}
 
   async create(dto: CreateTierDto) {
