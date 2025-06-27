@@ -19,20 +19,20 @@ export class TiersService {
     const tier = this.tiersRepository.create(dto);
     const savedTier = await this.tiersRepository.save(tier);
     // 2. Create RuleTarget records for this tier
-    const createdBy = dto.created_by || 2;
+    // const createdBy = dto.created_by || 2;
 
-    if (dto.rule_targets?.length) {
-      const targets = dto.rule_targets.map((rt) =>
-        this.ruleTargetRepository.create({
-          rule_id: rt.rule_id,
-          target_type: 'tier',
-          target_id: savedTier.id,
-          created_by: createdBy,
-          updated_by: createdBy,
-        }),
-      );
-      await this.ruleTargetRepository.save(targets);
-    }
+    // if (dto.rule_targets?.length) {
+    //   const targets = dto.rule_targets.map((rt) =>
+    //     this.ruleTargetRepository.create({
+    //       rule_id: rt.rule_id,
+    //       target_type: 'tier',
+    //       target_id: savedTier.id,
+    //       created_by: createdBy,
+    //       updated_by: createdBy,
+    //     }),
+    //   );
+    //   await this.ruleTargetRepository.save(targets);
+    // }
 
     return savedTier;
   }
@@ -95,7 +95,7 @@ export class TiersService {
     // return this.tiersRepository.save(tier);
     const updatedTier = await this.tiersRepository.save(tier);
 
-    const updatedBy = dto.updated_by || 2;
+    // const updatedBy = dto.updated_by || 2;
 
     // Remove existing rule_targets linked to this tier
     await this.ruleTargetRepository.delete({
@@ -104,18 +104,18 @@ export class TiersService {
     });
 
     // Add new rule_targets
-    if (dto.rule_targets?.length) {
-      const newTargets = dto.rule_targets.map((rt) =>
-        this.ruleTargetRepository.create({
-          rule_id: rt.rule_id,
-          target_type: 'tier',
-          target_id: id,
-          created_by: updatedBy,
-          updated_by: updatedBy,
-        }),
-      );
-      await this.ruleTargetRepository.save(newTargets);
-    }
+    // if (dto.rule_targets?.length) {
+    //   const newTargets = dto.rule_targets.map((rt) =>
+    //     this.ruleTargetRepository.create({
+    //       rule_id: rt.rule_id,
+    //       target_type: 'tier',
+    //       target_id: id,
+    //       created_by: updatedBy,
+    //       updated_by: updatedBy,
+    //     }),
+    //   );
+    //   await this.ruleTargetRepository.save(newTargets);
+    // }
 
     return updatedTier;
   }
