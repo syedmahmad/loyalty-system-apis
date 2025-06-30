@@ -132,26 +132,7 @@ export class CampaignsService {
         throw new NotFoundException(`Campaign with ID ${id} not found`);
       }
 
-      await manager.delete(CampaignRule, { campaign: { id } });
-      await manager.delete(CampaignTier, { campaign: { id } });
-
-      const ruleIds = dto.rules.map((r) => r.rule_id);
-      const ruleEntities = await this.ruleRepository.findBy({
-        id: In(ruleIds),
-      });
-
-      if (ruleEntities.length !== dto.rules.length) {
-        throw new BadRequestException('Some rules not found');
-      }
-
-      const tierIds = dto.tiers.map((t) => t.tier_id);
-      const tierEntities = await this.tierRepository.findBy({
-        id: In(tierIds),
-      });
-      if (tierEntities.length !== dto.tiers.length) {
-        throw new BadRequestException('Some tiers not found');
-      }
-
+      // Update campaign basic fields
       Object.assign(campaign, {
         name: dto.name,
         start_date: dto.start_date,
@@ -162,22 +143,77 @@ export class CampaignsService {
 
       const updatedCampaign = await manager.save(campaign);
 
-      const campaignRules = ruleEntities.map((rule) =>
-        this.campaignRuleRepository.create({
-          campaign: updatedCampaign,
-          rule,
-        }),
+      // RULES: Sync changes
+      const incomingRuleIds = dto.rules.map((r) => r.rule_id);
+      const existingRuleIds = campaign.rules.map((cr) => cr.rule.id);
+
+      const ruleIdsToRemove = existingRuleIds.filter(
+        (id) => !incomingRuleIds.includes(id),
+      );
+      const ruleIdsToAdd = incomingRuleIds.filter(
+        (id) => !existingRuleIds.includes(id),
       );
 
-      const campaignTiers = tierEntities.map((tier) =>
-        this.campaignTierRepository.create({
-          campaign: updatedCampaign,
-          tier,
-        }),
+      if (ruleIdsToRemove.length > 0) {
+        await manager.delete(CampaignRule, {
+          campaign: { id },
+          rule: In(ruleIdsToRemove),
+        });
+      }
+
+      if (ruleIdsToAdd.length > 0) {
+        const rulesToAdd = await this.ruleRepository.findBy({
+          id: In(ruleIdsToAdd),
+        });
+
+        if (rulesToAdd.length !== ruleIdsToAdd.length) {
+          throw new BadRequestException('Some new rules not found');
+        }
+
+        const newCampaignRules = rulesToAdd.map((rule) =>
+          this.campaignRuleRepository.create({
+            campaign: updatedCampaign,
+            rule,
+          }),
+        );
+        await manager.save(CampaignRule, newCampaignRules);
+      }
+
+      // TIERS: Sync changes
+      const incomingTierIds = dto.tiers.map((t) => t.tier_id);
+      const existingTierIds = campaign.tiers.map((ct) => ct.tier.id);
+
+      const tierIdsToRemove = existingTierIds.filter(
+        (id) => !incomingTierIds.includes(id),
+      );
+      const tierIdsToAdd = incomingTierIds.filter(
+        (id) => !existingTierIds.includes(id),
       );
 
-      await manager.save(CampaignRule, campaignRules);
-      await manager.save(CampaignTier, campaignTiers);
+      if (tierIdsToRemove.length > 0) {
+        await manager.delete(CampaignTier, {
+          campaign: { id },
+          tier: In(tierIdsToRemove),
+        });
+      }
+
+      if (tierIdsToAdd.length > 0) {
+        const tiersToAdd = await this.tierRepository.findBy({
+          id: In(tierIdsToAdd),
+        });
+
+        if (tiersToAdd.length !== tierIdsToAdd.length) {
+          throw new BadRequestException('Some new tiers not found');
+        }
+
+        const newCampaignTiers = tiersToAdd.map((tier) =>
+          this.campaignTierRepository.create({
+            campaign: updatedCampaign,
+            tier,
+          }),
+        );
+        await manager.save(CampaignTier, newCampaignTiers);
+      }
 
       return updatedCampaign;
     });
