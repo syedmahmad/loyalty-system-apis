@@ -32,6 +32,9 @@ export class Tier {
   @Column()
   name: string; // e.g., Bronze, Silver, Gold
 
+  // @Column('float', { default: 0 })
+  // points_conversion_rate: number;
+
   @Column('int', { default: 1 })
   level: number; // Order or rank
 
@@ -43,9 +46,6 @@ export class Tier {
 
   @Column('int')
   min_points: number;
-
-  @Column('int')
-  max_points: number;
 
   @Column({ nullable: true, type: 'text' })
   benefits: string;

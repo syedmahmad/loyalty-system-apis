@@ -5,6 +5,7 @@ import { Tier } from '../entities/tier.entity';
 import { CreateTierDto } from '../dto/create-tier.dto';
 import { UpdateTierDto } from '../dto/update-tier.dto';
 import { RuleTarget } from '../../rules/entities/rule-target.entity'; // adjust path as needed
+import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
 
 @Injectable()
 export class TiersService {
@@ -13,26 +14,28 @@ export class TiersService {
     private tiersRepository: Repository<Tier>,
     @InjectRepository(RuleTarget)
     private ruleTargetRepository: Repository<RuleTarget>,
+    @InjectRepository(BusinessUnit)
+    private businessUnitRepository: Repository<BusinessUnit>, // adjust path as needed
   ) {}
 
   async create(dto: CreateTierDto) {
     const tier = this.tiersRepository.create(dto);
     const savedTier = await this.tiersRepository.save(tier);
     // 2. Create RuleTarget records for this tier
-    const createdBy = dto.created_by || 2;
+    // const createdBy = dto.created_by || 2;
 
-    if (dto.rule_targets?.length) {
-      const targets = dto.rule_targets.map((rt) =>
-        this.ruleTargetRepository.create({
-          rule_id: rt.rule_id,
-          target_type: 'tier',
-          target_id: savedTier.id,
-          created_by: createdBy,
-          updated_by: createdBy,
-        }),
-      );
-      await this.ruleTargetRepository.save(targets);
-    }
+    // if (dto.rule_targets?.length) {
+    //   const targets = dto.rule_targets.map((rt) =>
+    //     this.ruleTargetRepository.create({
+    //       rule_id: rt.rule_id,
+    //       target_type: 'tier',
+    //       target_id: savedTier.id,
+    //       created_by: createdBy,
+    //       updated_by: createdBy,
+    //     }),
+    //   );
+    //   await this.ruleTargetRepository.save(targets);
+    // }
 
     return savedTier;
   }
@@ -91,31 +94,44 @@ export class TiersService {
 
   async update(id: number, dto: UpdateTierDto) {
     const tier = await this.findOne(id);
+
+    if (dto.business_unit_id) {
+      const bu = await this.businessUnitRepository.findOne({
+        where: { id: dto.business_unit_id },
+      });
+
+      if (!bu) {
+        throw new NotFoundException('Business Unit not found');
+      }
+
+      tier.business_unit = bu;
+    }
+
     Object.assign(tier, dto);
     // return this.tiersRepository.save(tier);
     const updatedTier = await this.tiersRepository.save(tier);
 
-    const updatedBy = dto.updated_by || 2;
+    // const updatedBy = dto.updated_by || 2;
 
     // Remove existing rule_targets linked to this tier
-    await this.ruleTargetRepository.delete({
-      target_type: 'tier',
-      target_id: id,
-    });
+    // await this.ruleTargetRepository.delete({
+    //   target_type: 'tier',
+    //   target_id: id,
+    // });
 
     // Add new rule_targets
-    if (dto.rule_targets?.length) {
-      const newTargets = dto.rule_targets.map((rt) =>
-        this.ruleTargetRepository.create({
-          rule_id: rt.rule_id,
-          target_type: 'tier',
-          target_id: id,
-          created_by: updatedBy,
-          updated_by: updatedBy,
-        }),
-      );
-      await this.ruleTargetRepository.save(newTargets);
-    }
+    // if (dto.rule_targets?.length) {
+    //   const newTargets = dto.rule_targets.map((rt) =>
+    //     this.ruleTargetRepository.create({
+    //       rule_id: rt.rule_id,
+    //       target_type: 'tier',
+    //       target_id: id,
+    //       created_by: updatedBy,
+    //       updated_by: updatedBy,
+    //     }),
+    //   );
+    //   await this.ruleTargetRepository.save(newTargets);
+    // }
 
     return updatedTier;
   }

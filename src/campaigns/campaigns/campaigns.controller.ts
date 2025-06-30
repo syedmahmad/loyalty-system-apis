@@ -1,45 +1,49 @@
 import {
+  Body,
   Controller,
   Get,
-  Post,
-  Body,
   Param,
-  Delete,
+  Post,
   Put,
+  NotFoundException,
 } from '@nestjs/common';
 import { CampaignsService } from './campaigns.service';
+import { Campaign } from '../entities/campaign.entity';
 import { CreateCampaignDto } from '../dto/create-campaign.dto';
 import { UpdateCampaignDto } from '../dto/update-campaign.dto';
 
 @Controller('campaigns')
 export class CampaignsController {
-  constructor(private readonly campaignsService: CampaignsService) {}
+  constructor(private readonly campaignService: CampaignsService) {}
 
   @Post()
-  async create(@Body() createCampaignDto: CreateCampaignDto) {
-    return await this.campaignsService.create(createCampaignDto);
+  async create(@Body() dto: CreateCampaignDto): Promise<Campaign> {
+    return this.campaignService.create(dto);
   }
 
   @Get()
-  async findAll() {
-    return await this.campaignsService.findAll();
+  async findAll(): Promise<Campaign[]> {
+    return this.campaignService.findAll();
   }
 
   @Get(':id')
-  async findOne(@Param('id') id: string) {
-    return await this.campaignsService.findOne(+id);
+  async findOne(@Param('id') id: number): Promise<Campaign> {
+    const campaign = await this.campaignService.findOne(id);
+    if (!campaign) {
+      throw new NotFoundException('Campaign not found');
+    }
+    return campaign;
   }
 
   @Put(':id')
   async update(
-    @Param('id') id: string,
-    @Body() updateCampaignDto: UpdateCampaignDto,
-  ) {
-    return await this.campaignsService.update(+id, updateCampaignDto);
-  }
-
-  @Delete(':id')
-  async remove(@Param('id') id: string) {
-    return await this.campaignsService.remove(+id);
+    @Param('id') id: number,
+    @Body() dto: UpdateCampaignDto,
+  ): Promise<Campaign> {
+    const updated = await this.campaignService.update(id, dto);
+    if (!updated) {
+      throw new NotFoundException('Campaign not found');
+    }
+    return updated;
   }
 }

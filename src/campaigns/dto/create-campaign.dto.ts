@@ -1,23 +1,16 @@
 import {
-  IsNotEmpty,
-  IsString,
+  IsArray,
   IsDateString,
-  IsBoolean,
+  IsNotEmpty,
   IsOptional,
+  IsString,
   IsNumber,
 } from 'class-validator';
 
 export class CreateCampaignDto {
-  @IsNumber()
-  tenant_id: number;
-
   @IsString()
   @IsNotEmpty()
   name: string;
-
-  @IsString()
-  @IsOptional()
-  description?: string;
 
   @IsDateString()
   start_date: string;
@@ -25,13 +18,25 @@ export class CreateCampaignDto {
   @IsDateString()
   end_date: string;
 
-  @IsBoolean()
+  business_unit_id: number;
+
   @IsOptional()
-  is_active?: boolean;
+  @IsString()
+  description?: string;
 
+  @IsArray()
+  @IsNotEmpty()
+  bu_ids: number[]; // Business Unit IDs
+
+  @IsArray()
+  @IsNotEmpty()
+  rules: { rule_id: number }[];
+
+  @IsArray()
+  @IsNotEmpty()
+  tiers: { tier_id: number }[]; // Tier IDs from Tier table
+
+  @IsOptional()
+  @IsNumber()
   created_by?: number;
-
-  rule_targets?: {
-    rule_id: number;
-  }[];
 }

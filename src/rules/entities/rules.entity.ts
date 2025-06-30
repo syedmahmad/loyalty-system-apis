@@ -14,22 +14,37 @@ export class Rule {
   id: number;
 
   @Column({ type: 'varchar' })
-  type: string;
+  name: string;
 
   @Column({ type: 'varchar' })
-  condition_type: string; // e.g. total_spending, visit_count
-
-  @Column({ type: 'varchar' })
-  operator: string; // e.g. '=', '>=', '<='
-
-  @Column({ type: 'float' })
-  value: number;
-
-  @Column({ type: 'float', nullable: true })
-  reward_value: number;
+  rule_type: string; // 'event based earn' or 'spend and earn' or 'burn'
 
   @Column({ type: 'varchar', nullable: true })
-  unit_type: string; // points, cashback, coupon
+  condition_type: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  condition_operator: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  condition_value: string;
+
+  @Column({ type: 'float', nullable: true })
+  min_amount_spent: number;
+
+  @Column({ type: 'float', nullable: true })
+  reward_points: number;
+
+  @Column({ type: 'varchar', nullable: true })
+  event_triggerer: string;
+
+  @Column({ type: 'int', nullable: true })
+  max_redeemption_points_limit: number;
+
+  @Column({ type: 'float', nullable: true })
+  points_conversion_factor: number; // for burn
+
+  @Column({ type: 'float', nullable: true })
+  max_burn_percent_on_invoice: number; // for burn
 
   @Column({ type: 'text', nullable: true })
   description: string;
