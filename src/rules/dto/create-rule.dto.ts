@@ -13,7 +13,7 @@ export class CreateRuleDto {
   name: string;
 
   @IsString()
-  @IsIn(['event based earn', 'spend and earn', 'burn'])
+  @IsIn(['event based earn', 'spend and earn', 'burn', 'dynamic rule'])
   rule_type: string;
 
   @IsOptional()
@@ -22,7 +22,9 @@ export class CreateRuleDto {
 
   @ValidateIf(
     (o) =>
-      o.rule_type === 'event based earn' || o.rule_type === 'spend and earn',
+      o.rule_type === 'event based earn' ||
+      o.rule_type === 'spend and earn' ||
+      o.rule_type === 'dynamic rule',
   )
   @IsNumber()
   reward_points?: number;
@@ -42,6 +44,18 @@ export class CreateRuleDto {
   @ValidateIf((o) => o.rule_type === 'burn')
   @IsNumber()
   max_burn_percent_on_invoice?: number;
+
+  @IsOptional()
+  @IsString()
+  condition_type?: string;
+
+  @IsOptional()
+  @IsString()
+  condition_operator?: string;
+
+  @IsOptional()
+  @IsString()
+  condition_value?: string;
 
   @IsOptional()
   @IsString()

@@ -5,7 +5,6 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { UsersModule } from './users/users.module';
-import { CampaignsModule } from './campaigns/campaigns.module';
 import { RewardsModule } from './rewards/rewards.module';
 import { PointsModule } from './points/points.module';
 import { TiersModule } from './tiers/tiers.module';
@@ -14,6 +13,7 @@ import { ReportsModule } from './reports/reports.module';
 import { CustomersModule } from './customers/customer.module';
 import { BusinessUnitsModule } from './business_unit/business_unit.module';
 import { RulesModule } from './rules/rules.module';
+import { CampaignModule } from './campaigns/campaigns.module';
 
 @Module({
   imports: [
@@ -29,7 +29,7 @@ import { RulesModule } from './rules/rules.module';
       synchronize: true,
     }),
     UsersModule,
-    CampaignsModule,
+    CampaignModule,
     CustomersModule,
     BusinessUnitsModule,
     RewardsModule,

@@ -47,9 +47,6 @@ export class Tier {
   @Column('int')
   min_points: number;
 
-  @Column('int')
-  max_points: number;
-
   @Column({ nullable: true, type: 'text' })
   benefits: string;
 

@@ -1,108 +1,193 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, DataSource, In } from 'typeorm';
 import { Campaign } from '../entities/campaign.entity';
+import { CampaignRule } from '../entities/campaign-rule.entity';
+import { CampaignTier } from '../entities/campaign-tier.entity';
 import { CreateCampaignDto } from '../dto/create-campaign.dto';
 import { UpdateCampaignDto } from '../dto/update-campaign.dto';
-import { RuleTarget } from '../../rules/entities/rule-target.entity'; // adjust path
+import { Rule } from 'src/rules/entities/rules.entity';
+import { Tier } from 'src/tiers/entities/tier.entity';
 
 @Injectable()
 export class CampaignsService {
   constructor(
     @InjectRepository(Campaign)
-    private campaignsRepository: Repository<Campaign>,
-    @InjectRepository(RuleTarget)
-    private ruleTargetRepository: Repository<RuleTarget>,
+    private readonly campaignRepository: Repository<Campaign>,
+
+    @InjectRepository(CampaignRule)
+    private readonly campaignRuleRepository: Repository<CampaignRule>,
+
+    @InjectRepository(CampaignTier)
+    private readonly campaignTierRepository: Repository<CampaignTier>,
+
+    @InjectRepository(Rule)
+    private readonly ruleRepository: Repository<Rule>,
+
+    @InjectRepository(Tier)
+    private readonly tierRepository: Repository<Tier>,
+
+    private readonly dataSource: DataSource,
   ) {}
 
-  async create(createCampaignDto: CreateCampaignDto): Promise<Campaign> {
-    const createdBy = createCampaignDto.created_by || 2;
-    const campaign = this.campaignsRepository.create(createCampaignDto);
-    const savedCampaign = await this.campaignsRepository.save(campaign);
+  async create(dto: CreateCampaignDto): Promise<Campaign> {
+    return await this.dataSource.transaction(async (manager) => {
+      const {
+        name,
+        start_date,
+        end_date,
+        description,
+        business_unit_id,
+        rules,
+        tiers,
+      } = dto;
 
-    // 2. Save rule_targets
-    if (createCampaignDto.rule_targets?.length) {
-      const targets = createCampaignDto.rule_targets.map((rt) =>
-        this.ruleTargetRepository.create({
-          rule_id: rt.rule_id,
-          target_type: 'campaign',
-          target_id: savedCampaign.id,
-          created_by: createdBy,
-          updated_by: createdBy,
+      console.log('ruleIds', dto.rules);
+      const ruleIds = dto.rules.map((r) => r.rule_id);
+      console.log('ruleIds', ruleIds);
+      const ruleEntities = await this.ruleRepository.findBy({
+        id: In(ruleIds),
+      });
+
+      if (ruleEntities.length !== rules.length) {
+        throw new BadRequestException('Some rules not found');
+      }
+
+      const tierIds = dto.tiers.map((t) => t.tier_id);
+      console.log('tierIds', tierIds);
+      const tierEntities = await this.tierRepository.findBy({
+        id: In(tierIds),
+      });
+
+      if (tierEntities.length !== tiers.length) {
+        throw new BadRequestException('Some tiers not found');
+      }
+
+      const campaign = manager.create(Campaign, {
+        name,
+        start_date,
+        end_date,
+        description,
+        business_unit_id,
+      });
+
+      const savedCampaign = await manager.save(campaign);
+
+      console.log('ruleEntities', ruleEntities);
+      console.log('tierEntities', tierEntities);
+
+      const campaignRules = ruleEntities.map((rule) =>
+        this.campaignRuleRepository.create({
+          campaign: savedCampaign,
+          rule,
         }),
       );
-      await this.ruleTargetRepository.save(targets);
-    }
 
-    return savedCampaign;
+      const campaignTiers = tierEntities.map((tier) =>
+        this.campaignTierRepository.create({
+          campaign: savedCampaign,
+          tier,
+        }),
+      );
+
+      await manager.save(CampaignRule, campaignRules);
+      await manager.save(CampaignTier, campaignTiers);
+
+      return savedCampaign;
+    });
   }
 
   async findAll(): Promise<Campaign[]> {
-    return await this.campaignsRepository.find({
-      relations: ['business_unit'],
+    return this.campaignRepository.find({
+      relations: ['rules', 'tiers', 'business_unit'],
+      order: { created_at: 'DESC' },
     });
   }
 
-  async findOne(id: number) {
-    const campaign = await this.campaignsRepository.findOneBy({ id });
+  async findOne(id: number): Promise<Campaign> {
+    const campaign = await this.campaignRepository.findOne({
+      where: { id },
+      relations: ['rules', 'tiers', 'business_unit'],
+    });
+
     if (!campaign) {
-      throw new NotFoundException(`Campaign with id ${id} not found`);
+      throw new NotFoundException(`Campaign with ID ${id} not found`);
     }
 
-    const ruleTargets = await this.ruleTargetRepository.find({
-      where: {
-        target_type: 'campaign',
-        target_id: id,
-      },
-      relations: { rule: true },
-    });
-
-    const rule_targets = ruleTargets.map((rt) => ({
-      id: rt.id,
-      rule_id: rt.rule_id,
-    }));
-
-    return {
-      ...campaign,
-      rule_targets,
-    };
+    return campaign;
   }
 
-  async update(
-    id: number,
-    updateCampaignDto: UpdateCampaignDto,
-  ): Promise<Campaign> {
-    const campaign = await this.findOne(id);
-    Object.assign(campaign, updateCampaignDto);
-    const saved = await this.campaignsRepository.save(campaign);
+  async update(id: number, dto: UpdateCampaignDto): Promise<Campaign> {
+    return await this.dataSource.transaction(async (manager) => {
+      const campaign = await manager.findOne(Campaign, {
+        where: { id },
+        relations: ['rules', 'tiers'],
+      });
 
-    const updatedBy = updateCampaignDto.updated_by || 2;
+      if (!campaign) {
+        throw new NotFoundException(`Campaign with ID ${id} not found`);
+      }
 
-    // Delete existing rule_targets
-    await this.ruleTargetRepository.delete({
-      target_type: 'campaign',
-      target_id: id,
-    });
+      await manager.delete(CampaignRule, { campaign: { id } });
+      await manager.delete(CampaignTier, { campaign: { id } });
 
-    // Add new rule_targets
-    if (updateCampaignDto.rule_targets?.length) {
-      const newTargets = updateCampaignDto.rule_targets.map((rt) =>
-        this.ruleTargetRepository.create({
-          rule_id: rt.rule_id,
-          target_type: 'campaign',
-          target_id: id,
-          created_by: updatedBy,
-          updated_by: updatedBy,
+      const ruleIds = dto.rules.map((r) => r.rule_id);
+      const ruleEntities = await this.ruleRepository.findBy({
+        id: In(ruleIds),
+      });
+
+      if (ruleEntities.length !== dto.rules.length) {
+        throw new BadRequestException('Some rules not found');
+      }
+
+      const tierIds = dto.tiers.map((t) => t.tier_id);
+      const tierEntities = await this.tierRepository.findBy({
+        id: In(tierIds),
+      });
+      if (tierEntities.length !== dto.tiers.length) {
+        throw new BadRequestException('Some tiers not found');
+      }
+
+      Object.assign(campaign, {
+        name: dto.name,
+        start_date: dto.start_date,
+        end_date: dto.end_date,
+        description: dto.description,
+        business_unit_id: dto.business_unit_id,
+      });
+
+      const updatedCampaign = await manager.save(campaign);
+
+      const campaignRules = ruleEntities.map((rule) =>
+        this.campaignRuleRepository.create({
+          campaign: updatedCampaign,
+          rule,
         }),
       );
-      await this.ruleTargetRepository.save(newTargets);
-    }
 
-    return saved;
+      const campaignTiers = tierEntities.map((tier) =>
+        this.campaignTierRepository.create({
+          campaign: updatedCampaign,
+          tier,
+        }),
+      );
+
+      await manager.save(CampaignRule, campaignRules);
+      await manager.save(CampaignTier, campaignTiers);
+
+      return updatedCampaign;
+    });
   }
 
-  async remove(id: number): Promise<void> {
-    const campaign = await this.findOne(id);
-    await this.campaignsRepository.remove(campaign);
+  async remove(id: number): Promise<{ deleted: boolean }> {
+    const result = await this.campaignRepository.delete(id);
+    if (!result.affected) {
+      throw new NotFoundException(`Campaign with ID ${id} not found`);
+    }
+    return { deleted: true };
   }
 }

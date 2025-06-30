@@ -17,6 +17,9 @@ export class Tenant {
   @Column({ unique: true })
   domain: string; // e.g. tenant1.yourapp.com
 
+  @Column({ nullable: true })
+  currency: string;
+
   @Column()
   created_by: number;
 

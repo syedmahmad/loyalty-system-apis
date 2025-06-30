@@ -19,6 +19,15 @@ export class Rule {
   @Column({ type: 'varchar' })
   rule_type: string; // 'event based earn' or 'spend and earn' or 'burn'
 
+  @Column({ type: 'varchar', nullable: true })
+  condition_type: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  condition_operator: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  condition_value: string;
+
   @Column({ type: 'float', nullable: true })
   min_amount_spent: number;
 

@@ -1,27 +1,33 @@
-import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
-import { Tenant } from 'src/tenants/entities/tenant.entity';
-
 import {
   Entity,
   PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
   UpdateDateColumn,
+  OneToMany,
   ManyToOne,
   JoinColumn,
 } from 'typeorm';
+import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
+import { CampaignRule } from './campaign-rule.entity';
+import { CampaignTier } from './campaign-tier.entity';
 
 @Entity('campaigns')
 export class Campaign {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @ManyToOne(() => Tenant, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'tenant_id' })
-  tenant: Tenant;
-
   @Column()
-  tenant_id: number;
+  name: string;
+
+  @Column({ type: 'timestamp' })
+  start_date: Date;
+
+  @Column({ type: 'timestamp' })
+  end_date: Date;
+
+  @Column({ nullable: true })
+  description?: string;
 
   @ManyToOne(() => BusinessUnit, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'business_unit_id' })
@@ -30,38 +36,14 @@ export class Campaign {
   @Column()
   business_unit_id: number;
 
-  @Column()
-  name: string;
+  @OneToMany(() => CampaignRule, (cr) => cr.campaign, { cascade: true })
+  rules: CampaignRule[];
 
-  @Column({ nullable: true, type: 'text' })
-  description: string;
-
-  @Column({ type: 'datetime' })
-  start_date: Date;
-
-  @Column({ nullable: true })
-  type: 'seasonal' | 'referral' | 'targeted';
-
-  @Column({ type: 'float', nullable: true })
-  budget: number;
-
-  @Column({ nullable: true })
-  color: string;
-
-  @Column({ type: 'datetime' })
-  end_date: Date;
-
-  @Column({ default: true })
-  is_active: boolean;
-
-  @Column()
-  created_by: number;
+  @OneToMany(() => CampaignTier, (ct) => ct.campaign, { cascade: true })
+  tiers: CampaignTier[];
 
   @CreateDateColumn()
   created_at: Date;
-
-  @Column()
-  updated_by: number;
 
   @UpdateDateColumn()
   updated_at: Date;

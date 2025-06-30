@@ -28,6 +28,9 @@ export class RulesService {
       description: dto.description,
       created_by: createdBy,
       updated_by: createdBy,
+      condition_type: dto.condition_type,
+      condition_operator: dto.condition_operator,
+      condition_value: dto.condition_value,
     });
 
     return await this.ruleRepository.save(rule);
@@ -57,10 +60,12 @@ export class RulesService {
     rule.max_burn_percent_on_invoice =
       dto.max_burn_percent_on_invoice ?? rule.max_burn_percent_on_invoice;
     rule.description = dto.description ?? rule.description;
+    rule.condition_type = dto.condition_type ?? rule.condition_type;
+    rule.condition_operator = dto.condition_operator ?? rule.condition_operator;
+    rule.condition_value = dto.condition_value ?? rule.condition_value;
     rule.updated_by = dto.updated_by ?? rule.updated_by;
 
     await this.ruleRepository.save(rule);
-
     return this.findOne(id);
   }
 
