@@ -23,7 +23,6 @@ export class CreateCampaignDto {
   @IsOptional()
   @IsString()
   description?: string;
-
   @IsArray()
   @IsNotEmpty()
   bu_ids: number[]; // Business Unit IDs
@@ -34,7 +33,7 @@ export class CreateCampaignDto {
 
   @IsArray()
   @IsNotEmpty()
-  tiers: { tier_id: number }[]; // Tier IDs from Tier table
+  tiers: { tier_id: number; point_conversion_rate: number }[]; // Tier IDs from Tier table
 
   @IsOptional()
   @IsNumber()

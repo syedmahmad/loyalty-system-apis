@@ -46,9 +46,8 @@ export class CampaignsService {
         tiers,
       } = dto;
 
-      console.log('ruleIds', dto.rules);
-      const ruleIds = dto.rules.map((r) => r.rule_id);
-      console.log('ruleIds', ruleIds);
+      // Validate rules
+      const ruleIds = rules.map((r) => r.rule_id);
       const ruleEntities = await this.ruleRepository.findBy({
         id: In(ruleIds),
       });
@@ -57,8 +56,8 @@ export class CampaignsService {
         throw new BadRequestException('Some rules not found');
       }
 
-      const tierIds = dto.tiers.map((t) => t.tier_id);
-      console.log('tierIds', tierIds);
+      // Validate tiers
+      const tierIds = tiers.map((t) => t.tier_id);
       const tierEntities = await this.tierRepository.findBy({
         id: In(tierIds),
       });
@@ -67,6 +66,7 @@ export class CampaignsService {
         throw new BadRequestException('Some tiers not found');
       }
 
+      // Create and save campaign
       const campaign = manager.create(Campaign, {
         name,
         start_date,
@@ -77,9 +77,7 @@ export class CampaignsService {
 
       const savedCampaign = await manager.save(campaign);
 
-      console.log('ruleEntities', ruleEntities);
-      console.log('tierEntities', tierEntities);
-
+      // Create campaign rules
       const campaignRules = ruleEntities.map((rule) =>
         this.campaignRuleRepository.create({
           campaign: savedCampaign,
@@ -87,13 +85,26 @@ export class CampaignsService {
         }),
       );
 
-      const campaignTiers = tierEntities.map((tier) =>
-        this.campaignTierRepository.create({
+      // Map tiers for quick lookup
+      const dtoTierMap = new Map(tiers.map((t) => [t.tier_id, t]));
+
+      // Create campaign tiers with point_conversion_rate
+      const campaignTiers = tierEntities.map((tier) => {
+        const matchedDtoTier = dtoTierMap.get(tier.id);
+        if (!matchedDtoTier) {
+          throw new BadRequestException(
+            `Tier ID ${tier.id} does not match with DTO tiers`,
+          );
+        }
+
+        return this.campaignTierRepository.create({
           campaign: savedCampaign,
           tier,
-        }),
-      );
+          point_conversion_rate: matchedDtoTier.point_conversion_rate,
+        });
+      });
 
+      // Save campaign rules and tiers
       await manager.save(CampaignRule, campaignRules);
       await manager.save(CampaignTier, campaignTiers);
 
@@ -132,7 +143,7 @@ export class CampaignsService {
         throw new NotFoundException(`Campaign with ID ${id} not found`);
       }
 
-      // Update campaign basic fields
+      // Update basic fields
       Object.assign(campaign, {
         name: dto.name,
         start_date: dto.start_date,
@@ -143,7 +154,7 @@ export class CampaignsService {
 
       const updatedCampaign = await manager.save(campaign);
 
-      // RULES: Sync changes
+      // === RULES Sync ===
       const incomingRuleIds = dto.rules.map((r) => r.rule_id);
       const existingRuleIds = campaign.rules.map((cr) => cr.rule.id);
 
@@ -176,10 +187,12 @@ export class CampaignsService {
             rule,
           }),
         );
+
         await manager.save(CampaignRule, newCampaignRules);
       }
 
-      // TIERS: Sync changes
+      // === TIERS Sync ===
+      const dtoTierMap = new Map(dto.tiers.map((t) => [t.tier_id, t]));
       const incomingTierIds = dto.tiers.map((t) => t.tier_id);
       const existingTierIds = campaign.tiers.map((ct) => ct.tier.id);
 
@@ -206,13 +219,46 @@ export class CampaignsService {
           throw new BadRequestException('Some new tiers not found');
         }
 
-        const newCampaignTiers = tiersToAdd.map((tier) =>
-          this.campaignTierRepository.create({
+        const newCampaignTiers = tiersToAdd.map((tier) => {
+          const matchedDtoTier = dtoTierMap.get(tier.id);
+          if (!matchedDtoTier) {
+            throw new BadRequestException(
+              `Tier ID ${tier.id} does not match with DTO tiers`,
+            );
+          }
+
+          return this.campaignTierRepository.create({
             campaign: updatedCampaign,
             tier,
-          }),
-        );
+            point_conversion_rate: matchedDtoTier.point_conversion_rate,
+          });
+        });
+
         await manager.save(CampaignTier, newCampaignTiers);
+      }
+
+      // === UPDATE point_conversion_rate of existing tiers ===
+      const existingCampaignTiers = await manager.find(CampaignTier, {
+        where: {
+          campaign: { id },
+          tier: In(existingTierIds),
+        },
+        relations: ['tier'],
+      });
+
+      const tiersToUpdate = existingCampaignTiers.filter((ct) =>
+        dtoTierMap.has(ct.tier.id),
+      );
+
+      for (const ct of tiersToUpdate) {
+        const newRate = dtoTierMap.get(ct.tier.id)?.point_conversion_rate;
+        if (ct.point_conversion_rate !== newRate) {
+          ct.point_conversion_rate = newRate;
+        }
+      }
+
+      if (tiersToUpdate.length > 0) {
+        await manager.save(CampaignTier, tiersToUpdate);
       }
 
       return updatedCampaign;
