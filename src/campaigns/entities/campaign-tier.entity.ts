@@ -1,4 +1,10 @@
-import { Entity, PrimaryGeneratedColumn, ManyToOne, JoinColumn } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  ManyToOne,
+  JoinColumn,
+  Column,
+} from 'typeorm';
 import { Campaign } from './campaign.entity';
 import { Tier } from 'src/tiers/entities/tier.entity';
 
@@ -12,6 +18,9 @@ export class CampaignTier {
   })
   @JoinColumn({ name: 'campaign_id' })
   campaign: Campaign;
+
+  @Column({ type: 'float', default: 1 })
+  point_conversion_rate: number;
 
   @ManyToOne(() => Tier, { eager: true })
   @JoinColumn({ name: 'tier_id' })
