@@ -44,7 +44,7 @@ export class BusinessUnitsService {
       throw new Error(`Business Unit with id ${id} not found`);
     }
 
-    if (unit.name === 'Default All Business Unit') {
+    if (unit.name === 'All Business Unit') {
       throw new Error('Cannot update the default business unit');
     }
 
@@ -58,7 +58,7 @@ export class BusinessUnitsService {
       throw new Error(`Business Unit with id ${id} not found`);
     }
 
-    if (unit.name === 'Default All Business Unit') {
+    if (unit.name === 'All Business Unit') {
       throw new Error('Cannot delete the default business unit');
     }
 
