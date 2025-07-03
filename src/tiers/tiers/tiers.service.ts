@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { ILike, Repository } from 'typeorm';
 import { Tier } from '../entities/tier.entity';
 import { CreateTierDto } from '../dto/create-tier.dto';
 import { UpdateTierDto } from '../dto/update-tier.dto';
@@ -40,13 +40,22 @@ export class TiersService {
     return savedTier;
   }
 
-  async findAll() {
+  async findAll(client_id: number, name: string) {
     const ruleTargets = await this.ruleTargetRepository.find({
       where: { target_type: 'tier' },
       relations: { rule: true },
     });
 
+    let optionalWhereClause = {};
+
+    if (name) {
+      optionalWhereClause = {
+        name: ILike(`%${name}%`),
+      };
+    }
+
     const tiers = await this.tiersRepository.find({
+      where: { tenant_id: client_id, ...optionalWhereClause },
       relations: { business_unit: true },
       order: { created_at: 'DESC' },
     });

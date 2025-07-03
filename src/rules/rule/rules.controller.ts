@@ -6,6 +6,7 @@ import {
   Param,
   Put,
   Delete,
+  Query,
 } from '@nestjs/common';
 import { RulesService } from './rules.service';
 import { CreateRuleDto } from '../dto/create-rule.dto';
@@ -20,12 +21,15 @@ export class RulesController {
     return this.rulesService.create(dto);
   }
 
-  @Get()
-  findAll() {
-    return this.rulesService.findAll();
+  @Get(':client_id')
+  async findAll(
+    @Param('client_id') client_id: number,
+    @Query('name') name?: string, // optional query param
+  ) {
+    return await this.rulesService.findAll(client_id, name);
   }
 
-  @Get(':id')
+  @Get('/single/:id')
   findOne(@Param('id') id: number) {
     return this.rulesService.findOne(id);
   }

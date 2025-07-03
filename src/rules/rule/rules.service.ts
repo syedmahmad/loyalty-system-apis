@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { ILike, Repository } from 'typeorm';
 import { Rule } from '../entities/rules.entity';
 import { CreateRuleDto } from '../dto/create-rule.dto';
 import { UpdateRuleDto } from '../dto/update-rule.dto';
@@ -19,6 +19,7 @@ export class RulesService {
     const rule = this.ruleRepository.create({
       name: dto.name,
       rule_type: dto.rule_type,
+      tenant_id: dto.client_id,
       min_amount_spent: dto.min_amount_spent,
       reward_points: dto.reward_points,
       event_triggerer: dto.event_triggerer,
@@ -36,8 +37,21 @@ export class RulesService {
     return await this.ruleRepository.save(rule);
   }
 
-  findAll() {
-    return this.ruleRepository.find();
+  findAll(client_id: number, name: string) {
+    let optionalWhereClause = {};
+
+    if (name) {
+      optionalWhereClause = {
+        name: ILike(`%${name}%`),
+      };
+    }
+
+    return this.ruleRepository.find({
+      where: {
+        tenant_id: client_id,
+        ...optionalWhereClause,
+      },
+    });
   }
 
   findOne(id: number) {

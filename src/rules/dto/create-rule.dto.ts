@@ -20,6 +20,10 @@ export class CreateRuleDto {
   @IsNumber()
   min_amount_spent?: number;
 
+  @IsNumber()
+  @IsNotEmpty()
+  client_id: number;
+
   @ValidateIf(
     (o) =>
       o.rule_type === 'event based earn' ||

@@ -6,6 +6,7 @@ import {
   Post,
   Put,
   NotFoundException,
+  Query,
 } from '@nestjs/common';
 import { CampaignsService } from './campaigns.service';
 import { Campaign } from '../entities/campaign.entity';
@@ -21,12 +22,15 @@ export class CampaignsController {
     return this.campaignService.create(dto);
   }
 
-  @Get()
-  async findAll(): Promise<Campaign[]> {
-    return this.campaignService.findAll();
+  @Get(':client_id')
+  async findAll(
+    @Param('client_id') client_id: number,
+    @Query('name') name?: string,
+  ): Promise<Campaign[]> {
+    return this.campaignService.findAll(client_id, name);
   }
 
-  @Get(':id')
+  @Get('/single/:id')
   async findOne(@Param('id') id: number): Promise<Campaign> {
     const campaign = await this.campaignService.findOne(id);
     if (!campaign) {
