@@ -5,13 +5,23 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   OneToMany,
+  ManyToOne,
+  JoinColumn,
 } from 'typeorm';
 import { RuleTarget } from './rule-target.entity';
+import { Tenant } from 'src/tenants/entities/tenant.entity';
 
 @Entity({ name: 'rules' })
 export class Rule {
   @PrimaryGeneratedColumn()
   id: number;
+
+  @ManyToOne(() => Tenant, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'tenant_id' })
+  tenant: Tenant;
+
+  @Column({ type: 'int', nullable: false })
+  tenant_id: number;
 
   @Column({ type: 'varchar' })
   name: string;

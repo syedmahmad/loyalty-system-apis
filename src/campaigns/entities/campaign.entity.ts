@@ -11,11 +11,19 @@ import {
 import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
 import { CampaignRule } from './campaign-rule.entity';
 import { CampaignTier } from './campaign-tier.entity';
+import { Tenant } from 'src/tenants/entities/tenant.entity';
 
 @Entity('campaigns')
 export class Campaign {
   @PrimaryGeneratedColumn()
   id: number;
+
+  @ManyToOne(() => Tenant, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'tenant_id' })
+  tenant: Tenant;
+
+  @Column()
+  tenant_id: number;
 
   @Column()
   name: string;

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { ILike, Repository } from 'typeorm';
 import { CreateBusinessUnitDto } from '../dto/create-business-unit.dto';
 import { UpdateBusinessUnitDto } from '../dto/update-business-unit.dto';
 import { BusinessUnit } from '../entities/business_unit.entity';
@@ -17,8 +17,21 @@ export class BusinessUnitsService {
     return await this.repo.save(unit);
   }
 
-  async findAll() {
-    return await this.repo.find();
+  async findAll(client_id: number, name: string) {
+    let optionalWhereClause = {};
+
+    if (name) {
+      optionalWhereClause = {
+        name: ILike(`%${name}%`),
+      };
+    }
+
+    return await this.repo.find({
+      where: {
+        tenant_id: client_id,
+        ...optionalWhereClause,
+      },
+    });
   }
 
   async findOne(id: number) {
