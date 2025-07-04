@@ -1,26 +1,16 @@
 import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
+import { CouponType } from 'src/coupon_type/entities/coupon_type.entity';
 import { Tenant } from 'src/tenants/entities/tenant.entity';
 import {
-  Entity,
-  PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
-  UpdateDateColumn,
-  ManyToOne,
+  Entity,
   JoinColumn,
+  ManyToOne,
+  PrimaryGeneratedColumn,
+  UpdateDateColumn,
 } from 'typeorm';
-
-export enum CouponType {
-  DISCOUNT = 'DISCOUNT',
-  CASHBACK = 'CASHBACK',
-  TIER_BASED = 'TIER_BASED',
-  REFERRAL = 'REFERRAL',
-  BIRTHDAY = 'BIRTHDAY',
-  USAGE_BASED = 'USAGE_BASED',
-  GEO_TARGETED = 'GEO_TARGETED',
-  PRODUCT_SPECIFIC = 'PRODUCT_SPECIFIC',
-  TIME_LIMITED = 'TIME_LIMITED',
-}
+import { ActiveStatus } from '../type/types';
 
 @Entity('coupons')
 export class Coupon {
@@ -35,7 +25,7 @@ export class Coupon {
   tenant_id: number;
 
   @Column()
-  code: string; // Coupon code eg: OFF50
+  code: string;
 
   @Column({ type: 'decimal', nullable: true })
   discount_percentage: number;
@@ -65,20 +55,29 @@ export class Coupon {
   @Column({ default: false })
   once_per_customer: boolean;
 
-  @Column({
-    type: 'enum',
-    enum: CouponType,
-  })
+  @ManyToOne(() => CouponType, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'coupon_type_id' })
   coupon_type: CouponType;
 
+  @Column()
+  coupon_type_id: number;
+
   @Column({ type: 'json', nullable: true })
-  conditions: any; // dynamic schema based on coupon type
+  conditions: any;
+
+  @Column({ type: 'json', nullable: true })
+  errors: {
+    general_error_message_en?: string;
+    general_error_message_ar?: string;
+    exception_error_message_en?: string;
+    exception_error_message_ar?: string;
+  };
 
   @Column({ nullable: true, type: 'text' })
   benefits: string;
 
-  @Column({ default: true })
-  is_active: boolean;
+  @Column({ type: 'tinyint', default: ActiveStatus.ACTIVE })
+  is_active: number;
 
   @Column('int')
   created_by: number;

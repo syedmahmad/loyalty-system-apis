@@ -15,6 +15,7 @@ import { BusinessUnitsModule } from './business_unit/business_unit.module';
 import { RulesModule } from './rules/rules.module';
 import { CampaignModule } from './campaigns/campaigns.module';
 import { CouponsModule } from './coupons/coupons.module';
+import { CouponTypeModule } from './coupon_type/coupon_type.module';
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { CouponsModule } from './coupons/coupons.module';
     ReportsModule,
     RulesModule,
     CouponsModule,
+    CouponTypeModule,
   ],
   controllers: [AppController],
   providers: [AppService],
