@@ -55,6 +55,9 @@ export class Coupon {
   @Column({ default: false })
   once_per_customer: boolean;
 
+  @Column('int', { default: 0 })
+  reuse_interval: number;
+
   @ManyToOne(() => CouponType, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'coupon_type_id' })
   coupon_type: CouponType;
@@ -77,7 +80,7 @@ export class Coupon {
   benefits: string;
 
   @Column({ type: 'tinyint', default: ActiveStatus.ACTIVE })
-  is_active: number;
+  status: number; // 0 = inactive, 1 = active, 2 = deleted
 
   @Column('int')
   created_by: number;

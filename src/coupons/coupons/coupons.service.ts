@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { ILike, Not, Repository } from 'typeorm';
 import { Coupon } from '../entities/coupon.entity';
 import { CreateCouponDto } from '../dto/create-coupon.dto';
 import { UpdateCouponDto } from '../dto/update-coupon.dto';
@@ -24,8 +24,18 @@ export class CouponsService {
     return savedTier;
   }
 
-  async findAll() {
+  async findAll(client_id: number, name: string) {
+    let optionalWhereClause = {};
+
+    if (name) {
+      optionalWhereClause = {
+        code: ILike(`%${name}%`),
+      };
+    }
+
     const coupons = await this.couponsRepository.find({
+      //  where: { tenant_id: client_id, ...optionalWhereClause },
+      where: { status: Not(2), tenant_id: client_id, ...optionalWhereClause },
       relations: { business_unit: true },
       order: { created_at: 'DESC' },
     });
@@ -66,7 +76,11 @@ export class CouponsService {
   }
 
   async remove(id: number) {
-    const coupon = await this.findOne(id);
-    await this.couponsRepository.remove(coupon);
+    const coupon = await this.couponsRepository.findOneBy({ id });
+    if (!coupon) throw new NotFoundException('Coupon not found');
+
+    coupon.status = 2;
+    const updatedCoupon = await this.couponsRepository.save(coupon);
+    return updatedCoupon;
   }
 }
