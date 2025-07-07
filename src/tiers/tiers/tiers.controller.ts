@@ -6,6 +6,7 @@ import {
   Param,
   Delete,
   Put,
+  Query,
 } from '@nestjs/common';
 import { TiersService } from './tiers.service';
 import { CreateTierDto } from '../dto/create-tier.dto';
@@ -20,12 +21,15 @@ export class TiersController {
     return await this.service.create(dto);
   }
 
-  @Get()
-  async findAll() {
-    return await this.service.findAll();
+  @Get(':client_id')
+  async findAll(
+    @Param('client_id') client_id: number,
+    @Query('name') name?: string, // optional query param
+  ) {
+    return await this.service.findAll(client_id, name);
   }
 
-  @Get(':id')
+  @Get('/single/:id')
   async findOne(@Param('id') id: string) {
     return await this.service.findOne(+id);
   }

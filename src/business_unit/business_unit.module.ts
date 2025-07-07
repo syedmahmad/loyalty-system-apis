@@ -4,9 +4,10 @@ import { BusinessUnit } from './entities/business_unit.entity';
 import { BusinessUnitsController } from './business_unit/business_unit.controller';
 import { BusinessUnitsService } from './business_unit/business_unit.service';
 import { BusinessUnitBootstrapService } from './startup/business-unit-bootstrap.service';
+import { Tenant } from 'src/tenants/entities/tenant.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([BusinessUnit])],
+  imports: [TypeOrmModule.forFeature([BusinessUnit, Tenant])],
   controllers: [BusinessUnitsController],
   providers: [BusinessUnitsService, BusinessUnitBootstrapService],
 })

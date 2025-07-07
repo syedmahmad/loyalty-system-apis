@@ -3,24 +3,39 @@ import { Injectable, OnApplicationBootstrap } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { BusinessUnit } from '../entities/business_unit.entity';
+import { Tenant } from 'src/tenants/entities/tenant.entity';
 
 @Injectable()
 export class BusinessUnitBootstrapService implements OnApplicationBootstrap {
   constructor(
     @InjectRepository(BusinessUnit)
     private readonly businessUnitRepo: Repository<BusinessUnit>,
+    @InjectRepository(Tenant)
+    private readonly tenantRepo: Repository<Tenant>,
   ) {}
 
   async onApplicationBootstrap() {
-    const defaultBUName = 'Default All Business Unit';
+    const defaultBUName = 'All Business Unit';
 
     const existing = await this.businessUnitRepo.findOneBy({
       name: defaultBUName,
     });
 
     if (!existing) {
+      const tenant = await this.tenantRepo.create({
+        name: 'NATC',
+        currency: 'SAR',
+        domain: 'https://petromin.com/',
+        created_by: 1,
+        updated_by: 1,
+      });
+
+      await this.tenantRepo.save(tenant);
+
+      const existingTenant = await this.tenantRepo.find();
+
       const defaultUnit = this.businessUnitRepo.create({
-        tenant_id: 1,
+        tenant_id: existingTenant[0].id,
         name: defaultBUName,
         description: 'this is default you can not delete it',
         location: 'system created',

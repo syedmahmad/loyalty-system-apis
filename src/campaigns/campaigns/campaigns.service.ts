@@ -4,7 +4,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource, In } from 'typeorm';
+import { Repository, DataSource, In, ILike } from 'typeorm';
 import { Campaign } from '../entities/campaign.entity';
 import { CampaignRule } from '../entities/campaign-rule.entity';
 import { CampaignTier } from '../entities/campaign-tier.entity';
@@ -44,6 +44,7 @@ export class CampaignsService {
         business_unit_id,
         rules,
         tiers,
+        client_id,
       } = dto;
 
       // Validate rules
@@ -73,6 +74,7 @@ export class CampaignsService {
         end_date,
         description,
         business_unit_id,
+        tenant_id: client_id,
       });
 
       const savedCampaign = await manager.save(campaign);
@@ -112,8 +114,17 @@ export class CampaignsService {
     });
   }
 
-  async findAll(): Promise<Campaign[]> {
+  async findAll(client_id: number, name: string): Promise<Campaign[]> {
+    let optionalWhereClause = {};
+
+    if (name) {
+      optionalWhereClause = {
+        name: ILike(`%${name}%`),
+      };
+    }
+
     return this.campaignRepository.find({
+      where: { tenant_id: client_id, ...optionalWhereClause },
       relations: ['rules', 'tiers', 'business_unit'],
       order: { created_at: 'DESC' },
     });

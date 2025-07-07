@@ -20,6 +20,10 @@ export class CreateCampaignDto {
 
   business_unit_id: number;
 
+  @IsNumber()
+  @IsNotEmpty()
+  client_id: number;
+
   @IsOptional()
   @IsString()
   description?: string;
