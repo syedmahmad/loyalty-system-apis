@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 // import { TenantMiddleware } from './common/middleware/tenant.middleware';
@@ -14,6 +14,10 @@ import { CustomersModule } from './customers/customer.module';
 import { BusinessUnitsModule } from './business_unit/business_unit.module';
 import { RulesModule } from './rules/rules.module';
 import { CampaignModule } from './campaigns/campaigns.module';
+import { LogVaultMiddleware } from './middleware/log-vault.middleware';
+import { LogModule } from './logs/log.module';
+import { GlobalAuditSubscriber } from './audit_tails/audit_trail/audit_trail.subscriber';
+import { AuditTrailModule } from './audit_tails/audit_trail.module';
 import { CouponsModule } from './coupons/coupons.module';
 import { CouponTypeModule } from './coupon_type/coupon_type.module';
 
@@ -29,6 +33,7 @@ import { CouponTypeModule } from './coupon_type/coupon_type.module';
       database: process.env.DB_NAME,
       autoLoadEntities: true,
       synchronize: true,
+      subscribers: [GlobalAuditSubscriber],
     }),
     UsersModule,
     CampaignModule,
@@ -37,6 +42,8 @@ import { CouponTypeModule } from './coupon_type/coupon_type.module';
     RewardsModule,
     PointsModule,
     TiersModule,
+    LogModule,
+    AuditTrailModule,
     TenantsModule,
     ReportsModule,
     RulesModule,
@@ -46,9 +53,8 @@ import { CouponTypeModule } from './coupon_type/coupon_type.module';
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule {}
-/*export class AppModule implements NestModule {
+export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    consumer.apply(TenantMiddleware).forRoutes('*'); // apply globally
+    consumer.apply(LogVaultMiddleware).forRoutes('*');
   }
-}*/
+}
