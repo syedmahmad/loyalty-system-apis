@@ -1,34 +1,55 @@
-import { Tenant } from 'src/tenants/entities/tenant.entity';
 import {
   Entity,
-  Column,
   PrimaryGeneratedColumn,
+  Column,
   CreateDateColumn,
-  ManyToOne,
-  JoinColumn,
+  UpdateDateColumn,
 } from 'typeorm';
 
-@Entity()
+@Entity({ name: 'users' })
 export class User {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @ManyToOne(() => Tenant, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'tenant_id' })
-  tenant: Tenant;
+  @Column({ type: 'varchar', nullable: false })
+  first_name: string;
 
-  @Column()
-  tenant_id: number;
+  @Column({ type: 'varchar', nullable: true })
+  middle_name: string;
 
-  @Column({ unique: true })
+  @Column({ type: 'varchar', nullable: true })
+  last_name: string;
+
+  @Column({ type: 'varchar', nullable: true })
   email: string;
 
-  @Column()
-  password: string;
+  @Column({ type: 'varchar', nullable: true })
+  mobile: string;
 
-  @Column({ default: 'viewer' })
-  role: 'admin' | 'manager' | 'viewer';
+  @Column({ type: 'varchar', nullable: false })
+  user_role: string;
 
-  @CreateDateColumn()
+  @Column({ type: 'json', nullable: true })
+  user_privileges: any; // use `Record<string, any>` or custom type if known
+
+  @Column({ type: 'varchar', nullable: true })
+  role_key: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  created_date: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  deactivate_date: string;
+
+  @Column({ type: 'int', nullable: true })
+  is_active: number;
+
+  @Column({ type: 'varchar', length: 36 })
+  uuid: string;
+
+  @CreateDateColumn({ type: 'timestamp' })
   createdAt: Date;
+
+  @UpdateDateColumn({ type: 'timestamp' })
+  updatedAt: Date;
 }

@@ -1,15 +1,5 @@
-import { IsEmail, IsNotEmpty, IsEnum } from 'class-validator';
-
-export class CreateUserDto {
-  @IsNotEmpty()
-  tenantId: number;
-
-  @IsEmail()
-  email: string;
-
-  @IsNotEmpty()
-  password: string;
-
-  @IsEnum(['admin', 'manager', 'viewer'])
-  role: 'admin' | 'manager' | 'viewer';
+export class UserDto {
+  readonly first_name: string;
+  readonly user_role: string;
+  readonly is_active: number;
 }
