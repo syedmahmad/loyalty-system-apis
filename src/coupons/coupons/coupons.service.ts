@@ -1,11 +1,12 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import axios from 'axios';
+import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
 import { ILike, Not, Repository } from 'typeorm';
-import { Coupon } from '../entities/coupon.entity';
+import { RuleTarget } from '../../rules/entities/rule-target.entity'; // adjust path as needed
 import { CreateCouponDto } from '../dto/create-coupon.dto';
 import { UpdateCouponDto } from '../dto/update-coupon.dto';
-import { RuleTarget } from '../../rules/entities/rule-target.entity'; // adjust path as needed
-import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
+import { Coupon } from '../entities/coupon.entity';
 
 @Injectable()
 export class CouponsService {

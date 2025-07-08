@@ -43,4 +43,9 @@ export class CouponsController {
   async remove(@Param('id') id: string) {
     return await this.service.remove(+id);
   }
+
+  @Get('vehicle/makes')
+  async findMakes() {
+    // return await this.service.findMakes();
+  }
 }
