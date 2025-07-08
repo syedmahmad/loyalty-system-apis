@@ -34,8 +34,14 @@ export class CampaignsService {
     private readonly dataSource: DataSource,
   ) {}
 
-  async create(dto: CreateCampaignDto): Promise<Campaign> {
-    return await this.dataSource.transaction(async (manager) => {
+  async create(dto: CreateCampaignDto, user: string): Promise<Campaign> {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      queryRunner.data = { user }; // 👈 Inject user into subscriber context
+
       const {
         name,
         start_date,
@@ -46,6 +52,8 @@ export class CampaignsService {
         tiers,
         client_id,
       } = dto;
+
+      const manager = queryRunner.manager;
 
       // Validate rules
       const ruleIds = rules.map((r) => r.rule_id);
@@ -110,8 +118,14 @@ export class CampaignsService {
       await manager.save(CampaignRule, campaignRules);
       await manager.save(CampaignTier, campaignTiers);
 
+      await queryRunner.commitTransaction();
       return savedCampaign;
-    });
+    } catch (err) {
+      await queryRunner.rollbackTransaction();
+      throw err;
+    } finally {
+      await queryRunner.release();
+    }
   }
 
   async findAll(client_id: number, name: string): Promise<Campaign[]> {
@@ -143,18 +157,28 @@ export class CampaignsService {
     return campaign;
   }
 
-  async update(id: number, dto: UpdateCampaignDto): Promise<Campaign> {
-    return await this.dataSource.transaction(async (manager) => {
+  async update(
+    id: number,
+    dto: UpdateCampaignDto,
+    user: string,
+  ): Promise<Campaign> {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+    queryRunner.data = { user }; // 👈 for audit logging
+
+    try {
+      const manager = queryRunner.manager;
+
       const campaign = await manager.findOne(Campaign, {
         where: { id },
-        relations: ['rules', 'tiers'],
+        relations: ['rules', 'tiers', 'tiers.tier', 'rules.rule'],
       });
 
       if (!campaign) {
         throw new NotFoundException(`Campaign with ID ${id} not found`);
       }
 
-      // Update basic fields
       Object.assign(campaign, {
         name: dto.name,
         start_date: dto.start_date,
@@ -176,18 +200,17 @@ export class CampaignsService {
         (id) => !existingRuleIds.includes(id),
       );
 
-      if (ruleIdsToRemove.length > 0) {
+      if (ruleIdsToRemove.length) {
         await manager.delete(CampaignRule, {
           campaign: { id },
           rule: In(ruleIdsToRemove),
         });
       }
 
-      if (ruleIdsToAdd.length > 0) {
+      if (ruleIdsToAdd.length) {
         const rulesToAdd = await this.ruleRepository.findBy({
           id: In(ruleIdsToAdd),
         });
-
         if (rulesToAdd.length !== ruleIdsToAdd.length) {
           throw new BadRequestException('Some new rules not found');
         }
@@ -198,7 +221,6 @@ export class CampaignsService {
             rule,
           }),
         );
-
         await manager.save(CampaignRule, newCampaignRules);
       }
 
@@ -214,18 +236,17 @@ export class CampaignsService {
         (id) => !existingTierIds.includes(id),
       );
 
-      if (tierIdsToRemove.length > 0) {
+      if (tierIdsToRemove.length) {
         await manager.delete(CampaignTier, {
           campaign: { id },
           tier: In(tierIdsToRemove),
         });
       }
 
-      if (tierIdsToAdd.length > 0) {
+      if (tierIdsToAdd.length) {
         const tiersToAdd = await this.tierRepository.findBy({
           id: In(tierIdsToAdd),
         });
-
         if (tiersToAdd.length !== tierIdsToAdd.length) {
           throw new BadRequestException('Some new tiers not found');
         }
@@ -234,7 +255,7 @@ export class CampaignsService {
           const matchedDtoTier = dtoTierMap.get(tier.id);
           if (!matchedDtoTier) {
             throw new BadRequestException(
-              `Tier ID ${tier.id} does not match with DTO tiers`,
+              `Tier ID ${tier.id} does not match DTO tiers`,
             );
           }
 
@@ -248,39 +269,54 @@ export class CampaignsService {
         await manager.save(CampaignTier, newCampaignTiers);
       }
 
-      // === UPDATE point_conversion_rate of existing tiers ===
+      // === UPDATE point_conversion_rate for existing tiers ===
       const existingCampaignTiers = await manager.find(CampaignTier, {
-        where: {
-          campaign: { id },
-          tier: In(existingTierIds),
-        },
+        where: { campaign: { id }, tier: In(existingTierIds) },
         relations: ['tier'],
       });
 
-      const tiersToUpdate = existingCampaignTiers.filter((ct) =>
-        dtoTierMap.has(ct.tier.id),
-      );
-
-      for (const ct of tiersToUpdate) {
+      for (const ct of existingCampaignTiers) {
         const newRate = dtoTierMap.get(ct.tier.id)?.point_conversion_rate;
-        if (ct.point_conversion_rate !== newRate) {
+        if (newRate !== undefined && ct.point_conversion_rate !== newRate) {
           ct.point_conversion_rate = newRate;
         }
       }
 
-      if (tiersToUpdate.length > 0) {
-        await manager.save(CampaignTier, tiersToUpdate);
-      }
+      await manager.save(CampaignTier, existingCampaignTiers);
 
+      await queryRunner.commitTransaction();
       return updatedCampaign;
-    });
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
   }
 
-  async remove(id: number): Promise<{ deleted: boolean }> {
-    const result = await this.campaignRepository.delete(id);
-    if (!result.affected) {
-      throw new NotFoundException(`Campaign with ID ${id} not found`);
+  async remove(id: number, user: string): Promise<{ deleted: boolean }> {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+    queryRunner.data = { user };
+
+    try {
+      const manager = queryRunner.manager;
+
+      const campaign = await manager.findOne(Campaign, { where: { id } });
+      if (!campaign) {
+        throw new NotFoundException(`Campaign with ID ${id} not found`);
+      }
+
+      await manager.remove(campaign); // triggers beforeRemove subscriber
+      await queryRunner.commitTransaction();
+
+      return { deleted: true };
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
     }
-    return { deleted: true };
   }
 }

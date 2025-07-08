@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { Tenant } from '../entities/tenant.entity';
 import { CreateTenantDto } from '../dto/create-tenant.dto';
 import { UpdateTenantDto } from '../dto/update-tenant.dto';
@@ -10,11 +10,29 @@ export class TenantsService {
   constructor(
     @InjectRepository(Tenant)
     private tenantsRepository: Repository<Tenant>,
+
+    @InjectDataSource()
+    private readonly dataSource: DataSource,
   ) {}
 
-  async create(dto: CreateTenantDto) {
-    const tenant = this.tenantsRepository.create(dto);
-    return await this.tenantsRepository.save(tenant);
+  async create(dto: CreateTenantDto, user: string): Promise<Tenant> {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+    queryRunner.data = { user };
+
+    try {
+      const tenant = this.tenantsRepository.create(dto);
+      const savedTenant = await queryRunner.manager.save(tenant);
+
+      await queryRunner.commitTransaction();
+      return savedTenant;
+    } catch (err) {
+      await queryRunner.rollbackTransaction();
+      throw err;
+    } finally {
+      await queryRunner.release();
+    }
   }
 
   async findAll() {
@@ -33,14 +51,58 @@ export class TenantsService {
     return tenant;
   }
 
-  async update(id: number, dto: UpdateTenantDto) {
-    const tenant = await this.findOne(id);
-    Object.assign(tenant, dto);
-    return await this.tenantsRepository.save(tenant);
+  async update(
+    id: number,
+    dto: UpdateTenantDto,
+    user: string,
+  ): Promise<Tenant> {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+    queryRunner.data = { user };
+
+    try {
+      const tenant = await queryRunner.manager.findOne(Tenant, {
+        where: { id },
+      });
+      if (!tenant) throw new Error(`Tenant with ID ${id} not found`);
+
+      Object.assign(tenant, dto);
+      const updatedTenant = await queryRunner.manager.save(tenant);
+
+      await queryRunner.commitTransaction();
+      return updatedTenant;
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
   }
 
-  async remove(id: number) {
-    const tenant = await this.findOne(id);
-    await this.tenantsRepository.remove(tenant);
+  async remove(id: number, user: string): Promise<{ deleted: boolean }> {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+    queryRunner.data = { user };
+
+    console.log('user,', user);
+
+    try {
+      const tenant = await queryRunner.manager.findOne(Tenant, {
+        where: { id },
+      });
+      if (!tenant) throw new Error(`Tenant with ID ${id} not found`);
+
+      await queryRunner.manager.remove(tenant);
+      await queryRunner.commitTransaction();
+
+      return { deleted: true };
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
   }
 }

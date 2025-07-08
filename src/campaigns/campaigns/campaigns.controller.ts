@@ -1,5 +1,6 @@
 import {
   Body,
+  Headers,
   Controller,
   Get,
   Param,
@@ -7,19 +8,51 @@ import {
   Put,
   NotFoundException,
   Query,
+  UseGuards,
+  BadRequestException,
+  Delete,
 } from '@nestjs/common';
+import * as jwt from 'jsonwebtoken';
 import { CampaignsService } from './campaigns.service';
 import { Campaign } from '../entities/campaign.entity';
 import { CreateCampaignDto } from '../dto/create-campaign.dto';
 import { UpdateCampaignDto } from '../dto/update-campaign.dto';
+import { AuthTokenGuard } from 'src/users/guards/authTokenGuard';
+import { InjectRepository } from '@nestjs/typeorm';
+import { User } from 'src/users/entities/user.entity';
+import { Repository } from 'typeorm';
 
 @Controller('campaigns')
 export class CampaignsController {
-  constructor(private readonly campaignService: CampaignsService) {}
+  constructor(
+    private readonly campaignService: CampaignsService,
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
+  ) {}
 
+  @UseGuards(AuthTokenGuard)
   @Post()
-  async create(@Body() dto: CreateCampaignDto): Promise<Campaign> {
-    return this.campaignService.create(dto);
+  async create(
+    @Body() dto: CreateCampaignDto,
+    @Headers('user-secret') userSecret: string,
+  ): Promise<Campaign> {
+    if (!userSecret) {
+      throw new BadRequestException('user-secret not found in headers');
+    }
+
+    const decodedUser: any = jwt.decode(userSecret);
+
+    const user = await this.userRepository.findOne({
+      where: {
+        id: decodedUser.UserId,
+      },
+    });
+
+    if (!user) {
+      throw new BadRequestException('user not found against provided token');
+    }
+
+    return this.campaignService.create(dto, user.uuid);
   }
 
   @Get(':client_id')
@@ -39,15 +72,58 @@ export class CampaignsController {
     return campaign;
   }
 
+  @UseGuards(AuthTokenGuard)
   @Put(':id')
   async update(
     @Param('id') id: number,
     @Body() dto: UpdateCampaignDto,
+    @Headers('user-secret') userSecret: string,
   ): Promise<Campaign> {
-    const updated = await this.campaignService.update(id, dto);
+    if (!userSecret) {
+      throw new BadRequestException('user-secret not found in headers');
+    }
+
+    const decodedUser: any = jwt.decode(userSecret);
+
+    const user = await this.userRepository.findOne({
+      where: {
+        id: decodedUser.UserId,
+      },
+    });
+
+    if (!user) {
+      throw new BadRequestException('user not found against provided token');
+    }
+
+    const updated = await this.campaignService.update(id, dto, user.uuid);
     if (!updated) {
       throw new NotFoundException('Campaign not found');
     }
     return updated;
+  }
+
+  @UseGuards(AuthTokenGuard)
+  @Delete(':id')
+  async remove(
+    @Param('id') id: string,
+    @Headers('user-secret') userSecret: string,
+  ) {
+    if (!userSecret) {
+      throw new BadRequestException('user-secret not found in headers');
+    }
+
+    const decodedUser: any = jwt.decode(userSecret);
+
+    const user = await this.userRepository.findOne({
+      where: {
+        id: decodedUser.UserId,
+      },
+    });
+
+    if (!user) {
+      throw new BadRequestException('user not found against provided token');
+    }
+
+    return await this.campaignService.remove(+id, user.uuid);
   }
 }

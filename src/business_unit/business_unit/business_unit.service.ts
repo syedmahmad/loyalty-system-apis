@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { ILike, Repository } from 'typeorm';
+import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
+import { DataSource, ILike, Repository } from 'typeorm';
 import { CreateBusinessUnitDto } from '../dto/create-business-unit.dto';
 import { UpdateBusinessUnitDto } from '../dto/update-business-unit.dto';
 import { BusinessUnit } from '../entities/business_unit.entity';
@@ -10,11 +10,32 @@ export class BusinessUnitsService {
   constructor(
     @InjectRepository(BusinessUnit)
     private readonly repo: Repository<BusinessUnit>,
+
+    @InjectDataSource()
+    private readonly dataSource: DataSource,
   ) {}
 
-  async create(dto: CreateBusinessUnitDto) {
-    const unit = this.repo.create(dto);
-    return await this.repo.save(unit);
+  async create(dto: CreateBusinessUnitDto, user: string) {
+    const queryRunner = this.dataSource.createQueryRunner();
+
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      queryRunner.data = { user }; // ✅ make user available in subscriber
+
+      const repo = queryRunner.manager.getRepository(BusinessUnit);
+      const unit = repo.create(dto);
+      const saved = await repo.save(unit);
+
+      await queryRunner.commitTransaction();
+      return saved;
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
   }
 
   async findAll(client_id: number, name: string) {
@@ -38,30 +59,67 @@ export class BusinessUnitsService {
     return await this.repo.findOne({ where: { id } });
   }
 
-  async update(id: number, dto: UpdateBusinessUnitDto) {
-    const unit = await this.repo.findOne({ where: { id } });
-    if (!unit) {
-      throw new Error(`Business Unit with id ${id} not found`);
-    }
+  async update(id: number, dto: UpdateBusinessUnitDto, user: string) {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
 
-    if (unit.name === 'All Business Unit') {
-      throw new Error('Cannot update the default business unit');
-    }
+    try {
+      queryRunner.data = { user }; // 👈 Pass user for audit trail
 
-    await this.repo.update(id, dto);
-    return this.findOne(id);
+      const repo = queryRunner.manager.getRepository(BusinessUnit);
+
+      const unit = await repo.findOne({ where: { id } });
+      if (!unit) {
+        throw new Error(`Business Unit with id ${id} not found`);
+      }
+
+      if (unit.name === 'All Business Unit') {
+        throw new Error('Cannot update the default business unit');
+      }
+
+      // Merge the DTO into the existing entity
+      repo.merge(unit, dto);
+      await repo.save(unit); // save triggers beforeUpdate + afterInsert
+
+      await queryRunner.commitTransaction();
+      return await this.findOne(id); // Can optionally re-fetch using main repo
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
   }
 
-  async remove(id: number) {
-    const unit = await this.repo.findOne({ where: { id } });
-    if (!unit) {
-      throw new Error(`Business Unit with id ${id} not found`);
-    }
+  async remove(id: number, user: string) {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
 
-    if (unit.name === 'All Business Unit') {
-      throw new Error('Cannot delete the default business unit');
-    }
+    try {
+      queryRunner.data = { user };
 
-    return await this.repo.delete(id);
+      const repo = queryRunner.manager.getRepository(BusinessUnit);
+
+      const unit = await repo.findOne({ where: { id } });
+      if (!unit) {
+        throw new Error(`Business Unit with id ${id} not found`);
+      }
+
+      if (unit.name === 'All Business Unit') {
+        throw new Error('Cannot delete the default business unit');
+      }
+
+      await repo.remove(unit); // triggers beforeRemove
+
+      await queryRunner.commitTransaction();
+      return { message: 'Deleted successfully' };
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
   }
 }
