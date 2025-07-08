@@ -5,9 +5,10 @@ import { TiersController } from './tiers/tiers.controller';
 import { Tier } from './entities/tier.entity';
 import { RuleTarget } from 'src/rules/entities/rule-target.entity';
 import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
+import { User } from 'src/users/entities/user.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Tier, RuleTarget, BusinessUnit])],
+  imports: [TypeOrmModule.forFeature([Tier, RuleTarget, BusinessUnit, User])],
   controllers: [TiersController],
   providers: [TiersService],
 })

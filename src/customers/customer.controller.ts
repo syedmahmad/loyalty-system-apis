@@ -6,15 +6,18 @@ import {
   Param,
   Delete,
   Put,
+  UseGuards,
 } from '@nestjs/common';
 import { CustomersService } from './customer.service';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
+import { AuthTokenGuard } from 'src/users/guards/authTokenGuard';
 
 @Controller('customers')
 export class CustomersController {
   constructor(private readonly service: CustomersService) {}
 
+  @UseGuards(AuthTokenGuard)
   @Post()
   async create(@Body() dto: CreateCustomerDto) {
     return await this.service.create(dto);
@@ -30,11 +33,13 @@ export class CustomersController {
     return await this.service.findOne(+id);
   }
 
+  @UseGuards(AuthTokenGuard)
   @Put(':id')
   async update(@Param('id') id: string, @Body() dto: UpdateCustomerDto) {
     return await this.service.update(+id, dto);
   }
 
+  @UseGuards(AuthTokenGuard)
   @Delete(':id')
   async remove(@Param('id') id: string) {
     return await this.service.remove(+id);

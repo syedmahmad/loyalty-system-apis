@@ -7,6 +7,7 @@ import { Rule } from '../rules/entities/rules.entity';
 import { Tier } from '../tiers/entities/tier.entity';
 import { CampaignsController } from './campaigns/campaigns.controller';
 import { CampaignsService } from './campaigns/campaigns.service';
+import { User } from 'src/users/entities/user.entity';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { CampaignsService } from './campaigns/campaigns.service';
       CampaignTier,
       Rule,
       Tier,
+      User,
     ]),
   ],
   controllers: [CampaignsController],
