@@ -48,7 +48,7 @@ export class CouponsController {
     if (!user) {
       throw new BadRequestException('user not found against provided token');
     }
-    return await this.service.create(dto);
+    return await this.service.create(dto, user.uuid);
   }
 
   @Get('/:client_id')
@@ -86,7 +86,7 @@ export class CouponsController {
     if (!user) {
       throw new BadRequestException('user not found against provided token');
     }
-    return await this.service.update(+id, dto);
+    return await this.service.update(+id, dto, user.uuid);
   }
 
   @UseGuards(AuthTokenGuard)
@@ -110,11 +110,21 @@ export class CouponsController {
     if (!user) {
       throw new BadRequestException('user not found against provided token');
     }
-    return await this.service.remove(+id);
+    return await this.service.remove(+id, user.uuid);
   }
 
   @Get('vehicle/makes')
   async findMakes() {
-    // return await this.service.findMakes();
+    return await this.service.findMakes();
+  }
+
+  @Get('vehicle/models/:makeId')
+  async findModels(@Param('makeId') makeId: string) {
+    return await this.service.findModels(makeId);
+  }
+
+   @Get('vehicle/variants/:modelId')
+  async findVariants(@Param('modelId') modelId: string) {
+    return await this.service.findVariants(modelId);
   }
 }

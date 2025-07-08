@@ -1,9 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
+import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import axios from 'axios';
 import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
-import { ILike, Not, Repository } from 'typeorm';
-import { RuleTarget } from '../../rules/entities/rule-target.entity'; // adjust path as needed
+import { DataSource, ILike, Not, Repository } from 'typeorm';
 import { CreateCouponDto } from '../dto/create-coupon.dto';
 import { UpdateCouponDto } from '../dto/update-coupon.dto';
 import { Coupon } from '../entities/coupon.entity';
@@ -13,16 +12,32 @@ export class CouponsService {
   constructor(
     @InjectRepository(Coupon)
     private couponsRepository: Repository<Coupon>,
-    @InjectRepository(RuleTarget)
-    private ruleTargetRepository: Repository<RuleTarget>,
     @InjectRepository(BusinessUnit)
     private businessUnitRepository: Repository<BusinessUnit>, // adjust path as needed
+    @InjectDataSource()
+    private readonly dataSource: DataSource,
   ) {}
 
-  async create(dto: CreateCouponDto) {
-    const coupon = this.couponsRepository.create(dto);
-    const savedTier = await this.couponsRepository.save(coupon);
-    return savedTier;
+  async create(dto: CreateCouponDto, user: string) {
+    const queryRunner = this.dataSource.createQueryRunner();
+
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      queryRunner.data = { user };
+      const repo = queryRunner.manager.getRepository(Coupon);
+      const coupon = repo.create(dto);
+      const saved = await repo.save(coupon);
+
+      await queryRunner.commitTransaction();
+      return saved;
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
   }
 
   async findAll(client_id: number, name: string) {
@@ -56,32 +71,91 @@ export class CouponsService {
     return coupon;
   }
 
-  async update(id: number, dto: UpdateCouponDto) {
-    const coupon = await this.findOne(id);
+  async update(id: number, dto: UpdateCouponDto, user: string) {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
 
-    if (dto.business_unit_id) {
-      const bu = await this.businessUnitRepository.findOne({
-        where: { id: dto.business_unit_id },
-      });
+    try {
+      queryRunner.data = { user }; // 👈 Pass user for audit trail
+      const repo = queryRunner.manager.getRepository(Coupon);
 
-      if (!bu) {
-        throw new NotFoundException('Business Unit not found');
+      const coupon = await repo.findOne({ where: { id } });
+      if (!coupon) {
+        throw new Error(`Coupon with id ${id} not found`);
       }
 
-      coupon.business_unit = bu;
-    }
+      // Merge the DTO into the existing entity
+      repo.merge(coupon, dto);
+      await repo.save(coupon); // save triggers beforeUpdate + afterInsert
 
-    Object.assign(coupon, dto);
-    const updatedCoupon = await this.couponsRepository.save(coupon);
-    return updatedCoupon;
+      await queryRunner.commitTransaction();
+      return await this.findOne(id); // Can optionally re-fetch using main repo
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
   }
 
-  async remove(id: number) {
-    const coupon = await this.couponsRepository.findOneBy({ id });
-    if (!coupon) throw new NotFoundException('Coupon not found');
+  async remove(id: number, user: string) {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
 
-    coupon.status = 2;
-    const updatedCoupon = await this.couponsRepository.save(coupon);
-    return updatedCoupon;
+    try {
+      queryRunner.data = { user };
+
+      const repo = queryRunner.manager.getRepository(Coupon);
+      const coupon = await repo.findOne({ where: { id } });
+      if (!coupon) {
+        throw new Error(`Coupon with id ${id} not found`);
+      }
+
+      coupon.status = 2;
+      await repo.save(coupon);
+
+      await queryRunner.commitTransaction();
+      return { message: 'Deleted successfully' };
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  async findMakes() {
+    try {
+      const response = await axios.get(
+        'https://cs.gogomotor.com/backend-api/master-data/makes?languageId=1',
+      );
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  async findModels(makeId) {
+    try {
+      const response = await axios.get(
+        `https://cs.gogomotor.com/backend-api/master-data/${makeId}/models?languageId=1`,
+      );
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  async findVariants(modelId) {
+    try {
+      const response = await axios.get(
+        `https://cs.gogomotor.com/backend-api/master-data/models/${modelId}/trims`,
+      );
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
   }
 }
