@@ -1,4 +1,4 @@
-import { Tenant } from 'src/tenants/entities/tenant.entity';
+import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
 import {
   Entity,
   PrimaryGeneratedColumn,
@@ -9,32 +9,41 @@ import {
   JoinColumn,
 } from 'typeorm';
 
-@Entity('customers')
+@Entity()
 export class Customer {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @ManyToOne(() => Tenant, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'tenant_id' })
-  tenant: Tenant;
-
   @Column()
-  tenant_id: number;
+  external_customer_id: string;
+
+  @ManyToOne(() => BusinessUnit)
+  @JoinColumn({ name: 'business_unit_id' })
+  business_unit: BusinessUnit;
 
   @Column()
   name: string;
 
-  @Column({ unique: true })
-  phone: string;
-
-  @Column({ nullable: true })
+  @Column()
   email: string;
 
-  @Column({ default: 0 })
-  points_balance: number;
+  @Column()
+  phone: string;
 
-  @Column({ nullable: true })
-  external_id: string; // optional field to store source CRM ID
+  @Column()
+  gender: string;
+
+  @Column()
+  DOB: Date;
+
+  @Column({ default: 0 })
+  status: 0 | 1; // 0 means inactive, 1 means active
+
+  @Column()
+  city: string;
+
+  @Column()
+  address: string;
 
   @CreateDateColumn()
   created_at: Date;

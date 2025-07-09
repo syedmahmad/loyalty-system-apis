@@ -1,13 +1,27 @@
-import { Module } from '@nestjs/common';
+import {
+  MiddlewareConsumer,
+  Module,
+  NestModule,
+  RequestMethod,
+} from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { CustomersService } from './customer.service';
-import { CustomersController } from './customer.controller';
+import { CustomerService } from './customer.service';
+import { CustomerController } from './customer.controller';
 import { Customer } from 'src/customers/entities/customer.entity';
 import { User } from 'src/users/entities/user.entity';
+import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
+import { BusinessUnitMiddleware } from 'src/business_unit/middleware/business_unit.middleware';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Customer, User])],
-  controllers: [CustomersController],
-  providers: [CustomersService],
+  imports: [TypeOrmModule.forFeature([Customer, User, BusinessUnit])],
+  controllers: [CustomerController],
+  providers: [CustomerService, BusinessUnitMiddleware],
 })
-export class CustomersModule {}
+export class CustomerModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(BusinessUnitMiddleware).forRoutes({
+      path: 'customers',
+      method: RequestMethod.POST,
+    });
+  }
+}

@@ -1,36 +1,56 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { BulkCreateCustomerDto } from './dto/create-customer.dto';
+import { Request } from 'express';
 import { Customer } from './entities/customer.entity';
-import { CreateCustomerDto } from './dto/create-customer.dto';
-import { UpdateCustomerDto } from './dto/update-customer.dto';
 
 @Injectable()
-export class CustomersService {
+export class CustomerService {
   constructor(
     @InjectRepository(Customer)
-    private readonly repo: Repository<Customer>,
+    private readonly customerRepo: Repository<Customer>,
   ) {}
 
-  async create(dto: CreateCustomerDto) {
-    const customer = this.repo.create(dto);
-    return await this.repo.save(customer);
-  }
+  async createCustomer(req: Request, dto: BulkCreateCustomerDto) {
+    const businessUnit = (req as any).businessUnit;
 
-  async findAll() {
-    return await this.repo.find();
-  }
+    if (!businessUnit) {
+      throw new BadRequestException('Invalid Business Unit Key');
+    }
 
-  async findOne(id: number) {
-    return await this.repo.findOne({ where: { id } });
-  }
+    const results = [];
 
-  async update(id: number, dto: UpdateCustomerDto) {
-    await this.repo.update(id, dto);
-    return this.findOne(id);
-  }
+    for (const customerDto of dto.customers) {
+      const existing = await this.customerRepo.findOne({
+        where: {
+          external_customer_id: customerDto.external_customer_id,
+          business_unit: { id: businessUnit.id },
+        },
+      });
 
-  async remove(id: number) {
-    return await this.repo.delete(id);
+      if (existing) {
+        results.push({
+          status: 'exists',
+          customer: existing,
+        });
+        continue;
+      }
+
+      const customer = this.customerRepo.create({
+        ...customerDto,
+        DOB: new Date(customerDto.DOB),
+        business_unit: businessUnit,
+      });
+
+      const saved = await this.customerRepo.save(customer);
+
+      results.push({
+        status: 'created',
+        customer: saved,
+      });
+    }
+
+    return results;
   }
 }

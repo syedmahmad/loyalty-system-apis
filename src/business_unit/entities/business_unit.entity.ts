@@ -1,6 +1,7 @@
 import { Campaign } from 'src/campaigns/entities/campaign.entity';
 import { Tenant } from 'src/tenants/entities/tenant.entity';
 import { Tier } from 'src/tiers/entities/tier.entity';
+import { v4 as uuidv4 } from 'uuid';
 import {
   Entity,
   PrimaryGeneratedColumn,
@@ -10,6 +11,7 @@ import {
   ManyToOne,
   JoinColumn,
   OneToMany,
+  BeforeInsert,
 } from 'typeorm';
 
 @Entity('business_units')
@@ -26,6 +28,14 @@ export class BusinessUnit {
 
   @Column()
   name: string;
+
+  @Column({ type: 'char', length: 36, unique: true })
+  uuid: string = uuidv4();
+
+  @BeforeInsert()
+  assignUuid() {
+    this.uuid = uuidv4();
+  }
 
   @Column({ nullable: true })
   description: string;
