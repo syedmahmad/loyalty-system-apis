@@ -66,7 +66,16 @@ export class Coupon {
   coupon_type_id: number;
 
   @Column({ type: 'json', nullable: true })
-  conditions: any;
+  conditions: {
+    id: number;
+    type: string;
+    operator: string;
+    value: string;
+    tier?: number;
+    make?: number;
+    model?: number;
+    variant?: number;
+  }[];
 
   @Column({ type: 'json', nullable: true })
   errors: {

@@ -123,7 +123,7 @@ export class CouponsController {
     return await this.service.findModels(makeId);
   }
 
-   @Get('vehicle/variants/:modelId')
+  @Get('vehicle/variants/:modelId')
   async findVariants(@Param('modelId') modelId: string) {
     return await this.service.findVariants(modelId);
   }
