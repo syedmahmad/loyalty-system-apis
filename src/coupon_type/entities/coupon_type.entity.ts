@@ -25,17 +25,11 @@ export class CouponType {
   @Column()
   coupon_type: string;
 
-  @Column({ type: 'json', nullable: true }) // Stores list of condition keys
+  @Column({ type: 'simple-json', nullable: true }) // Stores list of condition keys
   conditions: { name: string }[];
 
   @Column({ type: 'tinyint', default: ActiveStatus.ACTIVE })
   is_active: number;
-
-  @Column('int')
-  created_by: number;
-
-  @Column('int')
-  updated_by: number;
 
   @CreateDateColumn()
   created_at: Date;

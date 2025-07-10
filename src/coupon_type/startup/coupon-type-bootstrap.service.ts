@@ -72,13 +72,17 @@ export class CouponTypeBootstrapService implements OnApplicationBootstrap {
     if (!existing) {
       const existingTenant = await this.tenantRepo.find();
       const tenantId = existingTenant[0].id;
+
+      const now = new Date();
+
       const defaultCouponTypes = couponTypes.map((type) =>
         this.couponTypeRepo.create({
           tenant_id: tenantId,
           coupon_type: type,
-          created_by: tenantId,
-          updated_by: tenantId,
+          is_active: 1,
           conditions: conditions[type] || [],
+          created_at: now,
+          updated_at: now,
         }),
       );
       await this.couponTypeRepo.save(defaultCouponTypes);

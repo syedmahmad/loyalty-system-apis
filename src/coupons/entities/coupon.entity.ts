@@ -25,12 +25,15 @@ export class Coupon {
   tenant_id: number;
 
   @Column()
+  coupon_title: string;
+
+  @Column()
   code: string;
 
   @Column({ type: 'decimal', nullable: true })
   discount_percentage: number;
 
-  @Column({ type: 'decimal', nullable: true })
+  @Column({ type: 'decimal', nullable: false, default: 0 })
   discount_price: number;
 
   @ManyToOne(() => BusinessUnit, { onDelete: 'CASCADE' })
@@ -65,7 +68,7 @@ export class Coupon {
   @Column()
   coupon_type_id: number;
 
-  @Column({ type: 'json', nullable: true })
+  @Column({ type: 'simple-json', nullable: true })
   conditions: {
     id: number;
     type: string;
@@ -77,7 +80,7 @@ export class Coupon {
     variant?: number;
   }[];
 
-  @Column({ type: 'json', nullable: true })
+  @Column({ type: 'simple-json', nullable: true })
   errors: {
     general_error_message_en?: string;
     general_error_message_ar?: string;
