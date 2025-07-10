@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { BulkCreateCustomerDto } from './dto/create-customer.dto';
@@ -52,5 +56,29 @@ export class CustomerService {
     }
 
     return results;
+  }
+
+  async getAllCustomers(search?: string) {
+    const query = this.customerRepo
+      .createQueryBuilder('customer')
+      .leftJoinAndSelect('customer.business_unit', 'business_unit')
+      .leftJoinAndSelect('business_unit.tenant', 'tenant');
+
+    if (search) {
+      query.where('customer.name LIKE :search', { search: `%${search}%` });
+    }
+
+    return await query.orderBy('customer.created_at', 'DESC').getMany();
+  }
+
+  async updateStatus(id: number, status: 0 | 1) {
+    const customer = await this.customerRepo.findOne({ where: { id } });
+
+    if (!customer) {
+      throw new NotFoundException('Customer not found');
+    }
+
+    customer.status = status;
+    return this.customerRepo.save(customer);
   }
 }
