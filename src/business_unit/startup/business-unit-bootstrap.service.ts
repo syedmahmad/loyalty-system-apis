@@ -16,24 +16,29 @@ export class BusinessUnitBootstrapService implements OnApplicationBootstrap {
   ) {}
 
   async onApplicationBootstrap() {
-    const defaultBUName = 'All Business Unit';
+    await this.backfillMissingUUIDs(); // ✅ First step
+    await this.ensureDefaultBusinessUnit(); // ✅ Then normal logic
+  }
 
-    // 1. Backfill UUIDs for existing business units (if missing)
-    const unitsWithoutUuid = await this.businessUnitRepo.find({
+  private async backfillMissingUUIDs() {
+    const units = await this.businessUnitRepo.find({
       where: [{ uuid: null }, { uuid: '' }],
     });
 
-    if (unitsWithoutUuid.length > 0) {
-      for (const unit of unitsWithoutUuid) {
+    if (units.length) {
+      for (const unit of units) {
         unit.uuid = uuidv4();
         await this.businessUnitRepo.save(unit);
       }
-      console.log(
-        `✅ Added UUIDs to ${unitsWithoutUuid.length} business units`,
-      );
+      console.log(`✅ UUIDs added to ${units.length} business units`);
+    } else {
+      console.log('ℹ️ All business units already have UUIDs');
     }
+  }
 
-    // 2. Create default BU if it doesn't exist
+  private async ensureDefaultBusinessUnit() {
+    const defaultBUName = 'All Business Unit';
+
     const existing = await this.businessUnitRepo.findOneBy({
       name: defaultBUName,
     });
@@ -49,10 +54,8 @@ export class BusinessUnitBootstrapService implements OnApplicationBootstrap {
 
       await this.tenantRepo.save(tenant);
 
-      const existingTenant = await this.tenantRepo.find();
-
       const defaultUnit = this.businessUnitRepo.create({
-        tenant_id: existingTenant[0].id,
+        tenant_id: tenant.id,
         name: defaultBUName,
         description: 'this is default you can not delete it',
         location: 'system created',
