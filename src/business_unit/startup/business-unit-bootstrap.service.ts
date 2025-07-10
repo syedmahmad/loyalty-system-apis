@@ -4,6 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { BusinessUnit } from '../entities/business_unit.entity';
 import { Tenant } from 'src/tenants/entities/tenant.entity';
+import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class BusinessUnitBootstrapService implements OnApplicationBootstrap {
@@ -17,6 +18,22 @@ export class BusinessUnitBootstrapService implements OnApplicationBootstrap {
   async onApplicationBootstrap() {
     const defaultBUName = 'All Business Unit';
 
+    // 1. Backfill UUIDs for existing business units (if missing)
+    const unitsWithoutUuid = await this.businessUnitRepo.find({
+      where: [{ uuid: null }, { uuid: '' }],
+    });
+
+    if (unitsWithoutUuid.length > 0) {
+      for (const unit of unitsWithoutUuid) {
+        unit.uuid = uuidv4();
+        await this.businessUnitRepo.save(unit);
+      }
+      console.log(
+        `✅ Added UUIDs to ${unitsWithoutUuid.length} business units`,
+      );
+    }
+
+    // 2. Create default BU if it doesn't exist
     const existing = await this.businessUnitRepo.findOneBy({
       name: defaultBUName,
     });
@@ -40,6 +57,7 @@ export class BusinessUnitBootstrapService implements OnApplicationBootstrap {
         description: 'this is default you can not delete it',
         location: 'system created',
       });
+
       await this.businessUnitRepo.save(defaultUnit);
       console.log('✅ Default Business Unit created');
     } else {
