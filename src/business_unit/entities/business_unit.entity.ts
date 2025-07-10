@@ -34,7 +34,9 @@ export class BusinessUnit {
 
   @BeforeInsert()
   assignUuid() {
-    this.uuid = uuidv4();
+    if (!this.uuid) {
+      this.uuid = uuidv4();
+    }
   }
 
   @Column({ nullable: true })
