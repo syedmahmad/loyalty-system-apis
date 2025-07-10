@@ -29,7 +29,10 @@ export class BusinessUnit {
   @Column()
   name: string;
 
-  @Column({ type: 'char', length: 36, unique: true })
+  @Column({
+    type: 'char',
+    length: 36,
+  })
   uuid: string = uuidv4();
 
   @BeforeInsert()
