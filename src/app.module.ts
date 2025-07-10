@@ -10,7 +10,7 @@ import { PointsModule } from './points/points.module';
 import { TiersModule } from './tiers/tiers.module';
 import { TenantsModule } from './tenants/tenants.module';
 import { ReportsModule } from './reports/reports.module';
-import { CustomersModule } from './customers/customer.module';
+import { CustomerModule } from './api/customers/customer.module';
 import { BusinessUnitsModule } from './business_unit/business_unit.module';
 import { RulesModule } from './rules/rules.module';
 import { CampaignModule } from './campaigns/campaigns.module';
@@ -37,7 +37,7 @@ import { CouponTypeModule } from './coupon_type/coupon_type.module';
     }),
     UsersModule,
     CampaignModule,
-    CustomersModule,
+    CustomerModule,
     BusinessUnitsModule,
     RewardsModule,
     PointsModule,
