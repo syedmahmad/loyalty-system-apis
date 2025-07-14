@@ -55,8 +55,11 @@ export class Coupon {
   @Column({ type: 'datetime', nullable: true })
   date_to: Date;
 
-  @Column({ default: false })
-  once_per_customer: boolean;
+  // @Column({ default: false })
+  // once_per_customer: boolean;
+
+  @Column('int', { default: 0 })
+  max_usage_per_user: number;
 
   @Column('int', { default: 0 })
   reuse_interval: number;
@@ -65,7 +68,7 @@ export class Coupon {
   @JoinColumn({ name: 'coupon_type_id' })
   coupon_type: CouponType;
 
-  @Column()
+  @Column({ nullable: true })
   coupon_type_id: number;
 
   @Column({ type: 'simple-json', nullable: true })
@@ -87,6 +90,9 @@ export class Coupon {
     exception_error_message_en?: string;
     exception_error_message_ar?: string;
   };
+
+  @Column({ type: 'simple-json', nullable: true })
+  complex_coupon: any;
 
   @Column({ nullable: true, type: 'text' })
   benefits: string;

@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { CouponType } from '../entities/coupon_type.entity';
 import { CreateCouponTypeDto } from '../dto/create-coupon-type.dto';
 import { UpdateCouponTypeDto } from '../dto/update-coupon-type.dto';
+import { ActiveStatus } from '../type/types';
 
 @Injectable()
 export class CouponTypeService {
@@ -20,6 +21,7 @@ export class CouponTypeService {
 
   async findAll() {
     const couponTypes = await this.couponTypeRepository.find({
+      where: { is_active: ActiveStatus.ACTIVE },
       order: { created_at: 'DESC' },
     });
 

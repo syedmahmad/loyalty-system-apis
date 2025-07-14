@@ -18,10 +18,9 @@ export class CouponTypeBootstrapService implements OnApplicationBootstrap {
     const couponTypes = [
       'VEHICLE_SPECIFIC',
       'USER_SPECIFIC',
-      'TIME_LIMITED',
       'PRODUCT_SPECIFIC',
       'GEO_TARGETED',
-      'USAGE_BASED',
+      'SERVICE_BASED',
       'BIRTHDAY',
       'REFERRAL',
       'TIER_BASED',
@@ -43,10 +42,9 @@ export class CouponTypeBootstrapService implements OnApplicationBootstrap {
         { name: 'NOT_APPLICABLE' },
         { name: 'VALIDATE_OTP' },
       ],
-      TIME_LIMITED: [{ name: 'minimumPurchase' }],
       PRODUCT_SPECIFIC: [{ name: 'applicableProductIds' }],
       GEO_TARGETED: [{ name: 'allowedCities' }, { name: 'allowedZipCodes' }],
-      USAGE_BASED: [{ name: 'requiredUsageCount' }],
+      SERVICE_BASED: [{ name: '' }],
       BIRTHDAY: [
         { name: 'minimumPurchase' },
         { name: 'userMustVerifyBirthday' },
@@ -55,7 +53,6 @@ export class CouponTypeBootstrapService implements OnApplicationBootstrap {
       REFERRAL: [
         { name: 'referredUserFirstPurchaseMinAmount' },
         { name: 'referredUserSignupRequired' },
-        { name: 'referralDiscount' },
         { name: 'referrerReward' },
       ],
       TIER_BASED: [{ name: 'discountPercentage' }],
