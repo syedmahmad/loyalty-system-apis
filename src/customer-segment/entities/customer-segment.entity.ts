@@ -1,0 +1,46 @@
+// customer-segment.entity.ts
+import {
+  Entity,
+  Column,
+  PrimaryGeneratedColumn,
+  ManyToOne,
+  OneToMany,
+  JoinColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+} from 'typeorm';
+import { CustomerSegmentMember } from './customer-segment-member.entity';
+import { Tenant } from 'src/tenants/entities/tenant.entity';
+
+@Entity('customer_segments')
+export class CustomerSegment {
+  @PrimaryGeneratedColumn()
+  id: number;
+
+  @Column()
+  name: string;
+
+  @Column()
+  description: string;
+
+  @ManyToOne(() => Tenant, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'tenant_id' })
+  tenant: Tenant;
+
+  @Column()
+  tenant_id: number;
+
+  @Column({ type: 'int', default: 1 })
+  status: number;
+
+  @OneToMany(() => CustomerSegmentMember, (m) => m.segment, {
+    cascade: true,
+  })
+  members: CustomerSegmentMember[];
+
+  @CreateDateColumn()
+  created_at: Date;
+
+  @UpdateDateColumn()
+  updated_at: Date;
+}

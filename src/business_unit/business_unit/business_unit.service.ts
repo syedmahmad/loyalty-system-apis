@@ -25,7 +25,12 @@ export class BusinessUnitsService {
       queryRunner.data = { user }; // ✅ make user available in subscriber
 
       const repo = queryRunner.manager.getRepository(BusinessUnit);
-      const unit = repo.create(dto);
+
+      const unit = repo.create({
+        ...dto,
+        status: 1, // 👈 Hardcoded status
+      });
+
       const saved = await repo.save(unit);
 
       await queryRunner.commitTransaction();
@@ -49,6 +54,7 @@ export class BusinessUnitsService {
 
     return await this.repo.find({
       where: {
+        status: 1, // Only active business units
         tenant_id: client_id,
         ...optionalWhereClause,
       },
@@ -111,10 +117,12 @@ export class BusinessUnitsService {
         throw new Error('Cannot delete the default business unit');
       }
 
-      await repo.remove(unit); // triggers beforeRemove
+      // Instead of removing, we soft-delete by updating status
+      unit.status = 0;
+      await repo.save(unit);
 
       await queryRunner.commitTransaction();
-      return { message: 'Deleted successfully' };
+      return { message: 'Marked as inactive successfully' };
     } catch (error) {
       await queryRunner.rollbackTransaction();
       throw error;

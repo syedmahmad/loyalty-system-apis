@@ -8,12 +8,14 @@ import { Repository } from 'typeorm';
 import { BulkCreateCustomerDto } from './dto/create-customer.dto';
 import { Request } from 'express';
 import { Customer } from './entities/customer.entity';
+import { OciService } from 'src/oci/oci.service';
 
 @Injectable()
 export class CustomerService {
   constructor(
     @InjectRepository(Customer)
     private readonly customerRepo: Repository<Customer>,
+    private readonly ociService: OciService,
   ) {}
 
   async createCustomer(req: Request, dto: BulkCreateCustomerDto) {
@@ -41,8 +43,17 @@ export class CustomerService {
         continue;
       }
 
+      const encryptedEmail = await this.ociService.encryptData(
+        customerDto.email,
+      );
+      const encryptedPhone = await this.ociService.encryptData(
+        customerDto.phone,
+      );
+
       const customer = this.customerRepo.create({
         ...customerDto,
+        email: encryptedEmail,
+        phone: encryptedPhone,
         DOB: new Date(customerDto.DOB),
         business_unit: businessUnit,
       });
@@ -56,6 +67,18 @@ export class CustomerService {
     }
 
     return results;
+  }
+
+  async getCustomerById(id: number) {
+    const customer = await this.customerRepo.findOne({
+      where: { id },
+    });
+
+    if (!customer) {
+      throw new Error(`Customer with ID ${id} not found`);
+    }
+
+    return customer;
   }
 
   async getAllCustomers(search?: string) {

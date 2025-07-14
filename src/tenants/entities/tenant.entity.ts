@@ -31,4 +31,7 @@ export class Tenant {
 
   @UpdateDateColumn()
   updated_at: Date;
+
+  @Column({ type: 'int', default: 1 })
+  status: number; // 1 = active, 0 = inactive
 }

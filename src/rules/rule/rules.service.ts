@@ -41,6 +41,7 @@ export class RulesService {
         condition_type: dto.condition_type,
         condition_operator: dto.condition_operator,
         condition_value: dto.condition_value,
+        status: 1, // Default to active
       });
 
       const savedRule = await queryRunner.manager.save(rule);
@@ -67,6 +68,7 @@ export class RulesService {
       where: {
         tenant_id: client_id,
         ...optionalWhereClause,
+        status: 1, // Only active rules
       },
     });
   }
@@ -129,9 +131,10 @@ export class RulesService {
       const rule = await manager.findOne(Rule, { where: { id } });
       if (!rule) throw new Error('Rule not found');
 
-      await manager.remove(rule);
-      await queryRunner.commitTransaction();
+      rule.status = 0; // 👈 Soft delete by updating status
+      await manager.save(rule);
 
+      await queryRunner.commitTransaction();
       return { deleted: true };
     } catch (err) {
       await queryRunner.rollbackTransaction();

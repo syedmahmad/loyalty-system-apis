@@ -20,6 +20,8 @@ import { GlobalAuditSubscriber } from './audit_tails/audit_trail/audit_trail.sub
 import { AuditTrailModule } from './audit_tails/audit_trail.module';
 import { CouponsModule } from './coupons/coupons.module';
 import { CouponTypeModule } from './coupon_type/coupon_type.module';
+import { OciModule } from './oci/oci.module';
+import { CustomerSegmentsModule } from './customer-segment/customer-segment.module';
 
 @Module({
   imports: [
@@ -49,6 +51,8 @@ import { CouponTypeModule } from './coupon_type/coupon_type.module';
     RulesModule,
     CouponsModule,
     CouponTypeModule,
+    OciModule,
+    CustomerSegmentsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

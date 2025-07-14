@@ -22,7 +22,7 @@ export class TenantsService {
     queryRunner.data = { user };
 
     try {
-      const tenant = this.tenantsRepository.create(dto);
+      const tenant = this.tenantsRepository.create({ ...dto, status: 1 }); // Default to active status
       const savedTenant = await queryRunner.manager.save(tenant);
 
       await queryRunner.commitTransaction();
@@ -40,7 +40,7 @@ export class TenantsService {
   }
 
   async findOne(id: number) {
-    const tenant = await this.tenantsRepository.findOneBy({ id });
+    const tenant = await this.tenantsRepository.findOneBy({ id, status: 1 });
     if (!tenant) throw new NotFoundException('Tenant not found');
     return tenant;
   }
@@ -86,17 +86,16 @@ export class TenantsService {
     await queryRunner.startTransaction();
     queryRunner.data = { user };
 
-    console.log('user,', user);
-
     try {
       const tenant = await queryRunner.manager.findOne(Tenant, {
         where: { id },
       });
       if (!tenant) throw new Error(`Tenant with ID ${id} not found`);
 
-      await queryRunner.manager.remove(tenant);
-      await queryRunner.commitTransaction();
+      tenant.status = 0; // 👈 Set status to 0 instead of deleting
+      await queryRunner.manager.save(tenant);
 
+      await queryRunner.commitTransaction();
       return { deleted: true };
     } catch (error) {
       await queryRunner.rollbackTransaction();

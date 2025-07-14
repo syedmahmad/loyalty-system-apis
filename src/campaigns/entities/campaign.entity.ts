@@ -50,6 +50,12 @@ export class Campaign {
   @OneToMany(() => CampaignTier, (ct) => ct.campaign, { cascade: true })
   tiers: CampaignTier[];
 
+  @Column({ default: false })
+  active: boolean;
+
+  @Column({ type: 'int', default: 0 })
+  status: number;
+
   @CreateDateColumn()
   created_at: Date;
 
