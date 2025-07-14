@@ -118,9 +118,12 @@ export class CouponsController {
     return await this.service.findMakes();
   }
 
-  @Get('vehicle/models/:makeId')
-  async findModels(@Param('makeId') makeId: string) {
-    return await this.service.findModels(makeId);
+  @Get('vehicle/models')
+  async findModels(
+    @Query('makeId') makeId?: number,
+    @Query('year') year?: number,
+  ) {
+    return await this.service.findModels(makeId, year);
   }
 
   @Get('vehicle/variants/:modelId')

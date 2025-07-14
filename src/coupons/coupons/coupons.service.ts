@@ -137,12 +137,18 @@ export class CouponsService {
     }
   }
 
-  async findModels(makeId) {
+  async findModels(makeId, year) {
     try {
       const response = await axios.get(
         `https://cs.gogomotor.com/backend-api/master-data/${makeId}/models?languageId=1`,
       );
-      return response.data;
+      const filteredData = response.data.data.filter(
+        (singleobj) => singleobj.ModelYear === year,
+      );
+      return {
+        success: response.data.success,
+        data: filteredData,
+      };
     } catch (error) {
       throw error;
     }
