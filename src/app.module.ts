@@ -20,6 +20,7 @@ import { GlobalAuditSubscriber } from './audit_tails/audit_trail/audit_trail.sub
 import { AuditTrailModule } from './audit_tails/audit_trail.module';
 import { CouponsModule } from './coupons/coupons.module';
 import { CouponTypeModule } from './coupon_type/coupon_type.module';
+import { WalletModule } from './wallet/wallet.module';
 
 @Module({
   imports: [
@@ -49,6 +50,7 @@ import { CouponTypeModule } from './coupon_type/coupon_type.module';
     RulesModule,
     CouponsModule,
     CouponTypeModule,
+    WalletModule,
   ],
   controllers: [AppController],
   providers: [AppService],
