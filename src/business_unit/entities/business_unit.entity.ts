@@ -48,6 +48,9 @@ export class BusinessUnit {
   @Column({ nullable: true })
   location: string;
 
+  @Column({ type: 'int', default: 1 })
+  status: number; // 1 = active, 0 = inactive
+
   @CreateDateColumn()
   created_at: Date;
 

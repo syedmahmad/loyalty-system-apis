@@ -71,6 +71,9 @@ export class Rule {
   @UpdateDateColumn()
   updated_at: Date;
 
+  @Column({ type: 'int', default: 1 })
+  status: number; // 1 = active, 0 = inactive
+
   @OneToMany(() => RuleTarget, (ruleTarget) => ruleTarget.rule, {
     cascade: true,
   })

@@ -9,12 +9,14 @@ import * as jwt from 'jsonwebtoken';
 import axios from 'axios';
 import { v4 as uuidv4 } from 'uuid';
 import { User } from '../entities/user.entity';
+import { OciService } from 'src/oci/oci.service';
 
 @Injectable()
 export class UsersService {
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    private readonly ociService: OciService,
   ) {}
 
   async validateToken({ token }: { token: string }): Promise<any> {
@@ -31,6 +33,8 @@ export class UsersService {
         .map((domain) => domain.trim().toLowerCase());
       const userEmail = decodedUser.email || decodedUser.preferred_username;
 
+      const encryptedEmail = await this.ociService.encryptData(userEmail);
+
       const isValid = ALLOWED_DOMAINS.some((domain) =>
         userEmail.endsWith(domain),
       );
@@ -42,17 +46,20 @@ export class UsersService {
       }
 
       let user = await this.userRepository.findOne({
-        where: { email: userEmail },
+        where: { email: encryptedEmail },
       });
 
       const privileges = await this.handleverify_with_access(userEmail);
+      const encryptedPhoneNumber = await this.ociService.encryptData(
+        decodedUser?.phone_number,
+      );
 
       if (!user) {
         user = this.userRepository.create({
-          email: userEmail,
+          email: encryptedEmail,
           first_name: decodedUser?.given_name || decodedUser.name,
           last_name: decodedUser?.family_name,
-          mobile: decodedUser?.phone_number,
+          mobile: encryptedPhoneNumber,
           user_role: 'User',
           role_key: 'user',
           user_privileges: privileges,
@@ -63,7 +70,8 @@ export class UsersService {
       } else {
         user.first_name = decodedUser?.given_name || decodedUser.name;
         user.last_name = decodedUser?.family_name;
-        user.mobile = decodedUser?.phone_number;
+        user.mobile = encryptedPhoneNumber;
+        user.email = encryptedEmail;
         user.user_privileges = privileges;
         user.is_active = 1;
         user = await this.userRepository.save(user);

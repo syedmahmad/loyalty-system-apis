@@ -32,9 +32,6 @@ export class Tier {
   @Column()
   name: string; // e.g., Bronze, Silver, Gold
 
-  // @Column('float', { default: 0 })
-  // points_conversion_rate: number;
-
   @Column('int', { default: 1 })
   level: number; // Order or rank
 
@@ -61,4 +58,7 @@ export class Tier {
 
   @UpdateDateColumn()
   updated_at: Date;
+
+  @Column({ type: 'int', default: 1 })
+  status: number; // 1 = active, 0 = inactive
 }

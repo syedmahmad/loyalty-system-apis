@@ -29,7 +29,7 @@ export class TiersService {
 
     try {
       // 1. Create and save the Tier
-      const tier = this.tiersRepository.create(dto);
+      const tier = this.tiersRepository.create({ ...dto, status: 1 }); // Default to active status
       const savedTier = await queryRunner.manager.save(tier);
 
       // 2. Optionally create RuleTarget records
@@ -74,7 +74,7 @@ export class TiersService {
     }
 
     const tiers = await this.tiersRepository.find({
-      where: { tenant_id: client_id, ...optionalWhereClause },
+      where: { tenant_id: client_id, status: 1, ...optionalWhereClause },
       relations: { business_unit: true },
       order: { created_at: 'DESC' },
     });
@@ -197,9 +197,10 @@ export class TiersService {
       const tier = await queryRunner.manager.findOne(Tier, { where: { id } });
       if (!tier) throw new NotFoundException(`Tier with id ${id} not found`);
 
-      await queryRunner.manager.remove(tier);
-      await queryRunner.commitTransaction();
+      tier.status = 0; // 👈 Soft delete by setting status to 0
+      await queryRunner.manager.save(tier);
 
+      await queryRunner.commitTransaction();
       return { deleted: true };
     } catch (error) {
       await queryRunner.rollbackTransaction();

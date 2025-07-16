@@ -12,6 +12,7 @@ import { CreateCampaignDto } from '../dto/create-campaign.dto';
 import { UpdateCampaignDto } from '../dto/update-campaign.dto';
 import { Rule } from 'src/rules/entities/rules.entity';
 import { Tier } from 'src/tiers/entities/tier.entity';
+import { Cron, CronExpression } from '@nestjs/schedule';
 
 @Injectable()
 export class CampaignsService {
@@ -83,6 +84,8 @@ export class CampaignsService {
         description,
         business_unit_id,
         tenant_id: client_id,
+        active: true, // Default to active
+        status: 1, // Default to active status
       });
 
       const savedCampaign = await manager.save(campaign);
@@ -138,7 +141,7 @@ export class CampaignsService {
     }
 
     return this.campaignRepository.find({
-      where: { tenant_id: client_id, ...optionalWhereClause },
+      where: { tenant_id: client_id, status: 1, ...optionalWhereClause },
       relations: ['rules', 'tiers', 'business_unit'],
       order: { created_at: 'DESC' },
     });
@@ -308,15 +311,41 @@ export class CampaignsService {
         throw new NotFoundException(`Campaign with ID ${id} not found`);
       }
 
-      await manager.remove(campaign); // triggers beforeRemove subscriber
-      await queryRunner.commitTransaction();
+      campaign.status = 0; // 👈 Soft delete by updating status
+      await manager.save(campaign);
 
+      await queryRunner.commitTransaction();
       return { deleted: true };
     } catch (error) {
       await queryRunner.rollbackTransaction();
       throw error;
     } finally {
       await queryRunner.release();
+    }
+  }
+
+  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
+  async handleCron() {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // normalize to start of the day
+
+    console.log('Running campaign expiry check...');
+
+    const expiredCampaigns = await this.campaignRepository.find({
+      where: {
+        end_date: today,
+        active: true,
+      },
+    });
+
+    if (expiredCampaigns.length) {
+      for (const campaign of expiredCampaigns) {
+        campaign.active = false;
+        await this.campaignRepository.save(campaign);
+        console.log(`Deactivated campaign: ${campaign.name}`);
+      }
+    } else {
+      console.log('No expired campaigns found today.');
     }
   }
 }

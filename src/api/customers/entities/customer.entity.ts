@@ -1,13 +1,16 @@
-import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
+// customer.entity.ts
 import {
   Entity,
   PrimaryGeneratedColumn,
   Column,
+  ManyToOne,
+  OneToMany,
   CreateDateColumn,
   UpdateDateColumn,
-  ManyToOne,
   JoinColumn,
 } from 'typeorm';
+import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
+import { CustomerSegmentMember } from 'src/customer-segment/entities/customer-segment-member.entity';
 
 @Entity()
 export class Customer {
@@ -37,13 +40,16 @@ export class Customer {
   DOB: Date;
 
   @Column({ default: 0 })
-  status: 0 | 1; // 0 means inactive, 1 means active
+  status: 0 | 1;
 
   @Column()
   city: string;
 
   @Column()
   address: string;
+
+  @OneToMany(() => CustomerSegmentMember, (m: any) => m.customer)
+  memberships: CustomerSegmentMember[];
 
   @CreateDateColumn()
   created_at: Date;

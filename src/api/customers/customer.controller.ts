@@ -26,6 +26,11 @@ export class CustomerController {
     return this.customerService.getAllCustomers(search);
   }
 
+  @Get(':id')
+  async getCustomerById(@Param('id') id: number) {
+    return this.customerService.getCustomerById(id);
+  }
+
   @Patch(':id/status')
   async updateStatus(@Param('id') id: number, @Body() body: { status: 0 | 1 }) {
     return this.customerService.updateStatus(id, body.status);

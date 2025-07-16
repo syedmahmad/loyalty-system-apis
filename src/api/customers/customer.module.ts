@@ -12,11 +12,13 @@ import { User } from 'src/users/entities/user.entity';
 import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
 import { BusinessUnitMiddleware } from 'src/business_unit/middleware/business_unit.middleware';
 import { WalletModule } from 'src/wallet/wallet.module';
+import { OciModule } from 'src/oci/oci.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Customer, User, BusinessUnit]),
     WalletModule,
+    OciModule,
   ],
   controllers: [CustomerController],
   providers: [CustomerService, BusinessUnitMiddleware],
