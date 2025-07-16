@@ -8,12 +8,14 @@ import { Repository } from 'typeorm';
 import { BulkCreateCustomerDto } from './dto/create-customer.dto';
 import { Request } from 'express';
 import { Customer } from './entities/customer.entity';
+import { WalletService } from 'src/wallet/wallet/wallet.service';
 
 @Injectable()
 export class CustomerService {
   constructor(
     @InjectRepository(Customer)
     private readonly customerRepo: Repository<Customer>,
+    private readonly walletService: WalletService,
   ) {}
 
   async createCustomer(req: Request, dto: BulkCreateCustomerDto) {
@@ -41,13 +43,18 @@ export class CustomerService {
         continue;
       }
 
-      const customer = this.customerRepo.create({
+      const customer = await this.customerRepo.create({
         ...customerDto,
         DOB: new Date(customerDto.DOB),
         business_unit: businessUnit,
       });
 
       const saved = await this.customerRepo.save(customer);
+
+      await this.walletService.createWallet({
+        customer_id: saved.id,
+        business_unit_id: businessUnit.id,
+      });
 
       results.push({
         status: 'created',
