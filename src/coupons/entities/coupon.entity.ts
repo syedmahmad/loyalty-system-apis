@@ -55,6 +55,9 @@ export class Coupon {
   @Column({ type: 'datetime', nullable: true })
   date_to: Date;
 
+  @Column('int', { default: 0 })
+  validity_after_assignment: number;
+
   // @Column({ default: false })
   // once_per_customer: boolean;
 

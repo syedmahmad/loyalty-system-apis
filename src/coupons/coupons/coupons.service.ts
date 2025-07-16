@@ -40,20 +40,21 @@ export class CouponsService {
     }
   }
 
-  async findAll(client_id: number, name: string) {
-    let optionalWhereClause = {};
-
-    if (name) {
-      optionalWhereClause = {
-        code: ILike(`%${name}%`),
-      };
-    }
+  async findAll(client_id: number, name: string, limit: number) {
+    const baseConditions = { status: Not(2), tenant_id: client_id };
+    const whereClause = name
+      ? [
+          { ...baseConditions, code: ILike(`%${name}%`) },
+          { ...baseConditions, coupon_title: ILike(`%${name}%`) },
+        ]
+      : [baseConditions];
 
     const coupons = await this.couponsRepository.find({
-      //  where: { tenant_id: client_id, ...optionalWhereClause },
-      where: { status: Not(2), tenant_id: client_id, ...optionalWhereClause },
+      where: whereClause,
       relations: { business_unit: true },
       order: { created_at: 'DESC' },
+      ...(name && { take: 20 }), // ← limit to 20 if name is present
+      ...(limit && { take: limit }),
     });
 
     return { coupons: coupons };

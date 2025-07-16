@@ -39,6 +39,10 @@ export class CreateCampaignDto {
   @IsNotEmpty()
   tiers: { tier_id: number; point_conversion_rate: number }[]; // Tier IDs from Tier table
 
+  @IsArray()
+  @IsNotEmpty()
+  coupons: { coupon_id: number }[];
+
   @IsOptional()
   @IsNumber()
   created_by?: number;

@@ -54,9 +54,10 @@ export class CouponsController {
   @Get('/:client_id')
   async findAll(
     @Param('client_id') client_id: number,
-    @Query('name') name?: string, // optional query param
+    @Query('name') name?: string, // optional query param,
+    @Query('limit') limit?: number, // optional query param,
   ) {
-    return await this.service.findAll(client_id, name);
+    return await this.service.findAll(client_id, name, limit);
   }
 
   @Get('edit/:id')

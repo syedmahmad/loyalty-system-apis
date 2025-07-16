@@ -8,11 +8,13 @@ import { Repository, DataSource, In, ILike } from 'typeorm';
 import { Campaign } from '../entities/campaign.entity';
 import { CampaignRule } from '../entities/campaign-rule.entity';
 import { CampaignTier } from '../entities/campaign-tier.entity';
+import { CampaignCoupons } from '../entities/campaign-coupon.entity';
 import { CreateCampaignDto } from '../dto/create-campaign.dto';
 import { UpdateCampaignDto } from '../dto/update-campaign.dto';
 import { Rule } from 'src/rules/entities/rules.entity';
 import { Tier } from 'src/tiers/entities/tier.entity';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { Coupon } from 'src/coupons/entities/coupon.entity';
 
 @Injectable()
 export class CampaignsService {
@@ -31,6 +33,12 @@ export class CampaignsService {
 
     @InjectRepository(Tier)
     private readonly tierRepository: Repository<Tier>,
+
+    @InjectRepository(Coupon)
+    private readonly couponRepository: Repository<Coupon>,
+
+    @InjectRepository(CampaignCoupons)
+    private readonly campaignCouponsRepository: Repository<CampaignCoupons>,
 
     private readonly dataSource: DataSource,
   ) {}
@@ -51,6 +59,7 @@ export class CampaignsService {
         business_unit_id,
         rules,
         tiers,
+        coupons,
         client_id,
       } = dto;
 
@@ -76,6 +85,16 @@ export class CampaignsService {
         throw new BadRequestException('Some tiers not found');
       }
 
+      // Validate coupons
+      const couponIds = coupons.map((t) => t.coupon_id);
+      const couponEntities = await this.couponRepository.findBy({
+        id: In(couponIds),
+      });
+
+      if (couponEntities.length !== coupons.length) {
+        throw new BadRequestException('Some coupons not found');
+      }
+
       // Create and save campaign
       const campaign = manager.create(Campaign, {
         name,
@@ -89,6 +108,14 @@ export class CampaignsService {
       });
 
       const savedCampaign = await manager.save(campaign);
+
+      // Create campaign coupons
+      const campaignCoupons = couponEntities.map((coupon) =>
+        this.campaignCouponsRepository.create({
+          campaign: savedCampaign,
+          coupon,
+        }),
+      );
 
       // Create campaign rules
       const campaignRules = ruleEntities.map((rule) =>
@@ -120,6 +147,7 @@ export class CampaignsService {
       // Save campaign rules and tiers
       await manager.save(CampaignRule, campaignRules);
       await manager.save(CampaignTier, campaignTiers);
+      await manager.save(CampaignCoupons, campaignCoupons);
 
       await queryRunner.commitTransaction();
       return savedCampaign;
@@ -142,7 +170,7 @@ export class CampaignsService {
 
     return this.campaignRepository.find({
       where: { tenant_id: client_id, status: 1, ...optionalWhereClause },
-      relations: ['rules', 'tiers', 'business_unit'],
+      relations: ['rules', 'tiers', 'business_unit', 'coupons'],
       order: { created_at: 'DESC' },
     });
   }
@@ -150,7 +178,7 @@ export class CampaignsService {
   async findOne(id: number): Promise<Campaign> {
     const campaign = await this.campaignRepository.findOne({
       where: { id },
-      relations: ['rules', 'tiers', 'business_unit'],
+      relations: ['rules', 'tiers', 'business_unit', 'coupons'],
     });
 
     if (!campaign) {
@@ -175,7 +203,14 @@ export class CampaignsService {
 
       const campaign = await manager.findOne(Campaign, {
         where: { id },
-        relations: ['rules', 'tiers', 'tiers.tier', 'rules.rule'],
+        relations: [
+          'rules',
+          'tiers',
+          'coupons',
+          'tiers.tier',
+          'rules.rule',
+          'coupons.coupon',
+        ],
       });
 
       if (!campaign) {
@@ -225,6 +260,40 @@ export class CampaignsService {
           }),
         );
         await manager.save(CampaignRule, newCampaignRules);
+      }
+
+      // === COUPONS Sync ===
+      const incomingCouponIds = dto.coupons.map((c) => c.coupon_id);
+      const existingCouponIds = campaign.coupons.map((cc) => cc.coupon.id);
+      const couponIdsToRemove = existingCouponIds.filter(
+        (id) => !incomingCouponIds.includes(id),
+      );
+      const couponIdsToAdd = incomingCouponIds.filter(
+        (id) => !existingCouponIds.includes(id),
+      );
+
+      if (couponIdsToRemove.length) {
+        await manager.delete(CampaignCoupons, {
+          campaign: { id },
+          coupon: In(couponIdsToRemove),
+        });
+      }
+
+      if (couponIdsToAdd.length) {
+        const couponsToAdd = await this.couponRepository.findBy({
+          id: In(couponIdsToAdd),
+        });
+        if (couponsToAdd.length !== couponIdsToAdd.length) {
+          throw new BadRequestException('Some new coupons not found');
+        }
+
+        const newCampaignCoupons = couponsToAdd.map((coupon) =>
+          this.campaignCouponsRepository.create({
+            campaign: updatedCampaign,
+            coupon,
+          }),
+        );
+        await manager.save(CampaignCoupons, newCampaignCoupons);
       }
 
       // === TIERS Sync ===
