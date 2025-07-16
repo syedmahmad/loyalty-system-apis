@@ -25,6 +25,7 @@ export class Wallet {
 
   @Column({
     type: 'decimal',
+    default: 0,
     precision: 10,
     scale: 2,
     transformer: {
@@ -36,6 +37,7 @@ export class Wallet {
 
   @Column({
     type: 'decimal',
+    default: 0,
     precision: 10,
     scale: 2,
     transformer: {
@@ -47,6 +49,7 @@ export class Wallet {
 
   @Column({
     type: 'decimal',
+    default: 0,
     precision: 10,
     scale: 2,
     transformer: {
