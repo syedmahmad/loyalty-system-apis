@@ -23,13 +23,37 @@ export class Wallet {
   @JoinColumn({ name: 'business_unit_id' })
   business_unit: BusinessUnit;
 
-  @Column({ type: 'decimal', default: 0 })
+  @Column({
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    transformer: {
+      to: (value: number) => value,
+      from: (value: string) => parseFloat(value),
+    },
+  })
   total_balance: number;
 
-  @Column({ type: 'decimal', default: 0 })
+  @Column({
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    transformer: {
+      to: (value: number) => value,
+      from: (value: string) => parseFloat(value),
+    },
+  })
   available_balance: number;
 
-  @Column({ type: 'decimal', default: 0 })
+  @Column({
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    transformer: {
+      to: (value: number) => value,
+      from: (value: string) => parseFloat(value),
+    },
+  })
   locked_balance: number;
 
   @Column({ default: false })

@@ -106,16 +106,20 @@ export class WalletService {
       }
     }
 
+    const amount = Number(dto.amount);
+
     if (
       dto.type === WalletTransactionType.BURN &&
       !settings?.allow_negative_balance &&
-      wallet.available_balance < dto.amount
+      wallet.available_balance < amount
     ) {
       throw new BadRequestException('Insufficient balance');
     }
 
     const transaction = this.txRepo.create({
       ...dto,
+      business_unit: { id: dto.business_unit_id } as any,
+      wallet: { id: dto.wallet_id } as any,
       unlock_date: unlockDate,
       expiry_date: expiryDate,
     });
@@ -124,21 +128,25 @@ export class WalletService {
     if (dto.status === 'active') {
       switch (dto.type) {
         case 'earn':
-          wallet.total_balance += dto.amount;
-          wallet.available_balance += dto.amount;
+          wallet.total_balance += amount;
+          wallet.available_balance += amount;
           break;
         case 'burn':
-          wallet.total_balance -= dto.amount;
-          wallet.available_balance -= dto.amount;
+          wallet.total_balance -= amount;
+          wallet.available_balance -= amount;
           break;
         case 'expire':
-          wallet.total_balance -= dto.amount;
+          wallet.total_balance -= amount;
           break;
         case 'adjustment':
-          wallet.total_balance += dto.amount;
-          wallet.available_balance += dto.amount;
+          wallet.total_balance += amount;
+          wallet.available_balance += amount;
           break;
       }
+      await this.walletRepo.save(wallet);
+    } else if (dto.status === 'pending') {
+      wallet.total_balance += amount;
+      wallet.locked_balance += amount;
       await this.walletRepo.save(wallet);
     }
 

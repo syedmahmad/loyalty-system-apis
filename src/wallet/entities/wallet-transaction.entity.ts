@@ -28,6 +28,7 @@ export class WalletTransaction {
   id: number;
 
   @ManyToOne(() => Wallet)
+  @JoinColumn({ name: 'wallet_id' })
   wallet: Wallet;
 
   @ManyToOne(() => BusinessUnit)

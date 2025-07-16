@@ -1,3 +1,4 @@
+import { Type } from 'class-transformer';
 import {
   WalletTransactionType,
   WalletTransactionStatus,
@@ -8,6 +9,9 @@ export class CreateWalletTransactionDto {
   @IsInt()
   wallet_id: number;
 
+  @IsInt()
+  business_unit_id: number;
+
   @IsEnum(WalletTransactionType)
   type: WalletTransactionType;
 
@@ -15,6 +19,7 @@ export class CreateWalletTransactionDto {
   status: WalletTransactionStatus;
 
   @IsNumber()
+  @Type(() => Number)
   amount: number;
 
   @IsOptional()
