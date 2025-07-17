@@ -36,6 +36,7 @@ export class RulesService {
         points_conversion_factor: dto.points_conversion_factor,
         max_burn_percent_on_invoice: dto.max_burn_percent_on_invoice,
         description: dto.description,
+        validity_after_assignment: dto.validity_after_assignment,
         created_by: createdBy,
         updated_by: createdBy,
         condition_type: dto.condition_type,

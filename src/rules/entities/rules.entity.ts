@@ -59,6 +59,9 @@ export class Rule {
   @Column({ type: 'text', nullable: true })
   description: string;
 
+  @Column('int', { nullable: true })
+  validity_after_assignment: number;
+
   @Column({ default: 0 })
   created_by: number;
 

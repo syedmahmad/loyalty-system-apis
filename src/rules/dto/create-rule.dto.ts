@@ -65,6 +65,10 @@ export class CreateRuleDto {
   @IsString()
   description?: string;
 
+  @IsOptional()
+  @IsNumber()
+  validity_after_assignment: number;
+
   @IsNumber()
   created_by: number;
 }
