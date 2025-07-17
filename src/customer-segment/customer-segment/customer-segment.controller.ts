@@ -75,4 +75,24 @@ export class CustomerSegmentsController {
 
     return await this.service.addCustomerToSegment(segmentId, customerId);
   }
+
+  @UseGuards(AuthTokenGuard)
+  @Put('remove-customer/:segment_id')
+  async removeCustomer(
+    @Param('segment_id') segmentId: number,
+    @Body('customer_id') customerId: number,
+    @Headers('user-secret') userSecret: string,
+  ) {
+    if (!userSecret)
+      throw new BadRequestException('user-secret not found in headers');
+
+    const decodedUser: any = jwt.decode(userSecret);
+    const user = await this.userRepository.findOne({
+      where: { id: decodedUser.UserId },
+    });
+    if (!user)
+      throw new BadRequestException('user not found against provided token');
+
+    return await this.service.removeCustomerFromSegment(segmentId, customerId);
+  }
 }

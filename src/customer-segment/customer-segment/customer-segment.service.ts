@@ -71,12 +71,13 @@ export class CustomerSegmentsService {
       where: { id: segmentId },
       relations: ['members', 'members.customer'],
     });
+    console.log(`Segment ID: ${segmentId}`, segment);
 
     if (!segment) {
       throw new NotFoundException(`Segment with ID ${segmentId} not found`);
     }
 
-    return segment.members.map((m) => m.customer);
+    return segment;
   }
 
   async addCustomerToSegment(segmentId: number, customerId: number) {
@@ -102,6 +103,29 @@ export class CustomerSegmentsService {
     await this.memberRepository.save(member);
 
     return { message: 'Customer added successfully' };
+  }
+
+  async removeCustomerFromSegment(segmentId: number, customerId: number) {
+    const segment = await this.segmentRepository.findOne({
+      where: { id: segmentId },
+    });
+    if (!segment) throw new NotFoundException('Customer segment not found');
+
+    const customer = await this.customerRepository.findOne({
+      where: { id: customerId },
+    });
+    if (!customer) throw new NotFoundException('Customer not found');
+
+    const existing = await this.memberRepository.findOne({
+      where: { segment_id: segmentId, customer_id: customerId },
+    });
+    if (!existing) {
+      return { message: 'Customer not in segment' };
+    }
+
+    await this.memberRepository.remove(existing);
+
+    return { message: 'Customer removed successfully' };
   }
 
   async update(id: number, dto: UpdateCustomerSegmentDto, user: string) {
