@@ -55,7 +55,7 @@ export class Coupon {
   @Column({ type: 'datetime', nullable: true })
   date_to: Date;
 
-  @Column('int', { default: 0 })
+  @Column('int', { default: null, nullable: true })
   validity_after_assignment: number;
 
   // @Column({ default: false })
@@ -66,6 +66,9 @@ export class Coupon {
 
   @Column('int', { default: 0 })
   reuse_interval: number;
+
+  @Column('int', { default: 0 })
+  is_point_earning_disabled: number;
 
   @ManyToOne(() => CouponType, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'coupon_type_id' })
