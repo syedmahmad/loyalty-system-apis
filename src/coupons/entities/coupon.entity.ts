@@ -30,8 +30,8 @@ export class Coupon {
   @Column()
   code: string;
 
-  @Column({ type: 'decimal', nullable: true })
-  discount_percentage: number;
+  // @Column({ type: 'decimal', nullable: true })
+  // discount_percentage: number;
 
   @Column({ type: 'decimal', nullable: false, default: 0 })
   discount_price: number;
@@ -102,6 +102,9 @@ export class Coupon {
 
   @Column({ type: 'tinyint', default: ActiveStatus.ACTIVE })
   status: number; // 0 = inactive, 1 = active, 2 = deleted
+
+  @Column({ nullable: true })
+  discount_type: string;
 
   @Column('int')
   created_by: number;
