@@ -13,10 +13,11 @@ import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
 import { BusinessUnitMiddleware } from 'src/business_unit/middleware/business_unit.middleware';
 import { WalletModule } from 'src/wallet/wallet.module';
 import { OciModule } from 'src/oci/oci.module';
+import { QrCode } from 'src/qr_codes/entities/qr_code.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Customer, User, BusinessUnit]),
+    TypeOrmModule.forFeature([Customer, User, BusinessUnit, QrCode]),
     WalletModule,
     OciModule,
   ],
@@ -25,9 +26,12 @@ import { OciModule } from 'src/oci/oci.module';
 })
 export class CustomerModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    consumer.apply(BusinessUnitMiddleware).forRoutes({
-      path: 'customers',
-      method: RequestMethod.POST,
-    });
+    consumer.apply(BusinessUnitMiddleware).forRoutes(
+      {
+        path: 'customers',
+        method: RequestMethod.POST,
+      },
+      { path: 'customers/single/:uuid', method: RequestMethod.GET },
+    );
   }
 }

@@ -116,4 +116,9 @@ export class BusinessUnitsController {
 
     return await this.service.remove(+id, user.uuid);
   }
+
+  @Get('/tanant-info/:buId')
+  async getTanantInfo(@Param('buId') buId: number) {
+    return await this.service.getTanantInfo(buId);
+  }
 }

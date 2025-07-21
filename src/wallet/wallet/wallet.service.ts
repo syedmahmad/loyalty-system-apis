@@ -192,4 +192,13 @@ export class WalletService {
     }
     return this.settingsRepo.save(setting);
   }
+
+  async getSingleCustomerWalletInfo(customerId, buId) {
+    return this.walletRepo.findOne({
+      where: {
+        customer: { id: customerId },
+        business_unit: { id: buId },
+      },
+    });
+  }
 }

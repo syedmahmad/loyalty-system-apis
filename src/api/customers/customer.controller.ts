@@ -35,4 +35,9 @@ export class CustomerController {
   async updateStatus(@Param('id') id: number, @Body() body: { status: 0 | 1 }) {
     return this.customerService.updateStatus(id, body.status);
   }
+
+  @Get('/single/:uuid')
+  async getCustomerByUuid(@Req() req: Request, @Param('uuid') uuid: string) {
+    return this.customerService.getCustomerByUuid(req,uuid);
+  }
 }

@@ -130,4 +130,11 @@ export class BusinessUnitsService {
       await queryRunner.release();
     }
   }
+
+  async getTanantInfo(id) {
+    return await this.repo.findOne({
+      where: { uuid: id },
+      relations: { tenant: true },
+    });
+  }
 }

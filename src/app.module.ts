@@ -23,6 +23,7 @@ import { CouponTypeModule } from './coupon_type/coupon_type.module';
 import { WalletModule } from './wallet/wallet.module';
 import { OciModule } from './oci/oci.module';
 import { CustomerSegmentsModule } from './customer-segment/customer-segment.module';
+import { QrCodesModule } from './qr_codes/qr_codes.module';
 
 @Module({
   imports: [
@@ -55,6 +56,7 @@ import { CustomerSegmentsModule } from './customer-segment/customer-segment.modu
     WalletModule,
     OciModule,
     CustomerSegmentsModule,
+    QrCodesModule,
   ],
   controllers: [AppController],
   providers: [AppService],

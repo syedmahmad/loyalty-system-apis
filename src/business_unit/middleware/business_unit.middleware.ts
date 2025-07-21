@@ -13,6 +13,8 @@ export class BusinessUnitMiddleware implements NestMiddleware {
 
   async use(req: Request, res: Response, next: NextFunction) {
     const buKey = req.headers['x-bu-key'];
+    const tenantuuId = req.headers['x-tenant-id'];
+
     if (!buKey || typeof buKey !== 'string') {
       return res.status(400).json({ message: 'Missing business unit key' });
     }
@@ -24,6 +26,12 @@ export class BusinessUnitMiddleware implements NestMiddleware {
 
     if (!bu) {
       return res.status(403).json({ message: 'Invalid business unit key' });
+    }
+
+    if (bu.tenant.uuid !== tenantuuId) {
+      return res
+        .status(403)
+        .json({ message: 'Invalid tenant uuid or tenant uuid is missing' });
     }
 
     (req as any).businessUnit = bu;

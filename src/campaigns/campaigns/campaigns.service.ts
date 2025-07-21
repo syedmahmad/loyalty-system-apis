@@ -162,14 +162,18 @@ export class CampaignsService {
   async findAll(client_id: number, name: string): Promise<Campaign[]> {
     let optionalWhereClause = {};
 
-    if (name) {
+    if (typeof name === 'string' && name.trim() !== '') {
       optionalWhereClause = {
         name: ILike(`%${name}%`),
       };
     }
 
     return this.campaignRepository.find({
-      where: { tenant_id: client_id, status: 1, ...optionalWhereClause },
+      where: {
+        tenant_id: Number(client_id),
+        status: 1,
+        ...optionalWhereClause,
+      },
       relations: ['rules', 'tiers', 'business_unit', 'coupons'],
       order: { created_at: 'DESC' },
     });
