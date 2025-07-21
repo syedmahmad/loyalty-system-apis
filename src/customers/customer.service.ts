@@ -13,7 +13,7 @@ import { WalletService } from 'src/wallet/wallet/wallet.service';
 import { OciService } from 'src/oci/oci.service';
 import { v4 as uuidv4 } from 'uuid';
 import { nanoid } from 'nanoid';
-import { QrCode } from '../../qr_codes/entities/qr_code.entity';
+import { QrCode } from '../qr_codes/entities/qr_code.entity';
 
 @Injectable()
 export class CustomerService {

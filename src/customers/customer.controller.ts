@@ -38,6 +38,6 @@ export class CustomerController {
 
   @Get('/single/:uuid')
   async getCustomerByUuid(@Req() req: Request, @Param('uuid') uuid: string) {
-    return this.customerService.getCustomerByUuid(req,uuid);
+    return this.customerService.getCustomerByUuid(req, uuid);
   }
 }
