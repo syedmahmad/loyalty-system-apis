@@ -54,8 +54,24 @@ export class TenantsController {
   }
 
   @Get()
-  async findAll() {
-    return await this.service.findAll();
+  async findAll(@Headers('user-secret') userSecret: string) {
+    if (!userSecret) {
+      throw new BadRequestException('user-secret not found in headers');
+    }
+
+    const decodedUser: any = jwt.decode(userSecret);
+
+    const user = await this.userRepository.findOne({
+      where: {
+        id: decodedUser.UserId,
+      },
+    });
+
+    if (!user) {
+      throw new BadRequestException('user not found against provided token');
+    }
+
+    return await this.service.findAll(user.id);
   }
 
   @Get(':id')

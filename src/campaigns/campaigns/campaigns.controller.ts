@@ -58,9 +58,26 @@ export class CampaignsController {
   @Get(':client_id')
   async findAll(
     @Param('client_id') client_id: number,
+    @Headers('user-secret') userSecret: string,
     @Query('name') name?: string,
   ): Promise<Campaign[]> {
-    return this.campaignService.findAll(client_id, name);
+    if (!userSecret) {
+      throw new BadRequestException('user-secret not found in headers');
+    }
+
+    const decodedUser: any = jwt.decode(userSecret);
+
+    const user = await this.userRepository.findOne({
+      where: {
+        id: decodedUser.UserId,
+      },
+    });
+
+    if (!user) {
+      throw new BadRequestException('user not found against provided token');
+    }
+
+    return this.campaignService.findAll(client_id, name, user.id);
   }
 
   @Get('/single/:id')

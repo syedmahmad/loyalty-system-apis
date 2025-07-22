@@ -6,6 +6,7 @@ import { WalletController } from './wallet/wallet.controller';
 import { WalletService } from './wallet/wallet.service';
 import { UserCoupon } from './entities/user-coupon.entity';
 import { WalletSettings } from './entities/wallet-settings.entity';
+import { User } from 'src/users/entities/user.entity';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { WalletSettings } from './entities/wallet-settings.entity';
       WalletTransaction,
       UserCoupon,
       WalletSettings,
+      User,
     ]),
   ],
   controllers: [WalletController],
