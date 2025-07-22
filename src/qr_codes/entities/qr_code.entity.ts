@@ -1,7 +1,10 @@
+import { Customer } from 'src/customers/entities/customer.entity';
 import {
   Column,
   CreateDateColumn,
   Entity,
+  JoinColumn,
+  ManyToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
 
@@ -10,8 +13,9 @@ export class QrCode {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({ unique: true })
-  external_customer_id: string;
+  @ManyToOne(() => Customer, { eager: true })
+  @JoinColumn({ name: 'customer_id' })
+  customer: Customer;
 
   @Column({ unique: true })
   short_id: string;

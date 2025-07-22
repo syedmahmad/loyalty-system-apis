@@ -36,6 +36,8 @@ export class CustomerService {
     }
 
     const baseUrl = `${req.protocol}://${req.get('host')}`;
+    const customerUuid = uuidv4();
+
     const results = [];
     for (const customerDto of dto.customers) {
       const existing = await this.customerRepo.findOne({
@@ -46,9 +48,21 @@ export class CustomerService {
       });
 
       if (existing) {
-        const existCustomerQr = await this.qrService.findOne(
+        if (!existing.uuid) {
+          existing.uuid = customerUuid;
+          await this.customerRepo.save(existing);
+        }
+
+        let existCustomerQr = await this.qrService.findOne(
           existing.external_customer_id,
         );
+
+        if (!existCustomerQr) {
+          existCustomerQr = await this.createAndSaveCustomerQrCode(
+            customerUuid,
+            existing.id,
+          );
+        }
 
         results.push({
           status: 'exists',
@@ -64,17 +78,6 @@ export class CustomerService {
         customerDto.phone,
       );
 
-      const customerUuid = uuidv4();
-      const customerQrcode = await QRCode?.toDataURL(customerUuid);
-
-      const shortId = nanoid(8);
-      const mapping = this.qrCodeRepo.create({
-        external_customer_id: customerDto.external_customer_id,
-        short_id: shortId,
-        qr_code_base64: customerQrcode,
-      });
-      await this.qrCodeRepo.save(mapping);
-
       const customer = this.customerRepo.create({
         ...customerDto,
         email: encryptedEmail,
@@ -82,10 +85,13 @@ export class CustomerService {
         DOB: new Date(customerDto.DOB),
         business_unit: businessUnit,
         uuid: customerUuid,
-        qr_code_base64: customerQrcode,
       });
-
       const saved = await this.customerRepo.save(customer);
+
+      const saveCustomerQrCodeInfo = await this.createAndSaveCustomerQrCode(
+        customerUuid,
+        saved.id,
+      );
 
       await this.walletService.createWallet({
         customer_id: saved.id,
@@ -94,7 +100,7 @@ export class CustomerService {
 
       results.push({
         status: 'created',
-        qr_code_url: `${baseUrl}/qrcodes/qr/${shortId}`,
+        qr_code_url: `${baseUrl}/qrcodes/qr/${saveCustomerQrCodeInfo.short_id}`,
       });
     }
 
@@ -149,7 +155,7 @@ export class CustomerService {
     });
 
     if (!customer) {
-      throw new Error(`Customer not found`);
+      throw new NotFoundException(`Customer not found`);
     }
 
     const walletinfo = await this.walletService.getSingleCustomerWalletInfo(
@@ -167,5 +173,16 @@ export class CustomerService {
       businessUnit: walletinfo?.business_unit?.name,
       tenant_id: walletinfo?.business_unit?.tenant_id,
     };
+  }
+
+  async createAndSaveCustomerQrCode(customerUuid, customerId) {
+    const shortId = nanoid(8);
+    const customerQrcode = await QRCode?.toDataURL(customerUuid);
+    const mapping = this.qrCodeRepo.create({
+      customer: { id: customerId },
+      short_id: shortId,
+      qr_code_base64: customerQrcode,
+    });
+    return await this.qrCodeRepo.save(mapping);
   }
 }
