@@ -9,6 +9,7 @@ async function bootstrap() {
   app.enableCors({
     // origin: process.env.ALLOWED_CORS_URL, // ✅ your frontend URL
     origin: (origin, callback) => {
+      console.log('Origin dev:', origin, allowedOrigins);
       if (!origin || allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
