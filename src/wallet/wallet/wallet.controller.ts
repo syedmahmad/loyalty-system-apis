@@ -1,12 +1,29 @@
-import { Controller, Get, Post, Body, Param, Query } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Headers,
+  Body,
+  Param,
+  Query,
+  BadRequestException,
+} from '@nestjs/common';
 import { WalletService } from './wallet.service';
 import { CreateWalletDto } from '../dto/create-wallet.dto';
 import { CreateWalletTransactionDto } from '../dto/create-wallet-transaction.dto';
 import { CreateWalletSettingsDto } from '../dto/create-wallet-settings.dto';
+import { User } from 'src/users/entities/user.entity';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import * as jwt from 'jsonwebtoken';
 
 @Controller('wallets')
 export class WalletController {
-  constructor(private readonly walletService: WalletService) {}
+  constructor(
+    @InjectRepository(User)
+    private userRepository: Repository<User>,
+    private readonly walletService: WalletService,
+  ) {}
 
   @Post()
   async createWallet(@Body() dto: CreateWalletDto) {
@@ -14,8 +31,27 @@ export class WalletController {
   }
 
   @Post('transactions')
-  async addTransaction(@Body() dto: CreateWalletTransactionDto) {
-    return this.walletService.addTransaction(dto);
+  async addTransaction(
+    @Body() dto: CreateWalletTransactionDto,
+    @Headers('user-secret') userSecret: string,
+  ) {
+    if (!userSecret) {
+      throw new BadRequestException('user-secret not found in headers');
+    }
+
+    const decodedUser: any = jwt.decode(userSecret);
+
+    const user = await this.userRepository.findOne({
+      where: {
+        id: decodedUser.UserId,
+      },
+    });
+
+    if (!user) {
+      throw new BadRequestException('user not found against provided token');
+    }
+
+    return this.walletService.addTransaction(dto, user.id);
   }
 
   @Get(':id/transactions')

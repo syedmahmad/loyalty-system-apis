@@ -1,15 +1,23 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { Tenant } from '../entities/tenant.entity';
 import { CreateTenantDto } from '../dto/create-tenant.dto';
 import { UpdateTenantDto } from '../dto/update-tenant.dto';
+import { User } from 'src/users/entities/user.entity';
 
 @Injectable()
 export class TenantsService {
   constructor(
     @InjectRepository(Tenant)
     private tenantsRepository: Repository<Tenant>,
+
+    @InjectRepository(User)
+    private userRepository: Repository<User>,
 
     @InjectDataSource()
     private readonly dataSource: DataSource,
@@ -35,8 +43,38 @@ export class TenantsService {
     }
   }
 
-  async findAll() {
-    return await this.tenantsRepository.find();
+  async findAll(userId: number) {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+
+    if (!user) {
+      throw new BadRequestException('User not found against user-token');
+    }
+
+    const privileges: any = user.user_privileges || [];
+
+    const tenants = await this.tenantsRepository.find();
+
+    const hasGlobalAccess = privileges.some(
+      (p: any) => p.name === 'all_tenants',
+    );
+
+    if (hasGlobalAccess) {
+      return await this.tenantsRepository.find();
+    }
+
+    let matchedTenants: any[] = [];
+
+    if (!hasGlobalAccess) {
+      const tenantSpecificAccessNames = privileges
+        .filter((p) => p.module === 'tenants' && p.name !== 'all_tenants')
+        .map((p) => p.name);
+
+      matchedTenants = tenants.filter((tenant) =>
+        tenantSpecificAccessNames.includes(tenant.name),
+      );
+    }
+
+    return matchedTenants;
   }
 
   async findOne(id: number) {

@@ -10,6 +10,8 @@ import { CampaignsController } from './campaigns/campaigns.controller';
 import { CampaignsService } from './campaigns/campaigns.service';
 import { User } from 'src/users/entities/user.entity';
 import { Coupon } from '../coupons/entities/coupon.entity';
+import { Tenant } from 'src/tenants/entities/tenant.entity';
+import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
 
 @Module({
   imports: [
@@ -22,6 +24,8 @@ import { Coupon } from '../coupons/entities/coupon.entity';
       User,
       Coupon,
       CampaignCoupons,
+      Tenant,
+      BusinessUnit,
     ]),
   ],
   controllers: [CampaignsController],

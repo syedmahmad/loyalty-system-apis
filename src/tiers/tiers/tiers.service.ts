@@ -1,21 +1,35 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
-import { DataSource, ILike, Repository } from 'typeorm';
+import { DataSource, ILike, In, Repository } from 'typeorm';
 import { Tier } from '../entities/tier.entity';
 import { CreateTierDto } from '../dto/create-tier.dto';
 import { UpdateTierDto } from '../dto/update-tier.dto';
 import { RuleTarget } from '../../rules/entities/rule-target.entity'; // adjust path as needed
 import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
+import { User } from 'src/users/entities/user.entity';
+import { Tenant } from 'src/tenants/entities/tenant.entity';
 
 @Injectable()
 export class TiersService {
   constructor(
     @InjectRepository(Tier)
     private tiersRepository: Repository<Tier>,
+
     @InjectRepository(RuleTarget)
     private ruleTargetRepository: Repository<RuleTarget>,
+
     @InjectRepository(BusinessUnit)
     private businessUnitRepository: Repository<BusinessUnit>, // adjust path as needed
+
+    @InjectRepository(User)
+    private userRepository: Repository<User>,
+
+    @InjectRepository(Tenant)
+    private tenantRepository: Repository<Tenant>,
 
     @InjectDataSource()
     private readonly dataSource: DataSource,
@@ -59,11 +73,36 @@ export class TiersService {
     }
   }
 
-  async findAll(client_id: number, name: string) {
+  async findAll(client_id: number, name: string, userId: number) {
     const ruleTargets = await this.ruleTargetRepository.find({
       where: { target_type: 'tier' },
       relations: { rule: true },
     });
+
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new BadRequestException('User not found against user-token');
+    }
+
+    const privileges: any[] = user.user_privileges || [];
+
+    // get tenant name from DB (we'll need this to match privileges like `NATC_Service Center`)
+    const tenant = await this.tenantRepository.findOne({
+      where: { id: client_id },
+    });
+
+    if (!tenant) {
+      throw new BadRequestException('Tenant not found');
+    }
+
+    const tenantName = tenant.name;
+
+    // check for global business unit access for this tenant
+    const hasGlobalBusinessUnitAccess = privileges.some(
+      (p) =>
+        p.module === 'businessUnits' &&
+        p.name === `${tenantName}_All Business Unit`,
+    );
 
     let optionalWhereClause = {};
 
@@ -73,14 +112,63 @@ export class TiersService {
       };
     }
 
-    const tiers = await this.tiersRepository.find({
-      where: { tenant_id: client_id, status: 1, ...optionalWhereClause },
+    if (hasGlobalBusinessUnitAccess) {
+      const tiers = await this.tiersRepository.find({
+        where: { tenant_id: client_id, status: 1, ...optionalWhereClause },
+        relations: { business_unit: true },
+        order: { created_at: 'DESC' },
+      });
+
+      return {
+        tiers: tiers.map((tier) => {
+          const targets = ruleTargets
+            .filter((rt) => rt.target_id === tier.id)
+            .map((rt) => ({
+              id: rt.id,
+              rule_id: rt.rule_id,
+            }));
+          return { ...tier, rule_targets: targets };
+        }),
+      };
+    }
+
+    // if no global access, extract specific tier names from privileges
+    const accessibleBusinessUnitNames = privileges
+      .filter(
+        (p) =>
+          p.module === 'businessUnits' &&
+          p.name.startsWith(`${tenantName}_`) &&
+          p.name !== `${tenantName}_All Business Unit`,
+      )
+      .map((p) => p.name.replace(`${tenantName}_`, ''));
+
+    if (!accessibleBusinessUnitNames.length) {
+      return []; // No access
+    }
+
+    const businessUnits = await this.businessUnitRepository.find({
+      where: {
+        status: 1,
+        tenant_id: client_id,
+        name: In(accessibleBusinessUnitNames),
+      },
+    });
+
+    const availableBusinessUnitIds = businessUnits.map((unit) => unit.id);
+
+    const specificTiers = await this.tiersRepository.find({
+      where: {
+        business_unit_id: In(availableBusinessUnitIds),
+        status: 1,
+        tenant_id: client_id,
+        ...optionalWhereClause,
+      },
       relations: { business_unit: true },
       order: { created_at: 'DESC' },
     });
 
     return {
-      tiers: tiers.map((tier) => {
+      tiers: specificTiers.map((tier) => {
         const targets = ruleTargets
           .filter((rt) => rt.target_id === tier.id)
           .map((rt) => ({

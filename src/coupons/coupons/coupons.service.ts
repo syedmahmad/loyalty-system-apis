@@ -1,19 +1,33 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import axios from 'axios';
 import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
-import { DataSource, ILike, Not, Repository } from 'typeorm';
+import { DataSource, ILike, In, Not, Repository } from 'typeorm';
 import { CreateCouponDto } from '../dto/create-coupon.dto';
 import { UpdateCouponDto } from '../dto/update-coupon.dto';
 import { Coupon } from '../entities/coupon.entity';
+import { User } from 'src/users/entities/user.entity';
+import { Tenant } from 'src/tenants/entities/tenant.entity';
 
 @Injectable()
 export class CouponsService {
   constructor(
     @InjectRepository(Coupon)
     private couponsRepository: Repository<Coupon>,
+
     @InjectRepository(BusinessUnit)
     private businessUnitRepository: Repository<BusinessUnit>, // adjust path as needed
+
+    @InjectRepository(User)
+    private userRepository: Repository<User>,
+
+    @InjectRepository(Tenant)
+    private tenantRepository: Repository<Tenant>,
+
     @InjectDataSource()
     private readonly dataSource: DataSource,
   ) {}
@@ -40,14 +54,83 @@ export class CouponsService {
     }
   }
 
-  async findAll(client_id: number, name: string, limit: number) {
+  async findAll(
+    client_id: number,
+    name: string,
+    limit: number,
+    userId: number,
+  ) {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new BadRequestException('User not found against user-token');
+    }
+
+    const privileges: any[] = user.user_privileges || [];
+
+    // get tenant name from DB (we'll need this to match privileges like `NATC_Service Center`)
+    const tenant = await this.tenantRepository.findOne({
+      where: { id: client_id },
+    });
+
+    if (!tenant) {
+      throw new BadRequestException('Tenant not found');
+    }
+
+    const tenantName = tenant.name;
+
+    // check for global business unit access for this tenant
+    const hasGlobalBusinessUnitAccess = privileges.some(
+      (p) =>
+        p.module === 'businessUnits' &&
+        p.name === `${tenantName}_All Business Unit`,
+    );
+
     const baseConditions = { status: Not(2), tenant_id: client_id };
-    const whereClause = name
-      ? [
-          { ...baseConditions, code: ILike(`%${name}%`) },
-          { ...baseConditions, coupon_title: ILike(`%${name}%`) },
-        ]
-      : [baseConditions];
+
+    let whereClause = {};
+
+    if (hasGlobalBusinessUnitAccess) {
+      whereClause = name
+        ? [
+            { ...baseConditions, code: ILike(`%${name}%`) },
+            { ...baseConditions, coupon_title: ILike(`%${name}%`) },
+          ]
+        : [baseConditions];
+    } else {
+      // if no global access, extract specific tier names from privileges
+      const accessibleBusinessUnitNames = privileges
+        .filter(
+          (p) =>
+            p.module === 'businessUnits' &&
+            p.name.startsWith(`${tenantName}_`) &&
+            p.name !== `${tenantName}_All Business Unit`,
+        )
+        .map((p) => p.name.replace(`${tenantName}_`, ''));
+
+      if (!accessibleBusinessUnitNames.length) {
+        return []; // No access
+      }
+
+      const businessUnits = await this.businessUnitRepository.find({
+        where: {
+          status: 1,
+          tenant_id: client_id,
+          name: In(accessibleBusinessUnitNames),
+        },
+      });
+
+      const availableBusinessUnitIds = businessUnits.map((unit) => unit.id);
+
+      const specificCoupons = await this.couponsRepository.find({
+        where: { ...whereClause, business_unit: In(availableBusinessUnitIds) },
+        relations: { business_unit: true },
+        order: { created_at: 'DESC' },
+        ...(name && { take: 20 }), // ← limit to 20 if name is present
+        ...(limit && { take: limit }),
+      });
+
+      return { coupons: specificCoupons };
+    }
 
     const coupons = await this.couponsRepository.find({
       where: whereClause,

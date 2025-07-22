@@ -54,10 +54,27 @@ export class CouponsController {
   @Get('/:client_id')
   async findAll(
     @Param('client_id') client_id: number,
+    @Headers('user-secret') userSecret: string,
     @Query('name') name?: string, // optional query param,
     @Query('limit') limit?: number, // optional query param,
   ) {
-    return await this.service.findAll(client_id, name, limit);
+    if (!userSecret) {
+      throw new BadRequestException('user-secret not found in headers');
+    }
+
+    const decodedUser: any = jwt.decode(userSecret);
+
+    const user = await this.userRepository.findOne({
+      where: {
+        id: decodedUser.UserId,
+      },
+    });
+
+    if (!user) {
+      throw new BadRequestException('user not found against provided token');
+    }
+
+    return await this.service.findAll(client_id, name, limit, user.id);
   }
 
   @Get('edit/:id')

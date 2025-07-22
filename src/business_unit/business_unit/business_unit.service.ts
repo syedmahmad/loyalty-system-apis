@@ -1,15 +1,23 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
-import { DataSource, ILike, Repository } from 'typeorm';
+import { DataSource, ILike, In, Repository } from 'typeorm';
 import { CreateBusinessUnitDto } from '../dto/create-business-unit.dto';
 import { UpdateBusinessUnitDto } from '../dto/update-business-unit.dto';
 import { BusinessUnit } from '../entities/business_unit.entity';
+import { User } from 'src/users/entities/user.entity';
+import { Tenant } from 'src/tenants/entities/tenant.entity';
 
 @Injectable()
 export class BusinessUnitsService {
   constructor(
     @InjectRepository(BusinessUnit)
     private readonly repo: Repository<BusinessUnit>,
+
+    @InjectRepository(Tenant)
+    private tenantRepository: Repository<Tenant>,
+
+    @InjectRepository(User)
+    private userRepository: Repository<User>,
 
     @InjectDataSource()
     private readonly dataSource: DataSource,
@@ -43,19 +51,67 @@ export class BusinessUnitsService {
     }
   }
 
-  async findAll(client_id: number, name: string) {
-    let optionalWhereClause = {};
+  async findAll(client_id: number, name: string, userId: number) {
+    const optionalWhereClause: any = {};
+
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new BadRequestException('User not found against user-token');
+    }
+
+    const privileges: any[] = user.user_privileges || [];
 
     if (name) {
-      optionalWhereClause = {
-        name: ILike(`%${name}%`),
-      };
+      optionalWhereClause.name = ILike(`%${name}%`);
+    }
+
+    // get tenant name from DB (we'll need this to match privileges like `NATC_service_center`)
+    const tenant = await this.tenantRepository.findOne({
+      where: { id: client_id },
+    });
+    if (!tenant) {
+      throw new BadRequestException('Tenant not found');
+    }
+
+    const tenantName = tenant.name;
+
+    // check for global business unit access for this tenant
+    const hasGlobalBusinessUnitAccess = privileges.some(
+      (p) =>
+        p.module === 'businessUnits' &&
+        p.name === `${tenantName}_All Business Unit`,
+    );
+
+    // if global access, return all business units under the tenant
+    if (hasGlobalBusinessUnitAccess) {
+      return await this.repo.find({
+        where: {
+          status: 1,
+          tenant_id: client_id,
+          ...optionalWhereClause,
+        },
+      });
+    }
+
+    // if no global access, extract specific BU names from privileges
+    const accessibleBusinessUnitNames = privileges
+      .filter(
+        (p) =>
+          p.module === 'businessUnits' &&
+          p.name.startsWith(`${tenantName}_`) &&
+          p.name !== `${tenantName}_All Business Unit`,
+      )
+      .map((p) => p.name.replace(`${tenantName}_`, ''));
+
+    if (!accessibleBusinessUnitNames.length) {
+      return []; // No access
     }
 
     return await this.repo.find({
       where: {
-        status: 1, // Only active business units
+        status: 1,
         tenant_id: client_id,
+        name: In(accessibleBusinessUnitNames),
         ...optionalWhereClause,
       },
     });

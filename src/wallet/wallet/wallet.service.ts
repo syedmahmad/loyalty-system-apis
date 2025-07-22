@@ -15,6 +15,7 @@ import { CreateWalletDto } from '../dto/create-wallet.dto';
 import { CreateWalletTransactionDto } from '../dto/create-wallet-transaction.dto';
 import * as dayjs from 'dayjs';
 import { CreateWalletSettingsDto } from '../dto/create-wallet-settings.dto';
+import { User } from 'src/users/entities/user.entity';
 
 @Injectable()
 export class WalletService {
@@ -24,6 +25,8 @@ export class WalletService {
     private txRepo: Repository<WalletTransaction>,
     @InjectRepository(WalletSettings)
     private settingsRepo: Repository<WalletSettings>,
+    @InjectRepository(User)
+    private userRepository: Repository<User>,
     @InjectRepository(UserCoupon) private couponRepo: Repository<UserCoupon>,
   ) {}
 
@@ -37,7 +40,26 @@ export class WalletService {
     return this.walletRepo.save(wallet);
   }
 
-  async addTransaction(dto: CreateWalletTransactionDto) {
+  async addTransaction(dto: CreateWalletTransactionDto, userId: number) {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new BadRequestException('User not found against user-token');
+    }
+
+    const privileges: any[] = user.user_privileges || [];
+
+    // check for global business unit access for this tenant
+    const hasGlobalBusinessUnitAccess = privileges.some(
+      (p) =>
+        p.module === 'businessUnits' && p.name.includes('_All Business Unit'),
+    );
+
+    if (!hasGlobalBusinessUnitAccess) {
+      throw new BadRequestException(
+        'User does not have permission to perform this action',
+      );
+    }
+
     const wallet = await this.walletRepo.findOne({
       where: { id: dto.wallet_id },
       relations: ['business_unit'],
