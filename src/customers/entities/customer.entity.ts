@@ -48,6 +48,12 @@ export class Customer {
   @Column()
   address: string;
 
+  @Column({ type: 'text', nullable: true })
+  uuid: string;
+
+  @Column({ type: 'text', nullable: true })
+  qr_code_base64: string;
+
   @OneToMany(() => CustomerSegmentMember, (m: any) => m.customer)
   memberships: CustomerSegmentMember[];
 

@@ -203,7 +203,7 @@ export class CampaignsService {
         p.name === `${tenantName}_All Business Unit`,
     );
 
-    if (name) {
+    if (typeof name === 'string' && name.trim() !== '') {
       optionalWhereClause = {
         name: ILike(`%${name}%`),
       };

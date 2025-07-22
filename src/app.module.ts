@@ -10,7 +10,7 @@ import { PointsModule } from './points/points.module';
 import { TiersModule } from './tiers/tiers.module';
 import { TenantsModule } from './tenants/tenants.module';
 import { ReportsModule } from './reports/reports.module';
-import { CustomerModule } from './api/customers/customer.module';
+import { CustomerModule } from './customers/customer.module';
 import { BusinessUnitsModule } from './business_unit/business_unit.module';
 import { RulesModule } from './rules/rules.module';
 import { CampaignModule } from './campaigns/campaigns.module';
@@ -23,6 +23,7 @@ import { CouponTypeModule } from './coupon_type/coupon_type.module';
 import { WalletModule } from './wallet/wallet.module';
 import { OciModule } from './oci/oci.module';
 import { CustomerSegmentsModule } from './customer-segment/customer-segment.module';
+import { QrCodesModule } from './qr_codes/qr_codes.module';
 
 @Module({
   imports: [
@@ -55,6 +56,7 @@ import { CustomerSegmentsModule } from './customer-segment/customer-segment.modu
     WalletModule,
     OciModule,
     CustomerSegmentsModule,
+    QrCodesModule,
   ],
   controllers: [AppController],
   providers: [AppService],

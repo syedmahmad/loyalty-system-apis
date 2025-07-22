@@ -4,7 +4,7 @@ import { Repository, DataSource } from 'typeorm';
 import { CustomerSegment } from '../entities/customer-segment.entity';
 import { CreateCustomerSegmentDto } from '../dto/create.dto';
 import { UpdateCustomerSegmentDto } from '../dto/update-customer-segment.dto';
-import { Customer } from 'src/api/customers/entities/customer.entity';
+import { Customer } from 'src/customers/entities/customer.entity';
 import { CustomerSegmentMember } from '../entities/customer-segment-member.entity';
 
 @Injectable()

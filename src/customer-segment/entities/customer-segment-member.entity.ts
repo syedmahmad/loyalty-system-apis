@@ -8,7 +8,7 @@ import {
   CreateDateColumn,
 } from 'typeorm';
 import { CustomerSegment } from './customer-segment.entity';
-import { Customer } from 'src/api/customers/entities/customer.entity';
+import { Customer } from 'src/customers/entities/customer.entity';
 
 @Entity('customer_segment_members')
 export class CustomerSegmentMember {
