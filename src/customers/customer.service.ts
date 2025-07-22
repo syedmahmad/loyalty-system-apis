@@ -160,7 +160,9 @@ export class CustomerService {
       customer.id,
       businessUnit.id,
     );
-
+    const transactionInfo = await this.walletService.getWalletTransactions(
+      walletinfo?.id,
+    );
     return {
       total_balance: walletinfo?.total_balance,
       available_balance: walletinfo?.available_balance,
@@ -170,6 +172,7 @@ export class CustomerService {
       address: customer.address,
       businessUnit: walletinfo?.business_unit?.name,
       tenant_id: walletinfo?.business_unit?.tenant_id,
+      transactions: transactionInfo || [],
     };
   }
 
