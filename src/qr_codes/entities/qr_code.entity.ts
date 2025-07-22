@@ -11,6 +11,9 @@ export class QrCode {
   id: number;
 
   @Column({ unique: true })
+  external_customer_id: string;
+
+  @Column({ unique: true })
   short_id: string;
 
   @Column({ type: 'text', nullable: true })

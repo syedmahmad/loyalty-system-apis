@@ -12,7 +12,7 @@ export class BusinessUnitMiddleware implements NestMiddleware {
   ) {}
 
   async use(req: Request, res: Response, next: NextFunction) {
-    const buKey = req.headers['x-bu-key'];
+    const buKey = req.headers['x-business-unit-id'];
     const tenantuuId = req.headers['x-tenant-id'];
 
     if (!buKey || typeof buKey !== 'string') {

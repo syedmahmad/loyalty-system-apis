@@ -14,6 +14,8 @@ import { BusinessUnitMiddleware } from 'src/business_unit/middleware/business_un
 import { WalletModule } from 'src/wallet/wallet.module';
 import { OciModule } from 'src/oci/oci.module';
 import { QrCode } from 'src/qr_codes/entities/qr_code.entity';
+import { QrcodesService } from '../qr_codes/qr_codes/qr_codes.service';
+
 
 @Module({
   imports: [
@@ -22,7 +24,7 @@ import { QrCode } from 'src/qr_codes/entities/qr_code.entity';
     OciModule,
   ],
   controllers: [CustomerController],
-  providers: [CustomerService, BusinessUnitMiddleware],
+  providers: [CustomerService, BusinessUnitMiddleware, QrcodesService],
 })
 export class CustomerModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {

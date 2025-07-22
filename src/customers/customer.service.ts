@@ -14,6 +14,7 @@ import { OciService } from 'src/oci/oci.service';
 import { v4 as uuidv4 } from 'uuid';
 import { nanoid } from 'nanoid';
 import { QrCode } from '../qr_codes/entities/qr_code.entity';
+import { QrcodesService } from '../qr_codes/qr_codes/qr_codes.service';
 
 @Injectable()
 export class CustomerService {
@@ -24,6 +25,7 @@ export class CustomerService {
     private readonly ociService: OciService,
     @InjectRepository(QrCode)
     private readonly qrCodeRepo: Repository<QrCode>,
+    private readonly qrService: QrcodesService,
   ) {}
 
   async createCustomer(req: Request, dto: BulkCreateCustomerDto) {
@@ -33,8 +35,8 @@ export class CustomerService {
       throw new BadRequestException('Invalid Business Unit Key');
     }
 
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
     const results = [];
-
     for (const customerDto of dto.customers) {
       const existing = await this.customerRepo.findOne({
         where: {
@@ -44,9 +46,13 @@ export class CustomerService {
       });
 
       if (existing) {
+        const existCustomerQr = await this.qrService.findOne(
+          existing.external_customer_id,
+        );
+
         results.push({
           status: 'exists',
-          customer: existing,
+          qr_code_url: `${baseUrl}/qrcodes/qr/${existCustomerQr.short_id}`,
         });
         continue;
       }
@@ -61,9 +67,9 @@ export class CustomerService {
       const customerUuid = uuidv4();
       const customerQrcode = await QRCode?.toDataURL(customerUuid);
 
-      const baseUrl = `${req.protocol}://${req.get('host')}`;
       const shortId = nanoid(8);
       const mapping = this.qrCodeRepo.create({
+        external_customer_id: customerDto.external_customer_id,
         short_id: shortId,
         qr_code_base64: customerQrcode,
       });
@@ -88,7 +94,6 @@ export class CustomerService {
 
       results.push({
         status: 'created',
-        // customer: saved,
         qr_code_url: `${baseUrl}/qrcodes/qr/${shortId}`,
       });
     }
