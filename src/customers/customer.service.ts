@@ -53,9 +53,7 @@ export class CustomerService {
           await this.customerRepo.save(existing);
         }
 
-        let existCustomerQr = await this.qrService.findOne(
-          existing.external_customer_id,
-        );
+        let existCustomerQr = await this.qrService.findOne(existing.id);
 
         if (!existCustomerQr) {
           existCustomerQr = await this.createAndSaveCustomerQrCode(
