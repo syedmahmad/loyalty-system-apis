@@ -1,4 +1,4 @@
-import { Customer } from 'src/api/customers/entities/customer.entity';
+import { Customer } from 'src/customers/entities/customer.entity';
 import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
 import {
   Entity,
