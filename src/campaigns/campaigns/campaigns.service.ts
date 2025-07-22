@@ -211,7 +211,11 @@ export class CampaignsService {
 
     if (hasGlobalBusinessUnitAccess) {
       return this.campaignRepository.find({
-        where: { tenant_id: client_id, status: 1, ...optionalWhereClause },
+        where: {
+          tenant_id: Number(client_id),
+          status: 1,
+          ...optionalWhereClause,
+        },
         relations: ['rules', 'tiers', 'business_unit', 'coupons'],
         order: { created_at: 'DESC' },
       });
@@ -243,7 +247,7 @@ export class CampaignsService {
 
     return this.campaignRepository.find({
       where: {
-        tenant_id: client_id,
+        tenant_id: Number(client_id),
         status: 1,
         business_unit_id: In(availableBusinessUnitIds),
         ...optionalWhereClause,
