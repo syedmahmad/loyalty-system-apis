@@ -99,6 +99,10 @@ export class CustomerService {
         saved.id,
       );
 
+      // TODO: need to check existing wallet for customer, his point balance.
+      // how to do that,
+      // create a new transaction for customer wallet and add reason of adjustment like import form external system
+      // and then add points to customer wallet
       await this.walletService.createWallet({
         customer_id: saved.id,
         business_unit_id: businessUnit.id,
@@ -106,6 +110,7 @@ export class CustomerService {
 
       results.push({
         status: 'created',
+        // TODO: baseUrl is wrong, we do not allow direct admin API access, all communication should be through gatwway
         qr_code_url: `${baseUrl}/qrcodes/qr/${saveCustomerQrCodeInfo.short_id}`,
       });
     }

@@ -12,6 +12,7 @@ export class QrcodesService {
 
   async findOne(shortId) {
     const mapping = await this.qrcodesRepository.findOne({
+      // TODO: why also fetching by customer id? give spcific reason
       where: [{ short_id: shortId }, { customer: { id: shortId } }],
     });
     return mapping;
