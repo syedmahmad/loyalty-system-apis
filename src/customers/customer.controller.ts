@@ -27,27 +27,8 @@ export class CustomerController {
   ) {}
 
   @Post()
-  async create(
-    @Req() req: Request,
-    @Body() dto: BulkCreateCustomerDto,
-    @Headers('user-secret') userSecret: string,
-  ) {
-    if (!userSecret) {
-      throw new BadRequestException('user-secret not found in headers');
-    }
-
-    const decodedUser: any = jwt.decode(userSecret);
-
-    const user = await this.userRepository.findOne({
-      where: {
-        id: decodedUser.UserId,
-      },
-    });
-
-    if (!user) {
-      throw new BadRequestException('user not found against provided token');
-    }
-    return this.customerService.createCustomer(req, dto, user.id);
+  async create(@Req() req: Request, @Body() dto: BulkCreateCustomerDto) {
+    return this.customerService.createCustomer(req, dto);
   }
 
   @Get()

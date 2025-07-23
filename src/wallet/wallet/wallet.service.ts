@@ -40,24 +40,30 @@ export class WalletService {
     return this.walletRepo.save(wallet);
   }
 
-  async addTransaction(dto: CreateWalletTransactionDto, userId: number) {
-    const user = await this.userRepository.findOne({ where: { id: userId } });
-    if (!user) {
-      throw new BadRequestException('User not found against user-token');
-    }
+  async addTransaction(
+    dto: CreateWalletTransactionDto,
+    userId: number,
+    callingFromgateway = false,
+  ) {
+    if (!callingFromgateway) {
+      const user = await this.userRepository.findOne({ where: { id: userId } });
+      if (!user) {
+        throw new BadRequestException('User not found against user-token');
+      }
 
-    const privileges: any[] = user.user_privileges || [];
+      const privileges: any[] = user.user_privileges || [];
 
-    // check for global business unit access for this tenant
-    const hasGlobalBusinessUnitAccess = privileges.some(
-      (p) =>
-        p.module === 'businessUnits' && p.name.includes('_All Business Unit'),
-    );
-
-    if (!hasGlobalBusinessUnitAccess) {
-      throw new BadRequestException(
-        'User does not have permission to perform this action',
+      // check for global business unit access for this tenant
+      const hasGlobalBusinessUnitAccess = privileges.some(
+        (p) =>
+          p.module === 'businessUnits' && p.name.includes('_All Business Unit'),
       );
+
+      if (!hasGlobalBusinessUnitAccess) {
+        throw new BadRequestException(
+          'User does not have permission to perform this action',
+        );
+      }
     }
 
     const wallet = await this.walletRepo.findOne({

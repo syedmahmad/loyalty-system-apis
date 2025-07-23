@@ -28,11 +28,7 @@ export class CustomerService {
     private readonly qrService: QrcodesService,
   ) {}
 
-  async createCustomer(
-    req: Request,
-    dto: BulkCreateCustomerDto,
-    userId: number,
-  ) {
+  async createCustomer(req: Request, dto: BulkCreateCustomerDto) {
     const businessUnit = (req as any).businessUnit;
 
     if (!businessUnit) {
@@ -106,29 +102,10 @@ export class CustomerService {
       // how to do that,
       // create a new transaction for customer wallet and add reason of adjustment like import form external system
       // and then add points to customer wallet
-      const checkExistingWallet =
-        await this.walletService.getSingleCustomerWalletInfo(
-          saved.id,
-          businessUnit.id,
-        );
-
-      if (checkExistingWallet) {
-        const customerWalletPayload: any = {
-          customer_id: customer?.id,
-          business_unit_id: businessUnit.id,
-          wallet_id: checkExistingWallet.id,
-          type: 'earn',
-          amount: 0,
-          status: 'active',
-          source_type: 'external_system',
-        };
-        await this.walletService.addTransaction(customerWalletPayload, userId);
-      } else {
-        await this.walletService.createWallet({
-          customer_id: saved.id,
-          business_unit_id: businessUnit.id,
-        });
-      }
+      await this.walletService.createWallet({
+        customer_id: saved.id,
+        business_unit_id: businessUnit.id,
+      });
 
       results.push({
         status: 'created',

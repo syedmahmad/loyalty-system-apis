@@ -73,4 +73,9 @@ export class WalletController {
   async saveSettings(@Body() dto: CreateWalletSettingsDto) {
     return this.walletService.saveOrUpdateSettings(dto);
   }
+
+  @Post('create-transaction')
+  async createTransaction(@Body() dto: CreateWalletTransactionDto) {
+    return this.walletService.addTransaction(dto, null, true);
+  }
 }
