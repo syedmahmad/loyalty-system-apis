@@ -1,7 +1,9 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
+  Headers,
   Param,
   Patch,
   Post,
@@ -11,14 +13,41 @@ import {
 import { CustomerService } from './customer.service';
 import { BulkCreateCustomerDto } from './dto/create-customer.dto';
 import { Request } from 'express';
+import * as jwt from 'jsonwebtoken';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { User } from 'src/users/entities/user.entity';
 
 @Controller('customers')
 export class CustomerController {
-  constructor(private readonly customerService: CustomerService) {}
+  constructor(
+    private readonly customerService: CustomerService,
+    @InjectRepository(User)
+    private userRepository: Repository<User>,
+  ) {}
 
   @Post()
-  async create(@Req() req: Request, @Body() dto: BulkCreateCustomerDto) {
-    return this.customerService.createCustomer(req, dto);
+  async create(
+    @Req() req: Request,
+    @Body() dto: BulkCreateCustomerDto,
+    @Headers('user-secret') userSecret: string,
+  ) {
+    if (!userSecret) {
+      throw new BadRequestException('user-secret not found in headers');
+    }
+
+    const decodedUser: any = jwt.decode(userSecret);
+
+    const user = await this.userRepository.findOne({
+      where: {
+        id: decodedUser.UserId,
+      },
+    });
+
+    if (!user) {
+      throw new BadRequestException('user not found against provided token');
+    }
+    return this.customerService.createCustomer(req, dto, user.id);
   }
 
   @Get()
