@@ -40,6 +40,14 @@ export class CustomerService {
 
     const results = [];
     for (const customerDto of dto.customers) {
+      if (!customerDto.phone) {
+        results.push({
+          status: 'failed',
+          message: 'Phone number is required',
+        });
+        continue;
+      }
+
       const existing = await this.customerRepo.findOne({
         where: {
           external_customer_id: customerDto.external_customer_id,
