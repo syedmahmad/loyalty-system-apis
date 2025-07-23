@@ -10,6 +10,7 @@ import {
   Put,
   UseGuards,
   BadRequestException,
+  Delete,
 } from '@nestjs/common';
 import { AuthTokenGuard } from 'src/users/guards/authTokenGuard';
 import * as jwt from 'jsonwebtoken';
@@ -94,5 +95,23 @@ export class CustomerSegmentsController {
       throw new BadRequestException('user not found against provided token');
 
     return await this.service.removeCustomerFromSegment(segmentId, customerId);
+  }
+
+  @Delete(':segment_id/delete')
+  async deactivateSegment(
+    @Param('segment_id') segmentId: number,
+    @Headers('user-secret') userSecret: string,
+  ) {
+    if (!userSecret)
+      throw new BadRequestException('user-secret not found in headers');
+
+    const decodedUser: any = jwt.decode(userSecret);
+    const user = await this.userRepository.findOne({
+      where: { id: decodedUser.UserId },
+    });
+    if (!user)
+      throw new BadRequestException('user not found against provided token');
+
+    return this.service.remove(segmentId, user.uuid);
   }
 }

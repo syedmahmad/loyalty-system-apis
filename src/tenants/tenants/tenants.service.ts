@@ -52,7 +52,10 @@ export class TenantsService {
 
     const privileges: any = user.user_privileges || [];
 
-    const tenants = await this.tenantsRepository.find();
+    const tenants = await this.tenantsRepository.find({
+      where: { status: 1 },
+      order: { created_at: 'DESC' },
+    });
 
     const hasGlobalAccess = privileges.some(
       (p: any) => p.name === 'all_tenants',
