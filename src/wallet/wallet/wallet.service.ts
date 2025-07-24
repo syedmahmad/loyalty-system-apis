@@ -186,9 +186,16 @@ export class WalletService {
   }
 
   async listWallets(buId?: number) {
-    const where = buId ? { business_unit: { id: buId } } : {};
+    if (buId) {
+      const where = buId ? { business_unit: { id: buId } } : {};
+      return this.walletRepo.find({
+        where,
+        relations: ['business_unit', 'customer'],
+        order: { created_at: 'DESC' },
+      });
+    }
+
     return this.walletRepo.find({
-      where,
       relations: ['business_unit', 'customer'],
       order: { created_at: 'DESC' },
     });

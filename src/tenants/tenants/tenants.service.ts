@@ -80,7 +80,9 @@ export class TenantsService {
     );
 
     if (hasGlobalAccess) {
-      return await this.tenantsRepository.find();
+      return await this.tenantsRepository.find({
+        where: { status: 1 },
+      });
     }
 
     let matchedTenants: any[] = [];
