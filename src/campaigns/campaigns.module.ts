@@ -12,6 +12,8 @@ import { User } from 'src/users/entities/user.entity';
 import { Coupon } from '../coupons/entities/coupon.entity';
 import { Tenant } from 'src/tenants/entities/tenant.entity';
 import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
+import { CampaignCustomerSegment } from './entities/campaign-customer-segments.entity';
+import { CustomerSegment } from 'src/customer-segment/entities/customer-segment.entity';
 
 @Module({
   imports: [
@@ -24,6 +26,8 @@ import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
       User,
       Coupon,
       CampaignCoupons,
+      CampaignCustomerSegment,
+      CustomerSegment,
       Tenant,
       BusinessUnit,
     ]),

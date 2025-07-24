@@ -24,6 +24,24 @@ export class TenantsService {
   ) {}
 
   async create(dto: CreateTenantDto, user: string): Promise<Tenant> {
+    const userInfo = await this.userRepository.findOne({
+      where: { uuid: user },
+    });
+
+    if (!userInfo) {
+      throw new BadRequestException('User not found against user-token');
+    }
+
+    const privileges: any = userInfo.user_privileges || [];
+    const hasGlobalAccess = privileges.some(
+      (p: any) => p.name === 'all_tenants',
+    );
+    if (!hasGlobalAccess) {
+      throw new BadRequestException(
+        'User does not have permission to create tenants',
+      );
+    }
+
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();

@@ -5,6 +5,7 @@ import {
   IsOptional,
   IsString,
   IsNumber,
+  IsInt,
 } from 'class-validator';
 
 export class CreateCampaignDto {
@@ -42,6 +43,11 @@ export class CreateCampaignDto {
   @IsArray()
   @IsNotEmpty()
   coupons: { coupon_id: number }[];
+
+  @IsOptional()
+  @IsArray()
+  @IsInt({ each: true })
+  customer_segment_ids?: number[];
 
   @IsOptional()
   @IsNumber()

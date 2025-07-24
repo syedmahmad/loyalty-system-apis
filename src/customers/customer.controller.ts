@@ -5,6 +5,7 @@ import {
   Get,
   Headers,
   Param,
+  ParseIntPipe,
   Patch,
   Post,
   Query,
@@ -39,6 +40,14 @@ export class CustomerController {
   @Get(':id')
   async getCustomerById(@Param('id') id: number) {
     return this.customerService.getCustomerById(id);
+  }
+
+  @Get(':id/details')
+  async getCustomerWithWallet(
+    @Req() req: Request,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.customerService.getCustomerWithWalletAndTransactions(req, id);
   }
 
   @Patch(':id/status')

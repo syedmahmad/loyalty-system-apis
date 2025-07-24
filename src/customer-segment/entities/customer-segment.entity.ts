@@ -11,6 +11,8 @@ import {
 } from 'typeorm';
 import { CustomerSegmentMember } from './customer-segment-member.entity';
 import { Tenant } from 'src/tenants/entities/tenant.entity';
+import { CampaignCustomerSegment } from 'src/campaigns/entities/campaign-customer-segments.entity';
+import { CouponCustomerSegment } from 'src/coupons/entities/coupon-customer-segments.entity';
 
 @Entity('customer_segments')
 export class CustomerSegment {
@@ -37,6 +39,12 @@ export class CustomerSegment {
     cascade: true,
   })
   members: CustomerSegmentMember[];
+
+  @OneToMany(() => CampaignCustomerSegment, (cs) => cs.segment)
+  campaigns: CampaignCustomerSegment[];
+
+  @OneToMany(() => CouponCustomerSegment, (cs) => cs.segment)
+  coupons: CouponCustomerSegment[];
 
   @CreateDateColumn()
   created_at: Date;

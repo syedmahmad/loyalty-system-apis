@@ -229,4 +229,12 @@ export class WalletService {
       },
     });
   }
+
+  async getSingleCustomerWalletInfoById(customerId) {
+    return this.walletRepo.findOne({
+      where: {
+        customer: { id: customerId },
+      },
+    });
+  }
 }

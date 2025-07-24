@@ -13,6 +13,7 @@ import { CampaignRule } from './campaign-rule.entity';
 import { CampaignTier } from './campaign-tier.entity';
 import { Tenant } from 'src/tenants/entities/tenant.entity';
 import { CampaignCoupons } from './campaign-coupon.entity';
+import { CampaignCustomerSegment } from './campaign-customer-segments.entity';
 
 @Entity('campaigns')
 export class Campaign {
@@ -59,6 +60,12 @@ export class Campaign {
 
   @OneToMany(() => CampaignCoupons, (cr) => cr.campaign, { cascade: true })
   coupons: CampaignCoupons[];
+
+  // In Campaign.ts
+  @OneToMany(() => CampaignCustomerSegment, (cs) => cs.campaign, {
+    cascade: true,
+  })
+  customerSegments: CampaignCustomerSegment[];
 
   @CreateDateColumn()
   created_at: Date;

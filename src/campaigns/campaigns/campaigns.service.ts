@@ -9,6 +9,7 @@ import { Campaign } from '../entities/campaign.entity';
 import { CampaignRule } from '../entities/campaign-rule.entity';
 import { CampaignTier } from '../entities/campaign-tier.entity';
 import { CampaignCoupons } from '../entities/campaign-coupon.entity';
+import { CustomerSegment } from 'src/customer-segment/entities/customer-segment.entity';
 import { CreateCampaignDto } from '../dto/create-campaign.dto';
 import { UpdateCampaignDto } from '../dto/update-campaign.dto';
 import { Rule } from 'src/rules/entities/rules.entity';
@@ -18,6 +19,7 @@ import { Coupon } from 'src/coupons/entities/coupon.entity';
 import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
 import { User } from 'src/users/entities/user.entity';
 import { Tenant } from 'src/tenants/entities/tenant.entity';
+import { CampaignCustomerSegment } from '../entities/campaign-customer-segments.entity';
 
 @Injectable()
 export class CampaignsService {
@@ -31,6 +33,15 @@ export class CampaignsService {
     @InjectRepository(CampaignTier)
     private readonly campaignTierRepository: Repository<CampaignTier>,
 
+    @InjectRepository(CampaignCoupons)
+    private readonly campaignCouponsRepository: Repository<CampaignCoupons>,
+
+    @InjectRepository(CampaignCustomerSegment)
+    private readonly campaignSegmentRepository: Repository<CampaignCustomerSegment>,
+
+    @InjectRepository(CustomerSegment)
+    private readonly segmentRepository: Repository<CustomerSegment>,
+
     @InjectRepository(Rule)
     private readonly ruleRepository: Repository<Rule>,
 
@@ -40,11 +51,8 @@ export class CampaignsService {
     @InjectRepository(Coupon)
     private readonly couponRepository: Repository<Coupon>,
 
-    @InjectRepository(CampaignCoupons)
-    private readonly campaignCouponsRepository: Repository<CampaignCoupons>,
-
     @InjectRepository(BusinessUnit)
-    private businessUnitRepository: Repository<BusinessUnit>, // adjust path as needed
+    private businessUnitRepository: Repository<BusinessUnit>,
 
     @InjectRepository(User)
     private userRepository: Repository<User>,
@@ -61,7 +69,7 @@ export class CampaignsService {
     await queryRunner.startTransaction();
 
     try {
-      queryRunner.data = { user }; // 👈 Inject user into subscriber context
+      queryRunner.data = { user };
 
       const {
         name,
@@ -73,41 +81,53 @@ export class CampaignsService {
         tiers,
         coupons,
         client_id,
+        customer_segment_ids = [],
       } = dto;
 
       const manager = queryRunner.manager;
 
       // Validate rules
-      const ruleIds = rules.map((r) => r.rule_id);
       const ruleEntities = await this.ruleRepository.findBy({
-        id: In(ruleIds),
+        id: In(rules.map((r) => r.rule_id)),
       });
-
       if (ruleEntities.length !== rules.length) {
         throw new BadRequestException('Some rules not found');
       }
 
       // Validate tiers
-      const tierIds = tiers.map((t) => t.tier_id);
       const tierEntities = await this.tierRepository.findBy({
-        id: In(tierIds),
+        id: In(tiers.map((t) => t.tier_id)),
       });
-
       if (tierEntities.length !== tiers.length) {
         throw new BadRequestException('Some tiers not found');
       }
 
       // Validate coupons
-      const couponIds = coupons.map((t) => t.coupon_id);
       const couponEntities = await this.couponRepository.findBy({
-        id: In(couponIds),
+        id: In(coupons.map((c) => c.coupon_id)),
       });
-
       if (couponEntities.length !== coupons.length) {
         throw new BadRequestException('Some coupons not found');
       }
 
-      // Create and save campaign
+      // Validate customer segments
+      let campaignSegmentEntities: CampaignCustomerSegment[] = [];
+      if (customer_segment_ids.length) {
+        const segments = await this.segmentRepository.findBy({
+          id: In(customer_segment_ids),
+        });
+        if (segments.length !== customer_segment_ids.length) {
+          throw new BadRequestException('Some customer segments not found');
+        }
+
+        campaignSegmentEntities = segments.map((segment) =>
+          this.campaignSegmentRepository.create({
+            segment,
+          }),
+        );
+      }
+
+      // Save campaign
       const campaign = manager.create(Campaign, {
         name,
         start_date,
@@ -115,40 +135,21 @@ export class CampaignsService {
         description,
         business_unit_id,
         tenant_id: client_id,
-        active: true, // Default to active
-        status: 1, // Default to active status
+        active: true,
+        status: 1,
       });
-
       const savedCampaign = await manager.save(campaign);
 
-      // Create campaign coupons
-      const campaignCoupons = couponEntities.map((coupon) =>
-        this.campaignCouponsRepository.create({
-          campaign: savedCampaign,
-          coupon,
-        }),
-      );
+      // Add campaign to relations
+      campaignSegmentEntities.forEach((c) => (c.campaign = savedCampaign));
 
-      // Create campaign rules
       const campaignRules = ruleEntities.map((rule) =>
-        this.campaignRuleRepository.create({
-          campaign: savedCampaign,
-          rule,
-        }),
+        this.campaignRuleRepository.create({ campaign: savedCampaign, rule }),
       );
 
-      // Map tiers for quick lookup
       const dtoTierMap = new Map(tiers.map((t) => [t.tier_id, t]));
-
-      // Create campaign tiers with point_conversion_rate
       const campaignTiers = tierEntities.map((tier) => {
         const matchedDtoTier = dtoTierMap.get(tier.id);
-        if (!matchedDtoTier) {
-          throw new BadRequestException(
-            `Tier ID ${tier.id} does not match with DTO tiers`,
-          );
-        }
-
         return this.campaignTierRepository.create({
           campaign: savedCampaign,
           tier,
@@ -156,10 +157,20 @@ export class CampaignsService {
         });
       });
 
-      // Save campaign rules and tiers
+      const campaignCoupons = couponEntities.map((coupon) =>
+        this.campaignCouponsRepository.create({
+          campaign: savedCampaign,
+          coupon,
+        }),
+      );
+
+      // Save all
       await manager.save(CampaignRule, campaignRules);
       await manager.save(CampaignTier, campaignTiers);
       await manager.save(CampaignCoupons, campaignCoupons);
+      if (campaignSegmentEntities.length) {
+        await manager.save(CampaignCustomerSegment, campaignSegmentEntities);
+      }
 
       await queryRunner.commitTransaction();
       return savedCampaign;
@@ -179,37 +190,27 @@ export class CampaignsService {
     let optionalWhereClause = {};
 
     const user = await this.userRepository.findOne({ where: { id: userId } });
-    if (!user) {
+    if (!user)
       throw new BadRequestException('User not found against user-token');
-    }
 
     const privileges: any[] = user.user_privileges || [];
-
-    // get tenant name from DB (we'll need this to match privileges like `NATC_Service Center`)
     const tenant = await this.tenantRepository.findOne({
       where: { id: client_id },
     });
-
-    if (!tenant) {
-      throw new BadRequestException('Tenant not found');
-    }
-
+    if (!tenant) throw new BadRequestException('Tenant not found');
     const tenantName = tenant.name;
 
-    // check for global business unit access for this tenant
-    const hasGlobalBusinessUnitAccess = privileges.some(
+    const hasGlobalAccess = privileges.some(
       (p) =>
         p.module === 'businessUnits' &&
         p.name === `${tenantName}_All Business Unit`,
     );
 
-    if (typeof name === 'string' && name.trim() !== '') {
-      optionalWhereClause = {
-        name: ILike(`%${name}%`),
-      };
+    if (name?.trim()) {
+      optionalWhereClause = { name: ILike(`%${name}%`) };
     }
 
-    if (hasGlobalBusinessUnitAccess) {
+    if (hasGlobalAccess) {
       return this.campaignRepository.find({
         where: {
           tenant_id: Number(client_id),
@@ -221,8 +222,7 @@ export class CampaignsService {
       });
     }
 
-    // if no global access, extract specific tier names from privileges
-    const accessibleBusinessUnitNames = privileges
+    const accessibleBU = privileges
       .filter(
         (p) =>
           p.module === 'businessUnits' &&
@@ -231,28 +231,29 @@ export class CampaignsService {
       )
       .map((p) => p.name.replace(`${tenantName}_`, ''));
 
-    if (!accessibleBusinessUnitNames.length) {
-      return []; // No access
-    }
+    if (!accessibleBU.length) return [];
 
     const businessUnits = await this.businessUnitRepository.find({
-      where: {
-        status: 1,
-        tenant_id: client_id,
-        name: In(accessibleBusinessUnitNames),
-      },
+      where: { status: 1, tenant_id: client_id, name: In(accessibleBU) },
     });
 
-    const availableBusinessUnitIds = businessUnits.map((unit) => unit.id);
+    const businessUnitIds = businessUnits.map((bu) => bu.id);
 
     return this.campaignRepository.find({
       where: {
         tenant_id: Number(client_id),
         status: 1,
-        business_unit_id: In(availableBusinessUnitIds),
+        business_unit_id: In(businessUnitIds),
         ...optionalWhereClause,
       },
-      relations: ['rules', 'tiers', 'business_unit', 'coupons'],
+      relations: [
+        'rules',
+        'tiers',
+        'business_unit',
+        'coupons',
+        'customerSegments',
+        'customerSegments.segment',
+      ],
       order: { created_at: 'DESC' },
     });
   }
@@ -260,13 +261,17 @@ export class CampaignsService {
   async findOne(id: number): Promise<Campaign> {
     const campaign = await this.campaignRepository.findOne({
       where: { id },
-      relations: ['rules', 'tiers', 'business_unit', 'coupons'],
+      relations: [
+        'rules',
+        'tiers',
+        'business_unit',
+        'coupons',
+        'customerSegments',
+        'customerSegments.segment',
+      ],
     });
-
-    if (!campaign) {
+    if (!campaign)
       throw new NotFoundException(`Campaign with ID ${id} not found`);
-    }
-
     return campaign;
   }
 
@@ -278,26 +283,17 @@ export class CampaignsService {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
-    queryRunner.data = { user }; // 👈 for audit logging
+    queryRunner.data = { user };
 
     try {
       const manager = queryRunner.manager;
 
       const campaign = await manager.findOne(Campaign, {
         where: { id },
-        relations: [
-          'rules',
-          'tiers',
-          'coupons',
-          'tiers.tier',
-          'rules.rule',
-          'coupons.coupon',
-        ],
+        relations: ['rules.rule', 'tiers.tier', 'coupons.coupon'],
       });
-
-      if (!campaign) {
+      if (!campaign)
         throw new NotFoundException(`Campaign with ID ${id} not found`);
-      }
 
       Object.assign(campaign, {
         name: dto.name,
@@ -312,36 +308,29 @@ export class CampaignsService {
       // === RULES Sync ===
       const incomingRuleIds = dto.rules.map((r) => r.rule_id);
       const existingRuleIds = campaign.rules.map((cr) => cr.rule.id);
-
       const ruleIdsToRemove = existingRuleIds.filter(
         (id) => !incomingRuleIds.includes(id),
       );
       const ruleIdsToAdd = incomingRuleIds.filter(
         (id) => !existingRuleIds.includes(id),
       );
-
       if (ruleIdsToRemove.length) {
         await manager.delete(CampaignRule, {
           campaign: { id },
           rule: In(ruleIdsToRemove),
         });
       }
-
       if (ruleIdsToAdd.length) {
         const rulesToAdd = await this.ruleRepository.findBy({
           id: In(ruleIdsToAdd),
         });
-        if (rulesToAdd.length !== ruleIdsToAdd.length) {
-          throw new BadRequestException('Some new rules not found');
-        }
-
-        const newCampaignRules = rulesToAdd.map((rule) =>
+        const newRules = rulesToAdd.map((rule) =>
           this.campaignRuleRepository.create({
             campaign: updatedCampaign,
             rule,
           }),
         );
-        await manager.save(CampaignRule, newCampaignRules);
+        await manager.save(CampaignRule, newRules);
       }
 
       // === COUPONS Sync ===
@@ -353,90 +342,101 @@ export class CampaignsService {
       const couponIdsToAdd = incomingCouponIds.filter(
         (id) => !existingCouponIds.includes(id),
       );
-
       if (couponIdsToRemove.length) {
         await manager.delete(CampaignCoupons, {
           campaign: { id },
           coupon: In(couponIdsToRemove),
         });
       }
-
       if (couponIdsToAdd.length) {
         const couponsToAdd = await this.couponRepository.findBy({
           id: In(couponIdsToAdd),
         });
-        if (couponsToAdd.length !== couponIdsToAdd.length) {
-          throw new BadRequestException('Some new coupons not found');
-        }
-
-        const newCampaignCoupons = couponsToAdd.map((coupon) =>
+        const newCoupons = couponsToAdd.map((coupon) =>
           this.campaignCouponsRepository.create({
             campaign: updatedCampaign,
             coupon,
           }),
         );
-        await manager.save(CampaignCoupons, newCampaignCoupons);
+        await manager.save(CampaignCoupons, newCoupons);
       }
 
       // === TIERS Sync ===
       const dtoTierMap = new Map(dto.tiers.map((t) => [t.tier_id, t]));
       const incomingTierIds = dto.tiers.map((t) => t.tier_id);
       const existingTierIds = campaign.tiers.map((ct) => ct.tier.id);
-
       const tierIdsToRemove = existingTierIds.filter(
         (id) => !incomingTierIds.includes(id),
       );
       const tierIdsToAdd = incomingTierIds.filter(
         (id) => !existingTierIds.includes(id),
       );
-
       if (tierIdsToRemove.length) {
         await manager.delete(CampaignTier, {
           campaign: { id },
           tier: In(tierIdsToRemove),
         });
       }
-
       if (tierIdsToAdd.length) {
         const tiersToAdd = await this.tierRepository.findBy({
           id: In(tierIdsToAdd),
         });
-        if (tiersToAdd.length !== tierIdsToAdd.length) {
-          throw new BadRequestException('Some new tiers not found');
-        }
-
-        const newCampaignTiers = tiersToAdd.map((tier) => {
-          const matchedDtoTier = dtoTierMap.get(tier.id);
-          if (!matchedDtoTier) {
-            throw new BadRequestException(
-              `Tier ID ${tier.id} does not match DTO tiers`,
-            );
-          }
-
+        const newTiers = tiersToAdd.map((tier) => {
+          const match = dtoTierMap.get(tier.id);
           return this.campaignTierRepository.create({
             campaign: updatedCampaign,
             tier,
-            point_conversion_rate: matchedDtoTier.point_conversion_rate,
+            point_conversion_rate: match.point_conversion_rate,
           });
         });
-
-        await manager.save(CampaignTier, newCampaignTiers);
+        await manager.save(CampaignTier, newTiers);
       }
-
-      // === UPDATE point_conversion_rate for existing tiers ===
+      // update point_conversion_rate of existing
       const existingCampaignTiers = await manager.find(CampaignTier, {
         where: { campaign: { id }, tier: In(existingTierIds) },
         relations: ['tier'],
       });
-
       for (const ct of existingCampaignTiers) {
         const newRate = dtoTierMap.get(ct.tier.id)?.point_conversion_rate;
         if (newRate !== undefined && ct.point_conversion_rate !== newRate) {
           ct.point_conversion_rate = newRate;
         }
       }
-
       await manager.save(CampaignTier, existingCampaignTiers);
+
+      // === CUSTOMER SEGMENTS Sync ===
+      const incomingSegmentIds = dto.customer_segment_ids || [];
+      const existingSegments = await manager.find(CampaignCustomerSegment, {
+        where: { campaign: { id } },
+        relations: ['segment'],
+      });
+      const existingSegmentIds = existingSegments.map((cs) => cs.segment.id);
+      const segmentIdsToRemove = existingSegmentIds.filter(
+        (id) => !incomingSegmentIds.includes(id),
+      );
+      const segmentIdsToAdd = incomingSegmentIds.filter(
+        (id) => !existingSegmentIds.includes(id),
+      );
+
+      if (segmentIdsToRemove.length) {
+        await manager.delete(CampaignCustomerSegment, {
+          campaign: { id },
+          segment: In(segmentIdsToRemove),
+        });
+      }
+
+      if (segmentIdsToAdd.length) {
+        const segmentsToAdd = await this.segmentRepository.findBy({
+          id: In(segmentIdsToAdd),
+        });
+        const newSegments = segmentsToAdd.map((segment) =>
+          this.campaignSegmentRepository.create({
+            campaign: updatedCampaign,
+            segment,
+          }),
+        );
+        await manager.save(CampaignCustomerSegment, newSegments);
+      }
 
       await queryRunner.commitTransaction();
       return updatedCampaign;
@@ -456,15 +456,11 @@ export class CampaignsService {
 
     try {
       const manager = queryRunner.manager;
-
       const campaign = await manager.findOne(Campaign, { where: { id } });
-      if (!campaign) {
+      if (!campaign)
         throw new NotFoundException(`Campaign with ID ${id} not found`);
-      }
-
-      campaign.status = 0; // 👈 Soft delete by updating status
+      campaign.status = 0;
       await manager.save(campaign);
-
       await queryRunner.commitTransaction();
       return { deleted: true };
     } catch (error) {
@@ -478,25 +474,17 @@ export class CampaignsService {
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
   async handleCron() {
     const today = new Date();
-    today.setHours(0, 0, 0, 0); // normalize to start of the day
-
+    today.setHours(0, 0, 0, 0);
     console.log('Running campaign expiry check...');
 
     const expiredCampaigns = await this.campaignRepository.find({
-      where: {
-        end_date: today,
-        active: true,
-      },
+      where: { end_date: today, active: true },
     });
 
-    if (expiredCampaigns.length) {
-      for (const campaign of expiredCampaigns) {
-        campaign.active = false;
-        await this.campaignRepository.save(campaign);
-        console.log(`Deactivated campaign: ${campaign.name}`);
-      }
-    } else {
-      console.log('No expired campaigns found today.');
+    for (const campaign of expiredCampaigns) {
+      campaign.active = false;
+      await this.campaignRepository.save(campaign);
+      console.log(`Deactivated campaign: ${campaign.name}`);
     }
   }
 }
