@@ -7,10 +7,12 @@ import {
   Entity,
   JoinColumn,
   ManyToOne,
+  OneToMany,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
 import { ActiveStatus } from '../type/types';
+import { CouponCustomerSegment } from './coupon-customer-segments.entity';
 
 @Entity('coupons')
 export class Coupon {
@@ -108,6 +110,9 @@ export class Coupon {
 
   @Column({ nullable: true })
   discount_type: string;
+
+  @OneToMany(() => CouponCustomerSegment, (cs) => cs.coupon)
+  customerSegments: CouponCustomerSegment[];
 
   @Column('int')
   created_by: number;

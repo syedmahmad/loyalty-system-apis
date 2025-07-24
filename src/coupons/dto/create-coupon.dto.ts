@@ -1,4 +1,4 @@
-import { IsInt, IsString, IsOptional, Min } from 'class-validator';
+import { IsInt, IsString, IsOptional, Min, IsArray } from 'class-validator';
 
 export class CreateCouponDto {
   @IsInt()
@@ -17,6 +17,11 @@ export class CreateCouponDto {
 
   @IsInt()
   business_unit_id: number;
+
+  @IsOptional()
+  @IsArray()
+  @IsInt({ each: true })
+  customer_segment_ids?: number[];
 
   @IsString()
   @IsOptional()

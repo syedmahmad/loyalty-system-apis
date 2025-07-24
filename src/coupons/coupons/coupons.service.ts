@@ -5,13 +5,16 @@ import {
 } from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import axios from 'axios';
-import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
 import { DataSource, ILike, In, Not, Repository } from 'typeorm';
+
 import { CreateCouponDto } from '../dto/create-coupon.dto';
 import { UpdateCouponDto } from '../dto/update-coupon.dto';
 import { Coupon } from '../entities/coupon.entity';
+import { CustomerSegment } from 'src/customer-segment/entities/customer-segment.entity';
+import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
 import { User } from 'src/users/entities/user.entity';
 import { Tenant } from 'src/tenants/entities/tenant.entity';
+import { CouponCustomerSegment } from '../entities/coupon-customer-segments.entity';
 
 @Injectable()
 export class CouponsService {
@@ -20,7 +23,7 @@ export class CouponsService {
     private couponsRepository: Repository<Coupon>,
 
     @InjectRepository(BusinessUnit)
-    private businessUnitRepository: Repository<BusinessUnit>, // adjust path as needed
+    private businessUnitRepository: Repository<BusinessUnit>,
 
     @InjectRepository(User)
     private userRepository: Repository<User>,
@@ -28,13 +31,18 @@ export class CouponsService {
     @InjectRepository(Tenant)
     private tenantRepository: Repository<Tenant>,
 
+    @InjectRepository(CouponCustomerSegment)
+    private couponSegmentRepository: Repository<CouponCustomerSegment>,
+
+    @InjectRepository(CustomerSegment)
+    private segmentRepository: Repository<CustomerSegment>,
+
     @InjectDataSource()
     private readonly dataSource: DataSource,
   ) {}
 
   async create(dto: CreateCouponDto, user: string) {
     const queryRunner = this.dataSource.createQueryRunner();
-
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
@@ -42,10 +50,33 @@ export class CouponsService {
       queryRunner.data = { user };
       const repo = queryRunner.manager.getRepository(Coupon);
       const coupon = repo.create(dto);
-      const saved = await repo.save(coupon);
+      const savedCoupon = await repo.save(coupon);
+
+      // Assign customer segments
+      if (dto.customer_segment_ids?.length) {
+        const segments = await this.segmentRepository.findBy({
+          id: In(dto.customer_segment_ids),
+        });
+
+        if (segments.length !== dto.customer_segment_ids.length) {
+          throw new BadRequestException('Some customer segments not found');
+        }
+
+        const couponSegmentEntities = segments.map((segment) =>
+          this.couponSegmentRepository.create({
+            coupon: savedCoupon,
+            segment,
+          }),
+        );
+
+        await queryRunner.manager.save(
+          CouponCustomerSegment,
+          couponSegmentEntities,
+        );
+      }
 
       await queryRunner.commitTransaction();
-      return saved;
+      return savedCoupon;
     } catch (error) {
       await queryRunner.rollbackTransaction();
       throw error;
@@ -67,29 +98,24 @@ export class CouponsService {
 
     const privileges: any[] = user.user_privileges || [];
 
-    // get tenant name from DB (we'll need this to match privileges like `NATC_Service Center`)
     const tenant = await this.tenantRepository.findOne({
       where: { id: client_id },
     });
-
     if (!tenant) {
       throw new BadRequestException('Tenant not found');
     }
 
     const tenantName = tenant.name;
-
-    // check for global business unit access for this tenant
-    const hasGlobalBusinessUnitAccess = privileges.some(
+    const hasGlobalAccess = privileges.some(
       (p) =>
         p.module === 'businessUnits' &&
         p.name === `${tenantName}_All Business Unit`,
     );
 
     const baseConditions = { status: Not(2), tenant_id: client_id };
-
     let whereClause = {};
 
-    if (hasGlobalBusinessUnitAccess) {
+    if (hasGlobalAccess) {
       whereClause = name
         ? [
             { ...baseConditions, code: ILike(`%${name}%`) },
@@ -97,7 +123,6 @@ export class CouponsService {
           ]
         : [baseConditions];
     } else {
-      // if no global access, extract specific tier names from privileges
       const accessibleBusinessUnitNames = privileges
         .filter(
           (p) =>
@@ -107,9 +132,7 @@ export class CouponsService {
         )
         .map((p) => p.name.replace(`${tenantName}_`, ''));
 
-      if (!accessibleBusinessUnitNames.length) {
-        return []; // No access
-      }
+      if (!accessibleBusinessUnitNames.length) return [];
 
       const businessUnits = await this.businessUnitRepository.find({
         where: {
@@ -125,7 +148,7 @@ export class CouponsService {
         where: { ...whereClause, business_unit: In(availableBusinessUnitIds) },
         relations: { business_unit: true },
         order: { created_at: 'DESC' },
-        ...(name && { take: 20 }), // ← limit to 20 if name is present
+        ...(name && { take: 20 }),
         ...(limit && { take: limit }),
       });
 
@@ -134,9 +157,13 @@ export class CouponsService {
 
     const coupons = await this.couponsRepository.find({
       where: whereClause,
-      relations: { business_unit: true },
+      relations: [
+        'business_unit',
+        'customerSegments',
+        'customerSegments.segment',
+      ],
       order: { created_at: 'DESC' },
-      ...(name && { take: 20 }), // ← limit to 20 if name is present
+      ...(name && { take: 20 }),
       ...(limit && { take: limit }),
     });
 
@@ -146,7 +173,11 @@ export class CouponsService {
   async findOne(id: number) {
     const coupon = await this.couponsRepository.findOne({
       where: { id },
-      relations: { business_unit: true },
+      relations: [
+        'business_unit',
+        'customerSegments',
+        'customerSegments.segment',
+      ],
       order: { created_at: 'DESC' },
     });
 
@@ -161,20 +192,58 @@ export class CouponsService {
     await queryRunner.startTransaction();
 
     try {
-      queryRunner.data = { user }; // 👈 Pass user for audit trail
+      queryRunner.data = { user };
       const repo = queryRunner.manager.getRepository(Coupon);
-
       const coupon = await repo.findOne({ where: { id } });
-      if (!coupon) {
-        throw new Error(`Coupon with id ${id} not found`);
+
+      if (!coupon) throw new Error(`Coupon with id ${id} not found`);
+
+      repo.merge(coupon, dto);
+      await repo.save(coupon); // ✅ This triggers audit events and updates
+
+      // === CUSTOMER SEGMENTS SYNC ===
+      const incomingSegmentIds = dto.customer_segment_ids || [];
+
+      const existingRelations = await this.couponSegmentRepository.find({
+        where: { coupon: { id } },
+        relations: ['segment'],
+      });
+
+      const existingIds = existingRelations.map((r) => r.segment.id);
+
+      const toAdd = incomingSegmentIds.filter(
+        (sid) => !existingIds.includes(sid),
+      );
+      const toRemove = existingIds.filter(
+        (sid) => !incomingSegmentIds.includes(sid),
+      );
+
+      if (toRemove.length) {
+        await queryRunner.manager.delete(CouponCustomerSegment, {
+          coupon: { id },
+          segment: In(toRemove),
+        });
       }
 
-      // Merge the DTO into the existing entity
-      repo.merge(coupon, dto);
-      await repo.save(coupon); // save triggers beforeUpdate + afterInsert
+      if (toAdd.length) {
+        const segments = await this.segmentRepository.findBy({ id: In(toAdd) });
+
+        if (segments.length !== toAdd.length) {
+          throw new BadRequestException('Some customer segments not found');
+        }
+
+        const newLinks = segments.map((segment) =>
+          this.couponSegmentRepository.create({
+            coupon,
+            segment,
+          }),
+        );
+
+        await queryRunner.manager.save(CouponCustomerSegment, newLinks);
+      }
 
       await queryRunner.commitTransaction();
-      return await this.findOne(id); // Can optionally re-fetch using main repo
+      return await this.findOne(id);
     } catch (error) {
       await queryRunner.rollbackTransaction();
       throw error;
@@ -190,12 +259,10 @@ export class CouponsService {
 
     try {
       queryRunner.data = { user };
-
       const repo = queryRunner.manager.getRepository(Coupon);
       const coupon = await repo.findOne({ where: { id } });
-      if (!coupon) {
-        throw new Error(`Coupon with id ${id} not found`);
-      }
+
+      if (!coupon) throw new Error(`Coupon with id ${id} not found`);
 
       coupon.status = 2;
       await repo.save(coupon);

@@ -198,4 +198,23 @@ export class CustomerService {
     });
     return await this.qrCodeRepo.save(mapping);
   }
+
+  async getCustomerWithWalletAndTransactions(req: Request, customerId: number) {
+    const customer = await this.customerRepo.findOne({
+      where: { id: customerId },
+    });
+
+    const walletinfo = await this.walletService.getSingleCustomerWalletInfoById(
+      customer.id,
+    );
+    const transactionInfo = await this.walletService.getWalletTransactions(
+      walletinfo?.id,
+    );
+
+    if (!customer) {
+      throw new NotFoundException(`Customer with ID ${customerId} not found`);
+    }
+
+    return { ...customer, wallet: walletinfo, transactions: transactionInfo };
+  }
 }

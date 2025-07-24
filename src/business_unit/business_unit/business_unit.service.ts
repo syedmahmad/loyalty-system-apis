@@ -24,6 +24,28 @@ export class BusinessUnitsService {
   ) {}
 
   async create(dto: CreateBusinessUnitDto, user: string) {
+    const userInfo = await this.userRepository.findOne({
+      where: { uuid: user },
+    });
+
+    if (!userInfo) {
+      throw new BadRequestException('User not found against user-token');
+    }
+
+    const privileges: any[] = userInfo.user_privileges || [];
+
+    // check for global business unit access for this tenant
+    const hasGlobalBusinessUnitAccess = privileges.some(
+      (p) =>
+        p.module === 'businessUnits' && p.name.includes('_All Business Unit'),
+    );
+
+    if (!hasGlobalBusinessUnitAccess) {
+      throw new BadRequestException(
+        'User does not have permission to create business units',
+      );
+    }
+
     const queryRunner = this.dataSource.createQueryRunner();
 
     await queryRunner.connect();
