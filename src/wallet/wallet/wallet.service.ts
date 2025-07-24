@@ -134,6 +134,10 @@ export class WalletService {
       }
     }
 
+    if (dto?.expiry_date) {
+      expiryDate = dto?.expiry_date;
+    }
+
     const amount = Number(dto.amount);
 
     if (

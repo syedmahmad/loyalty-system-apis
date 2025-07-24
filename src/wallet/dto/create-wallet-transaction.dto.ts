@@ -41,4 +41,6 @@ export class CreateWalletTransactionDto {
   @IsOptional()
   @IsInt()
   created_by?: number;
+
+  expiry_date?: Date;
 }
