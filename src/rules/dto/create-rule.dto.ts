@@ -69,6 +69,10 @@ export class CreateRuleDto {
   @IsNumber()
   validity_after_assignment: number;
 
+  @IsOptional()
+  @IsString()
+  frequency?: string;
+
   @IsNumber()
   created_by: number;
 }
