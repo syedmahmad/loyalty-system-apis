@@ -46,8 +46,15 @@ export class CustomerController {
   async getCustomerWithWallet(
     @Req() req: Request,
     @Param('id', ParseIntPipe) id: number,
+    @Query('page') page?: number,
+    @Query('pageSize') pageSize?: number,
   ) {
-    return this.customerService.getCustomerWithWalletAndTransactions(req, id);
+    return this.customerService.getCustomerWithWalletAndTransactions(
+      req,
+      id,
+      page,
+      pageSize,
+    );
   }
 
   @Patch(':id/status')

@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Wallet } from './entities/wallet.entity';
 import { WalletTransaction } from './entities/wallet-transaction.entity';
+import { WalletOrder } from './entities/wallet-order.entity';
 import { WalletController } from './wallet/wallet.controller';
 import { WalletService } from './wallet/wallet.service';
 import { UserCoupon } from './entities/user-coupon.entity';
@@ -16,6 +17,7 @@ import { User } from 'src/users/entities/user.entity';
       UserCoupon,
       WalletSettings,
       User,
+      WalletOrder,
     ]),
   ],
   controllers: [WalletController],

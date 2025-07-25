@@ -13,6 +13,10 @@ export class CreateRuleDto {
   name: string;
 
   @IsString()
+  @IsNotEmpty()
+  slug: string;
+
+  @IsString()
   @IsIn(['event based earn', 'spend and earn', 'burn', 'dynamic rule'])
   rule_type: string;
 

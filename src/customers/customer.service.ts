@@ -35,7 +35,6 @@ export class CustomerService {
       throw new BadRequestException('Invalid Business Unit Key');
     }
 
-    const baseUrl = process.env.GATEWAY_API_URL;
     const customerUuid = uuidv4();
 
     const results = [];
@@ -72,7 +71,7 @@ export class CustomerService {
 
         results.push({
           status: 'exists',
-          qr_code_url: `${baseUrl}/qrcodes/qr/${existCustomerQr.short_id}`,
+          qr_code_url: `/qrcodes/qr/${existCustomerQr.short_id}`,
         });
         continue;
       }
@@ -110,7 +109,7 @@ export class CustomerService {
       results.push({
         status: 'created',
         // TODO: baseUrl is wrong, we do not allow direct admin API access, all communication should be through gatwway
-        qr_code_url: `${baseUrl}/qrcodes/qr/${saveCustomerQrCodeInfo.short_id}`,
+        qr_code_url: `/qrcodes/qr/${saveCustomerQrCodeInfo.short_id}`,
       });
     }
 
@@ -199,7 +198,12 @@ export class CustomerService {
     return await this.qrCodeRepo.save(mapping);
   }
 
-  async getCustomerWithWalletAndTransactions(req: Request, customerId: number) {
+  async getCustomerWithWalletAndTransactions(
+    req: Request,
+    customerId: number,
+    page: number,
+    pageSize: number,
+  ) {
     const customer = await this.customerRepo.findOne({
       where: { id: customerId },
     });
@@ -209,6 +213,8 @@ export class CustomerService {
     );
     const transactionInfo = await this.walletService.getWalletTransactions(
       walletinfo?.id,
+      page,
+      pageSize,
     );
 
     if (!customer) {

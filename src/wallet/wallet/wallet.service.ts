@@ -16,6 +16,8 @@ import { CreateWalletTransactionDto } from '../dto/create-wallet-transaction.dto
 import * as dayjs from 'dayjs';
 import { CreateWalletSettingsDto } from '../dto/create-wallet-settings.dto';
 import { User } from 'src/users/entities/user.entity';
+import { CreateWalletOrderDto } from '../dto/create-wallet-order.dto';
+import { WalletOrder } from '../entities/wallet-order.entity';
 
 @Injectable()
 export class WalletService {
@@ -28,6 +30,8 @@ export class WalletService {
     @InjectRepository(User)
     private userRepository: Repository<User>,
     @InjectRepository(UserCoupon) private couponRepo: Repository<UserCoupon>,
+    @InjectRepository(WalletOrder)
+    private orderRepo: Repository<WalletOrder>,
   ) {}
 
   async createWallet(dto: CreateWalletDto) {
@@ -185,8 +189,29 @@ export class WalletService {
     return savedTx;
   }
 
-  async getWalletTransactions(walletId: number) {
+  async getWalletTransactionsOld(walletId: number) {
     return this.txRepo.find({ where: { wallet: { id: walletId } } });
+  }
+
+  async getWalletTransactions(
+    walletId: number,
+    page: number = 1,
+    pageSize: number = 7,
+  ) {
+    const take = pageSize;
+    const skip = (page - 1) * take;
+    const [data, total] = await this.txRepo.findAndCount({
+      where: { wallet: { id: walletId } },
+      take,
+      skip,
+    });
+    return {
+      data,
+      total,
+      page,
+      pageSize,
+      totalPages: Math.ceil(total / pageSize),
+    };
   }
 
   async listWallets(buId?: number) {
@@ -247,5 +272,11 @@ export class WalletService {
         customer: { id: customerId },
       },
     });
+  }
+
+  async addOrder(dto: CreateWalletOrderDto) {
+    const { ...orderData } = dto;
+    const order = this.orderRepo.create(orderData);
+    return await this.orderRepo.save(order);
   }
 }

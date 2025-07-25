@@ -27,6 +27,7 @@ export class RulesService {
 
       const rule = this.ruleRepository.create({
         name: dto.name,
+        slug: dto.slug,
         rule_type: dto.rule_type,
         tenant_id: dto.client_id,
         min_amount_spent: dto.min_amount_spent,
@@ -92,6 +93,7 @@ export class RulesService {
       if (!rule) throw new Error('Rule not found');
 
       rule.name = dto.name ?? rule.name;
+      rule.slug = dto.slug ?? rule.slug;
       rule.rule_type = dto.rule_type ?? rule.rule_type;
       rule.min_amount_spent = dto.min_amount_spent ?? rule.min_amount_spent;
       rule.reward_points = dto.reward_points ?? rule.reward_points;

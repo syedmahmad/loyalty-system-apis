@@ -16,6 +16,7 @@ import { User } from 'src/users/entities/user.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as jwt from 'jsonwebtoken';
+import { CreateWalletOrderDto } from '../dto/create-wallet-order.dto';
 
 @Controller('wallets')
 export class WalletController {
@@ -55,8 +56,12 @@ export class WalletController {
   }
 
   @Get(':id/transactions')
-  async getWalletTransactions(@Param('id') walletId: number) {
-    return this.walletService.getWalletTransactions(walletId);
+  async getWalletTransactions(
+    @Param('id') walletId: number,
+    @Query('page') page?: number,
+    @Query('pageSize') pageSize?: number,
+  ) {
+    return this.walletService.getWalletTransactions(walletId, page, pageSize);
   }
 
   @Get()
@@ -77,5 +82,10 @@ export class WalletController {
   @Post('create-transaction')
   async createTransaction(@Body() dto: CreateWalletTransactionDto) {
     return this.walletService.addTransaction(dto, null, true);
+  }
+
+  @Post('create-order')
+  async createOrder(@Body() dto: CreateWalletOrderDto) {
+    return this.walletService.addOrder(dto);
   }
 }
