@@ -37,6 +37,7 @@ export class RulesService {
         max_burn_percent_on_invoice: dto.max_burn_percent_on_invoice,
         description: dto.description,
         validity_after_assignment: dto.validity_after_assignment,
+        frequency: dto.frequency,
         created_by: createdBy,
         updated_by: createdBy,
         condition_type: dto.condition_type,
@@ -107,6 +108,7 @@ export class RulesService {
         dto.condition_operator ?? rule.condition_operator;
       rule.condition_value = dto.condition_value ?? rule.condition_value;
       rule.updated_by = dto.updated_by ?? rule.updated_by;
+      rule.frequency = dto.frequency ?? rule.frequency;
 
       await manager.save(rule);
       await queryRunner.commitTransaction();

@@ -62,6 +62,9 @@ export class Rule {
   @Column('int', { nullable: true })
   validity_after_assignment: number;
 
+  @Column({ type: 'varchar', nullable: true })
+  frequency: string; // 'once','daily' and 'yearly'
+
   @Column({ default: 0 })
   created_by: number;
 
