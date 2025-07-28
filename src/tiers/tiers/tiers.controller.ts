@@ -130,4 +130,21 @@ export class TiersController {
     }
     return await this.service.remove(+id, user.uuid);
   }
+
+  @Get(':client_id/benefits')
+  async getAllTierBenefits(@Param('client_id') client_id: number) {
+    return await this.service.getAllTierBenefits(client_id);
+  }
+
+  @Get('/customer/:customer_id/tier')
+  async getCurrentCustomerTier(@Param('customer_id') customerId: number) {
+    return await this.service.getCurrentCustomerTier(customerId);
+  }
+
+  @Get('business-unit/:business_unit_id')
+  async getTiersByBusinessUnit(
+    @Param('business_unit_id') business_unit_id: string,
+  ) {
+    return await this.service.findByBusinessUnit(business_unit_id);
+  }
 }

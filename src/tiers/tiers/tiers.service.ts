@@ -4,7 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
-import { DataSource, ILike, In, Repository } from 'typeorm';
+import { DataSource, ILike, In, LessThanOrEqual, Repository } from 'typeorm';
 import { Tier } from '../entities/tier.entity';
 import { CreateTierDto } from '../dto/create-tier.dto';
 import { UpdateTierDto } from '../dto/update-tier.dto';
@@ -12,6 +12,7 @@ import { RuleTarget } from '../../rules/entities/rule-target.entity'; // adjust 
 import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
 import { User } from 'src/users/entities/user.entity';
 import { Tenant } from 'src/tenants/entities/tenant.entity';
+import { Wallet } from 'src/wallet/entities/wallet.entity';
 
 @Injectable()
 export class TiersService {
@@ -24,6 +25,8 @@ export class TiersService {
 
     @InjectRepository(BusinessUnit)
     private businessUnitRepository: Repository<BusinessUnit>, // adjust path as needed
+
+    @InjectRepository(Wallet) private walletRepo: Repository<Wallet>,
 
     @InjectRepository(User)
     private userRepository: Repository<User>,
@@ -180,6 +183,48 @@ export class TiersService {
     };
   }
 
+  async findByBusinessUnit(businessUnitId: string) {
+    const businessUnit = await this.businessUnitRepository.findOne({
+      where: { uuid: businessUnitId, status: 1 },
+    });
+
+    if (!businessUnit) {
+      throw new NotFoundException('Business Unit not found');
+    }
+
+    const client_id = businessUnit.tenant_id;
+    const business_unit_id = businessUnit.id;
+
+    const ruleTargets = await this.ruleTargetRepository.find({
+      where: { target_type: 'tier' },
+      relations: { rule: true },
+    });
+
+    const whereClause: any = {
+      tenant_id: client_id,
+      business_unit_id,
+      status: 1,
+    };
+
+    const tiers = await this.tiersRepository.find({
+      where: whereClause,
+      relations: { business_unit: true },
+      order: { created_at: 'DESC' },
+    });
+
+    return {
+      tiers: tiers.map((tier) => {
+        const targets = ruleTargets
+          .filter((rt) => rt.target_id === tier.id)
+          .map((rt) => ({
+            id: rt.id,
+            rule_id: rt.rule_id,
+          }));
+        return { ...tier, rule_targets: targets };
+      }),
+    };
+  }
+
   async findOne(id: number) {
     const tier = await this.tiersRepository.findOne({
       where: { id },
@@ -296,5 +341,62 @@ export class TiersService {
     } finally {
       await queryRunner.release();
     }
+  }
+
+  async getAllTierBenefits(client_id: number) {
+    const tiers = await this.tiersRepository.find({
+      where: { tenant_id: client_id, status: 1 },
+      order: { created_at: 'DESC' },
+    });
+
+    return tiers.map((tier) => ({
+      tier_id: tier.id,
+      tier_name: tier.name,
+      benefits: tier.benefits || [], // assuming it's stored as an array or JSON column
+    }));
+  }
+
+  async getCurrentCustomerTier(customerId: number) {
+    // Step 1: Fetch customer's current point balance (assumes you have a Wallet table)
+    const customerWallet = await this.walletRepo.findOne({
+      where: { customer: { id: customerId } },
+      relations: ['customer'],
+    });
+
+    if (!customerWallet) {
+      throw new NotFoundException('Customer wallet not found');
+    }
+
+    const points = customerWallet.total_balance;
+
+    // Step 2: Find the matching tier
+    const matchingTier = await this.tiersRepository.findOne({
+      where: {
+        min_points: LessThanOrEqual(points),
+        status: 1,
+        business_unit_id: customerWallet.business_unit?.id,
+      },
+      order: {
+        min_points: 'DESC',
+      },
+    });
+
+    if (!matchingTier) {
+      return {
+        tier: null,
+        message: 'No tier found for current point balance',
+      };
+    }
+
+    return {
+      customer_id: customerId,
+      points,
+      tier: {
+        id: matchingTier.id,
+        name: matchingTier.name,
+        level: matchingTier.level,
+        min_points: matchingTier.min_points,
+      },
+    };
   }
 }
