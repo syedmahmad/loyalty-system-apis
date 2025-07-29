@@ -15,11 +15,17 @@ import { WalletModule } from 'src/wallet/wallet.module';
 import { OciModule } from 'src/oci/oci.module';
 import { QrCode } from 'src/qr_codes/entities/qr_code.entity';
 import { QrcodesService } from '../qr_codes/qr_codes/qr_codes.service';
-
+import { CustomerActivity } from 'src/customers/entities/customer-activity.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Customer, User, BusinessUnit, QrCode]),
+    TypeOrmModule.forFeature([
+      Customer,
+      User,
+      BusinessUnit,
+      QrCode,
+      CustomerActivity,
+    ]),
     WalletModule,
     OciModule,
   ],

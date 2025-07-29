@@ -15,6 +15,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { nanoid } from 'nanoid';
 import { QrCode } from '../qr_codes/entities/qr_code.entity';
 import { QrcodesService } from '../qr_codes/qr_codes/qr_codes.service';
+import { CustomerActivity } from './entities/customer-activity.entity';
 
 @Injectable()
 export class CustomerService {
@@ -26,6 +27,8 @@ export class CustomerService {
     @InjectRepository(QrCode)
     private readonly qrCodeRepo: Repository<QrCode>,
     private readonly qrService: QrcodesService,
+    @InjectRepository(CustomerActivity)
+    private readonly customeractivityRepo: Repository<CustomerActivity>,
   ) {}
 
   async createCustomer(req: Request, dto: BulkCreateCustomerDto) {
