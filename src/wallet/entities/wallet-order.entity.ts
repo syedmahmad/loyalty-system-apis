@@ -36,7 +36,7 @@ export class WalletOrder {
   @Column({ nullable: true })
   items_count: number;
 
-  @Column({ type: 'text', nullable: true })
+  @Column({ type: 'simple-json', nullable: true })
   items: string;
 
   @Column({ nullable: true })
