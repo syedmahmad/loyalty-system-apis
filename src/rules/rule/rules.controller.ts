@@ -61,6 +61,14 @@ export class RulesController {
     return await this.rulesService.findAll(client_id, name);
   }
 
+  @Get(':client_id/third-party')
+  async findAllForThirdParty(
+    @Param('client_id') client_id: string,
+    @Query('name') name?: string, // optional query param
+  ) {
+    return await this.rulesService.findAllForThirdParty(client_id, name);
+  }
+
   @Get('/single/:id')
   findOne(@Param('id') id: number) {
     return this.rulesService.findOne(id);
