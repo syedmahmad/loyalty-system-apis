@@ -4,12 +4,16 @@ import { DataSource, ILike, Repository } from 'typeorm';
 import { Rule } from '../entities/rules.entity';
 import { CreateRuleDto } from '../dto/create-rule.dto';
 import { UpdateRuleDto } from '../dto/update-rule.dto';
+import { Tenant } from 'src/tenants/entities/tenant.entity';
 
 @Injectable()
 export class RulesService {
   constructor(
     @InjectRepository(Rule)
     private readonly ruleRepository: Repository<Rule>,
+
+    @InjectRepository(Tenant)
+    private readonly tenantRepository: Repository<Tenant>,
 
     @InjectDataSource()
     private readonly dataSource: DataSource,
@@ -70,6 +74,36 @@ export class RulesService {
     return this.ruleRepository.find({
       where: {
         tenant_id: client_id,
+        ...optionalWhereClause,
+        status: 1, // Only active rules
+      },
+    });
+  }
+
+  async findAllForThirdParty(client_id: string, name: string) {
+    console.log('client_id', client_id);
+
+    let optionalWhereClause = {};
+
+    const tenant = await this.tenantRepository.findOne({
+      where: {
+        uuid: client_id,
+      },
+    });
+
+    if (!tenant) {
+      throw new Error('Tenant not found');
+    }
+
+    if (name) {
+      optionalWhereClause = {
+        name: ILike(`%${name}%`),
+      };
+    }
+
+    return this.ruleRepository.find({
+      where: {
+        tenant_id: tenant.id,
         ...optionalWhereClause,
         status: 1, // Only active rules
       },
