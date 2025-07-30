@@ -8,6 +8,7 @@ import {
 } from 'typeorm';
 import { Wallet } from './wallet.entity';
 import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
+import { WalletOrder } from './wallet-order.entity';
 
 export enum WalletTransactionType {
   EARN = 'earn',
@@ -26,6 +27,10 @@ export enum WalletTransactionStatus {
 export class WalletTransaction {
   @PrimaryGeneratedColumn()
   id: number;
+
+  @ManyToOne(() => WalletOrder)
+  @JoinColumn({ name: 'wallet_order_id' })
+  orders: WalletOrder;
 
   @ManyToOne(() => Wallet)
   @JoinColumn({ name: 'wallet_id' })

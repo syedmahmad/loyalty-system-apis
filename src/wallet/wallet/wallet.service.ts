@@ -156,6 +156,7 @@ export class WalletService {
       ...dto,
       business_unit: { id: dto.business_unit_id } as any,
       wallet: { id: dto.wallet_id } as any,
+      orders: { id: dto.wallet_order_id },
       unlock_date: unlockDate,
       expiry_date: expiryDate,
     });
@@ -202,6 +203,7 @@ export class WalletService {
     const skip = (page - 1) * take;
     const [data, total] = await this.txRepo.findAndCount({
       where: { wallet: { id: walletId } },
+      relations: ['orders'],
       take,
       skip,
     });
@@ -275,8 +277,11 @@ export class WalletService {
   }
 
   async addOrder(dto: CreateWalletOrderDto) {
-    const { ...orderData } = dto;
-    const order = this.orderRepo.create(orderData);
+    const order = this.orderRepo.create({
+      ...dto,
+      wallet: { id: dto.wallet_id },
+      business_unit: { id: dto.business_unit_id },
+    });
     return await this.orderRepo.save(order);
   }
 }

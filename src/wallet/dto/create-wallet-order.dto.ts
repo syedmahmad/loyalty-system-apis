@@ -3,10 +3,10 @@ import { IsInt, IsNumber, IsOptional, IsString } from 'class-validator';
 
 export class CreateWalletOrderDto {
   @IsInt()
-  wallet_id?: number;
+  wallet_id: number;
 
   @IsInt()
-  business_unit_id?: number;
+  business_unit_id: number;
 
   @IsOptional()
   @IsString()
