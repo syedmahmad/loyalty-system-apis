@@ -10,7 +10,7 @@ import {
   WalletSettings,
   ExpirationMethod,
 } from '../entities/wallet-settings.entity';
-import { Repository } from 'typeorm';
+import { ILike, Repository } from 'typeorm';
 import { CreateWalletDto } from '../dto/create-wallet.dto';
 import { CreateWalletTransactionDto } from '../dto/create-wallet-transaction.dto';
 import * as dayjs from 'dayjs';
@@ -198,11 +198,27 @@ export class WalletService {
     walletId: number,
     page: number = 1,
     pageSize: number = 7,
+    query: string = '',
   ) {
     const take = pageSize;
     const skip = (page - 1) * take;
+
+    let whereClause: any = {
+      wallet: { id: walletId },
+    };
+
+    if (query) {
+      const searchTerm = `%${query}%`;
+      whereClause = [
+        { wallet: { id: walletId }, type: ILike(searchTerm) },
+        { wallet: { id: walletId }, amount: ILike(searchTerm) },
+        { wallet: { id: walletId }, status: ILike(searchTerm) },
+        { wallet: { id: walletId }, description: ILike(searchTerm) },
+      ];
+    }
+
     const [data, total] = await this.txRepo.findAndCount({
-      where: { wallet: { id: walletId } },
+      where: whereClause,
       relations: ['orders'],
       take,
       skip,

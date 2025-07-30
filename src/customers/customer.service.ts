@@ -206,6 +206,7 @@ export class CustomerService {
     customerId: number,
     page: number,
     pageSize: number,
+    query: string,
   ) {
     const customer = await this.customerRepo.findOne({
       where: { id: customerId },
@@ -218,6 +219,7 @@ export class CustomerService {
       walletinfo?.id,
       page,
       pageSize,
+      query,
     );
 
     if (!customer) {

@@ -48,12 +48,14 @@ export class CustomerController {
     @Param('id', ParseIntPipe) id: number,
     @Query('page') page?: number,
     @Query('pageSize') pageSize?: number,
+    @Query('query') query?: string,
   ) {
     return this.customerService.getCustomerWithWalletAndTransactions(
       req,
       id,
       page,
       pageSize,
+      query
     );
   }
 

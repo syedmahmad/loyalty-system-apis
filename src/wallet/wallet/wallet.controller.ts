@@ -60,8 +60,9 @@ export class WalletController {
     @Param('id') walletId: number,
     @Query('page') page?: number,
     @Query('pageSize') pageSize?: number,
+    @Query('query') query?: string,
   ) {
-    return this.walletService.getWalletTransactions(walletId, page, pageSize);
+    return this.walletService.getWalletTransactions(walletId, page, pageSize, query);
   }
 
   @Get()
