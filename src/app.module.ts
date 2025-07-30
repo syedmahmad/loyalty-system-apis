@@ -24,6 +24,7 @@ import { WalletModule } from './wallet/wallet.module';
 import { OciModule } from './oci/oci.module';
 import { CustomerSegmentsModule } from './customer-segment/customer-segment.module';
 import { QrCodesModule } from './qr_codes/qr_codes.module';
+import { LoyaltyAnalyticsModule } from './analytics/analytics.module';
 
 @Module({
   imports: [
@@ -51,6 +52,7 @@ import { QrCodesModule } from './qr_codes/qr_codes.module';
     TenantsModule,
     ReportsModule,
     RulesModule,
+    LoyaltyAnalyticsModule,
     CouponsModule,
     CouponTypeModule,
     WalletModule,
