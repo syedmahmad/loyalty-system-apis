@@ -343,9 +343,17 @@ export class TiersService {
     }
   }
 
-  async getAllTierBenefits(client_id: number) {
+  async getAllTierBenefits(client_id: string) {
+    const tenant = await this.tenantRepository.findOne({
+      where: { uuid: client_id, status: 1 },
+    });
+
+    if (!tenant) {
+      throw new NotFoundException('Tenant not found');
+    }
+
     const tiers = await this.tiersRepository.find({
-      where: { tenant_id: client_id, status: 1 },
+      where: { tenant_id: tenant.id, status: 1 },
       order: { created_at: 'DESC' },
     });
 
