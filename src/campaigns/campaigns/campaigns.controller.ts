@@ -80,29 +80,12 @@ export class CampaignsController {
     return this.campaignService.findAll(client_id, name, user.id);
   }
 
-  @Get(':client_id')
-  async findAllForThirdPart(
+  @Get('/third-party/:client_id')
+  async findAllThirdParty(
     @Param('client_id') client_id: string,
-    @Headers('user-secret') userSecret: string,
     @Query('name') name?: string,
   ): Promise<Campaign[]> {
-    if (!userSecret) {
-      throw new BadRequestException('user-secret not found in headers');
-    }
-
-    const decodedUser: any = jwt.decode(userSecret);
-
-    const user = await this.userRepository.findOne({
-      where: {
-        id: decodedUser.UserId,
-      },
-    });
-
-    if (!user) {
-      throw new BadRequestException('user not found against provided token');
-    }
-
-    return this.campaignService.findAllForThirdPart(client_id, name, user.id);
+    return this.campaignService.findAllForThirdPart(client_id, name);
   }
 
   @Get('/single/:id')

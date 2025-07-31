@@ -261,65 +261,22 @@ export class CampaignsService {
   async findAllForThirdPart(
     client_id: string,
     name: string,
-    userId: number,
   ): Promise<Campaign[]> {
     let optionalWhereClause = {};
 
-    const user = await this.userRepository.findOne({ where: { id: userId } });
-    if (!user)
-      throw new BadRequestException('User not found against user-token');
-
-    const privileges: any[] = user.user_privileges || [];
     const tenant = await this.tenantRepository.findOne({
       where: { uuid: client_id },
     });
     if (!tenant) throw new BadRequestException('Tenant not found');
-    const tenantName = tenant.name;
-
-    const hasGlobalAccess = privileges.some(
-      (p) =>
-        p.module === 'businessUnits' &&
-        p.name === `${tenantName}_All Business Unit`,
-    );
 
     if (name?.trim()) {
       optionalWhereClause = { name: ILike(`%${name}%`) };
     }
 
-    if (hasGlobalAccess) {
-      return this.campaignRepository.find({
-        where: {
-          tenant_id: Number(client_id),
-          status: 1,
-          ...optionalWhereClause,
-        },
-        relations: ['rules', 'tiers', 'business_unit', 'coupons'],
-        order: { created_at: 'DESC' },
-      });
-    }
-
-    const accessibleBU = privileges
-      .filter(
-        (p) =>
-          p.module === 'businessUnits' &&
-          p.name.startsWith(`${tenantName}_`) &&
-          p.name !== `${tenantName}_All Business Unit`,
-      )
-      .map((p) => p.name.replace(`${tenantName}_`, ''));
-
-    if (!accessibleBU.length) return [];
-
-    const businessUnits = await this.businessUnitRepository.find({
-      where: { status: 1, tenant_id: tenant.id, name: In(accessibleBU) },
-    });
-
-    const businessUnitIds = businessUnits.map((bu) => bu.id);
-
     return this.campaignRepository.find({
       where: {
-        tenant_id: Number(client_id),
+        tenant_id: tenant.id,
         status: 1,
-        business_unit_id: In(businessUnitIds),
         ...optionalWhereClause,
       },
       relations: [
