@@ -132,7 +132,7 @@ export class TiersController {
   }
 
   @Get(':client_id/benefits')
-  async getAllTierBenefits(@Param('client_id') client_id: number) {
+  async getAllTierBenefits(@Param('client_id') client_id: string) {
     return await this.service.getAllTierBenefits(client_id);
   }
 

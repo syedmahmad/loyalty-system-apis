@@ -7,9 +7,11 @@ import {
   OneToMany,
   ManyToOne,
   JoinColumn,
+  BeforeInsert,
 } from 'typeorm';
 import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
 import { CampaignRule } from './campaign-rule.entity';
+import { v4 as uuidv4 } from 'uuid';
 import { CampaignTier } from './campaign-tier.entity';
 import { Tenant } from 'src/tenants/entities/tenant.entity';
 import { CampaignCoupons } from './campaign-coupon.entity';
@@ -54,6 +56,19 @@ export class Campaign {
 
   @Column({ default: false })
   active: boolean;
+
+  @Column({
+    type: 'char',
+    length: 36,
+  })
+  uuid: string = uuidv4();
+
+  @BeforeInsert()
+  assignUuid() {
+    if (!this.uuid) {
+      this.uuid = uuidv4();
+    }
+  }
 
   @Column({ type: 'int', default: 0 })
   status: number;
