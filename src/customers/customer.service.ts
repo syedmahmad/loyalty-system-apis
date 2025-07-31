@@ -16,6 +16,7 @@ import { nanoid } from 'nanoid';
 import { QrCode } from '../qr_codes/entities/qr_code.entity';
 import { QrcodesService } from '../qr_codes/qr_codes/qr_codes.service';
 import { CustomerActivity } from './entities/customer-activity.entity';
+import { TiersService } from 'src/tiers/tiers/tiers.service';
 
 @Injectable()
 export class CustomerService {
@@ -29,6 +30,7 @@ export class CustomerService {
     private readonly qrService: QrcodesService,
     @InjectRepository(CustomerActivity)
     private readonly customeractivityRepo: Repository<CustomerActivity>,
+    private readonly tiersService: TiersService,
   ) {}
 
   async createCustomer(req: Request, dto: BulkCreateCustomerDto) {
@@ -222,10 +224,18 @@ export class CustomerService {
       query,
     );
 
+    const tiersInfo =
+      await this.tiersService.getCurrentCustomerTier(customerId);
+
     if (!customer) {
       throw new NotFoundException(`Customer with ID ${customerId} not found`);
     }
 
-    return { ...customer, wallet: walletinfo, transactions: transactionInfo };
+    return {
+      ...customer,
+      wallet: walletinfo,
+      transactions: transactionInfo,
+      tier: tiersInfo,
+    };
   }
 }

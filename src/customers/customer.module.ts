@@ -16,6 +16,11 @@ import { OciModule } from 'src/oci/oci.module';
 import { QrCode } from 'src/qr_codes/entities/qr_code.entity';
 import { QrcodesService } from '../qr_codes/qr_codes/qr_codes.service';
 import { CustomerActivity } from 'src/customers/entities/customer-activity.entity';
+import { Tier } from 'src/tiers/entities/tier.entity';
+import { TiersService } from 'src/tiers/tiers/tiers.service';
+import { RuleTarget } from 'src/rules/entities/rule-target.entity';
+import { Wallet } from 'src/wallet/entities/wallet.entity';
+import { Tenant } from 'src/tenants/entities/tenant.entity';
 
 @Module({
   imports: [
@@ -25,12 +30,21 @@ import { CustomerActivity } from 'src/customers/entities/customer-activity.entit
       BusinessUnit,
       QrCode,
       CustomerActivity,
+      Tier,
+      RuleTarget,
+      Wallet,
+      Tenant,
     ]),
     WalletModule,
     OciModule,
   ],
   controllers: [CustomerController],
-  providers: [CustomerService, BusinessUnitMiddleware, QrcodesService],
+  providers: [
+    CustomerService,
+    BusinessUnitMiddleware,
+    QrcodesService,
+    TiersService,
+  ],
 })
 export class CustomerModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
