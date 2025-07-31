@@ -114,6 +114,15 @@ export class CampaignsController {
     return campaign;
   }
 
+  @Get('third-party/single/:id')
+  async findOneForThirdPart(@Param('id') id: string): Promise<Campaign> {
+    const campaign = await this.campaignService.findOneThirdParty(id);
+    if (!campaign) {
+      throw new NotFoundException('Campaign not found');
+    }
+    return campaign;
+  }
+
   @UseGuards(AuthTokenGuard)
   @Put(':id')
   async update(

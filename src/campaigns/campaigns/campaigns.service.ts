@@ -351,6 +351,23 @@ export class CampaignsService {
     return campaign;
   }
 
+  async findOneThirdParty(id: string): Promise<Campaign> {
+    const campaign = await this.campaignRepository.findOne({
+      where: { uuid: id },
+      relations: [
+        'rules',
+        'tiers',
+        'business_unit',
+        'coupons',
+        'customerSegments',
+        'customerSegments.segment',
+      ],
+    });
+    if (!campaign)
+      throw new NotFoundException(`Campaign with ID ${id} not found`);
+    return campaign;
+  }
+
   async update(
     id: number,
     dto: UpdateCampaignDto,
