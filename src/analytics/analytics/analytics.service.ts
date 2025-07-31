@@ -1,0 +1,212 @@
+import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Wallet } from 'src/wallet/entities/wallet.entity';
+import { WalletTransaction } from 'src/wallet/entities/wallet-transaction.entity';
+import { WalletOrder } from 'src/wallet/entities/wallet-order.entity';
+import { Between, IsNull, Not, Repository } from 'typeorm';
+
+@Injectable()
+export class LoyaltyAnalyticsService {
+  constructor(
+    @InjectRepository(Wallet)
+    private readonly walletRepository: Repository<Wallet>,
+
+    @InjectRepository(WalletTransaction)
+    private readonly walletTransactionRepository: Repository<WalletTransaction>,
+
+    @InjectRepository(WalletOrder)
+    private readonly walletOrderRepository: Repository<WalletOrder>,
+  ) {}
+
+  async getLoyaltyDashboard(startDate?: string, endDate?: string) {
+    const [pointSplits, customerByPoints, summary, itemUsage, barChart] =
+      await Promise.all([
+        this.getPointsSplit(startDate, endDate),
+        this.getCustomerPointDistribution(),
+        this.getPointSummary(startDate, endDate),
+        this.getItemUsage(startDate, endDate),
+        this.getBarChartData(startDate, endDate),
+      ]);
+
+    return {
+      pointSplits,
+      customerByPoints,
+      summary,
+      itemUsage,
+      barChart,
+    };
+  }
+
+  private async getPointsSplit(startDate?: string, endDate?: string) {
+    const qb = this.walletTransactionRepository
+      .createQueryBuilder('tx')
+      .select('tx.source_type', 'sourceType')
+      .addSelect('SUM(tx.amount)', 'totalPoints')
+      .where('tx.type IN (:...types)', { types: ['earn', 'adjustment'] })
+      .andWhere('tx.status = :status', { status: 'active' });
+
+    if (startDate && endDate) {
+      qb.andWhere('tx.created_at BETWEEN :start AND :end', {
+        start: startDate,
+        end: endDate,
+      });
+    }
+
+    return qb.groupBy('tx.source_type').getRawMany();
+  }
+
+  private async getCustomerPointDistribution() {
+    const { total } = await this.walletRepository
+      .createQueryBuilder('wallet')
+      .select('COUNT(*)', 'total')
+      .getRawOne();
+
+    const ranges = await this.walletRepository.query(`
+      SELECT 
+        CASE
+          WHEN total_balance BETWEEN 0 AND 1000 THEN '0-1,000'
+          WHEN total_balance BETWEEN 1001 AND 2000 THEN '1,001-2,000'
+          WHEN total_balance BETWEEN 2001 AND 5000 THEN '2,001-5,000'
+          ELSE '5,001+'
+        END AS \`range\`,
+        COUNT(*) AS count
+      FROM wallet
+      GROUP BY \`range\`
+    `);
+
+    return ranges.map((r: any) => ({
+      ...r,
+      percentage: total ? ((r.count / total) * 100).toFixed(2) + '%' : '0%',
+    }));
+  }
+
+  private async getPointSummary(startDate?: string, endDate?: string) {
+    const [earned, burnt, remaining] = await Promise.all([
+      this.walletTransactionRepository
+        .createQueryBuilder('tx')
+        .select('SUM(tx.amount)', 'total')
+        .where('tx.type IN (:...types)', { types: ['earn', 'adjustment'] })
+        .andWhere('tx.status = :status', { status: 'active' })
+        .andWhere(
+          startDate && endDate
+            ? 'tx.created_at BETWEEN :start AND :end'
+            : '1=1',
+          {
+            start: startDate,
+            end: endDate,
+          },
+        )
+        .getRawOne(),
+
+      this.walletTransactionRepository
+        .createQueryBuilder('tx')
+        .select('SUM(tx.amount)', 'total')
+        .where('tx.type = :type', { type: 'burn' })
+        .andWhere('tx.status = :status', { status: 'active' })
+        .andWhere(
+          startDate && endDate
+            ? 'tx.created_at BETWEEN :start AND :end'
+            : '1=1',
+          {
+            start: startDate,
+            end: endDate,
+          },
+        )
+        .getRawOne(),
+
+      this.walletRepository
+        .createQueryBuilder('wallet')
+        .select('SUM(wallet.available_balance)', 'total')
+        .getRawOne(),
+    ]);
+
+    return {
+      totalEarnedPoints: parseFloat(earned.total || 0),
+      totalBurntPoints: parseFloat(burnt.total || 0),
+      totalLoyaltyPoints:
+        parseFloat(earned.total || 0) - parseFloat(burnt.total || 0),
+      totalRemainingPoints: parseFloat(remaining.total || 0),
+    };
+  }
+
+  private async getItemUsage(startDate?: string, endDate?: string) {
+    const where: any = {
+      items: Not(IsNull()),
+    };
+
+    if (startDate && endDate) {
+      where.order_date = Between(new Date(startDate), new Date(endDate));
+    }
+
+    const orders = await this.walletOrderRepository.find({ where });
+
+    const itemMap = new Map<string, number>();
+    for (const order of orders) {
+      const items = Array.isArray(order.items)
+        ? order.items
+        : JSON.parse(order.items || '[]');
+      const seen = new Set();
+
+      for (const item of items) {
+        if (item?.item_name && !seen.has(item.item_name)) {
+          seen.add(item.item_name);
+          itemMap.set(item.item_name, (itemMap.get(item.item_name) || 0) + 1);
+        }
+      }
+    }
+
+    const totalOrders = orders.length;
+
+    return Array.from(itemMap.entries()).map(([itemName, count]) => ({
+      itemName,
+      invoiceCount: count,
+      percentage: totalOrders
+        ? `${((count / totalOrders) * 100).toFixed(2)}%`
+        : '0.00%',
+    }));
+  }
+
+  private async getBarChartData(startDate?: string, endDate?: string) {
+    const whereClause: any = {};
+    if (startDate && endDate) {
+      whereClause.created_at = Between(new Date(startDate), new Date(endDate));
+    }
+
+    const transactions = await this.walletTransactionRepository.find({
+      where: {
+        ...whereClause,
+        status: 'active',
+      },
+    });
+
+    const chartMap = new Map<string, { earn: number; burn: number }>();
+
+    for (const tx of transactions) {
+      const dateKey = tx.created_at.toISOString().split('T')[0]; // yyyy-mm-dd
+      const current = chartMap.get(dateKey) || { earn: 0, burn: 0 };
+
+      if (tx.type === 'earn' || tx.type === 'adjustment') {
+        current.earn += Number(tx.amount);
+      } else if (tx.type === 'burn') {
+        current.burn += Number(tx.amount);
+      }
+
+      chartMap.set(dateKey, current);
+    }
+
+    const result = Array.from(chartMap.entries()).map(
+      ([date, { earn, burn }]) => ({
+        date,
+        earned: earn,
+        burnt: burn,
+      }),
+    );
+
+    // Sort by date
+    result.sort(
+      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
+    );
+
+    return result;
+  }
+}
