@@ -52,4 +52,8 @@ export class CreateCampaignDto {
   @IsOptional()
   @IsNumber()
   created_by?: number;
+
+  @IsOptional()
+  @IsString()
+  campaign_type?: string;
 }

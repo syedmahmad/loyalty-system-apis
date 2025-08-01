@@ -48,7 +48,8 @@ export class RulesService {
         condition_type: dto.condition_type,
         condition_operator: dto.condition_operator,
         condition_value: dto.condition_value,
-        status: 1, // Default to active
+        status: 1, // Default to active,
+        burn_type: dto?.burn_type || null,
       });
 
       const savedRule = await queryRunner.manager.save(rule);
@@ -145,6 +146,7 @@ export class RulesService {
       rule.condition_value = dto.condition_value ?? rule.condition_value;
       rule.updated_by = dto.updated_by ?? rule.updated_by;
       rule.frequency = dto.frequency ?? rule.frequency;
+      rule.burn_type = dto.burn_type ?? rule.burn_type;
 
       await manager.save(rule);
       await queryRunner.commitTransaction();

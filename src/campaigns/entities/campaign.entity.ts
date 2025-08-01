@@ -76,6 +76,9 @@ export class Campaign {
   @OneToMany(() => CampaignCoupons, (cr) => cr.campaign, { cascade: true })
   coupons: CampaignCoupons[];
 
+  @Column({ nullable: true })
+  campaign_type?: string;
+
   // In Campaign.ts
   @OneToMany(() => CampaignCustomerSegment, (cs) => cs.campaign, {
     cascade: true,

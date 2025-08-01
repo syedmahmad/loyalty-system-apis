@@ -82,6 +82,7 @@ export class CampaignsService {
         coupons,
         client_id,
         customer_segment_ids = [],
+        campaign_type,
       } = dto;
 
       const manager = queryRunner.manager;
@@ -137,6 +138,7 @@ export class CampaignsService {
         tenant_id: client_id,
         active: true,
         status: 1,
+        campaign_type,
       });
       const savedCampaign = await manager.save(campaign);
 
@@ -351,6 +353,7 @@ export class CampaignsService {
         end_date: dto.end_date,
         description: dto.description,
         business_unit_id: dto.business_unit_id,
+        campaign_type: dto.campaign_type,
       });
 
       const updatedCampaign = await manager.save(campaign);

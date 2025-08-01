@@ -77,6 +77,10 @@ export class CreateRuleDto {
   @IsString()
   frequency?: string;
 
+  @IsOptional()
+  @IsString()
+  burn_type?: string;
+
   @IsNumber()
   created_by: number;
 }

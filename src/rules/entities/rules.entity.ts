@@ -68,6 +68,9 @@ export class Rule {
   @Column({ type: 'varchar', nullable: true })
   frequency: string; // 'once','daily' and 'yearly'
 
+  @Column({ nullable: true })
+  burn_type?: string;
+
   @Column({ default: 0 })
   created_by: number;
 
