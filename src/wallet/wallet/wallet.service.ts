@@ -152,14 +152,20 @@ export class WalletService {
       throw new BadRequestException('Insufficient balance');
     }
 
-    const transaction = this.txRepo.create({
+    const transactionPayload = {
       ...dto,
       business_unit: { id: dto.business_unit_id } as any,
       wallet: { id: dto.wallet_id } as any,
-      // orders: { id: dto.wallet_order_id },
+      orders: { id: dto.wallet_order_id },
       unlock_date: unlockDate,
       expiry_date: expiryDate,
-    });
+    };
+
+    if (dto.wallet_order_id) {
+      transactionPayload['orders'] = { id: dto.wallet_order_id };
+    }
+
+    const transaction = this.txRepo.create(transactionPayload);
     const savedTx = await this.txRepo.save(transaction);
 
     if (dto.status === 'active') {

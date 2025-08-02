@@ -30,7 +30,7 @@ export class WalletTransaction {
 
   @ManyToOne(() => WalletOrder)
   @JoinColumn({ name: 'wallet_order_id' })
-  orders: WalletOrder;
+  orders?: WalletOrder;
 
   @ManyToOne(() => Wallet)
   @JoinColumn({ name: 'wallet_id' })
