@@ -11,6 +11,7 @@ import {
   UseGuards,
   BadRequestException,
   Delete,
+  Query,
 } from '@nestjs/common';
 import { AuthTokenGuard } from 'src/users/guards/authTokenGuard';
 import * as jwt from 'jsonwebtoken';
@@ -48,8 +49,11 @@ export class CustomerSegmentsController {
   }
 
   @Get(':client_id')
-  async findAll(@Param('client_id') client_id: number) {
-    return await this.service.findAll(client_id);
+  async findAll(
+    @Param('client_id') client_id: number,
+    @Query('name') name?: string,
+  ) {
+    return await this.service.findAll(client_id, name);
   }
 
   @Get('view-customers/:segment_id')

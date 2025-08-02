@@ -251,6 +251,13 @@ export class WalletService {
   async getSettingsByBusinessUnit(buId: number) {
     return this.settingsRepo.findOne({
       where: { business_unit: { id: buId } },
+      relations: ['business_unit', 'created_by'],
+    });
+  }
+
+  async getAllWalltetSettings() {
+    return this.settingsRepo.find({
+      relations: ['business_unit', 'created_by'],
     });
   }
 
