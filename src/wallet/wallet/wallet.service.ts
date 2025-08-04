@@ -156,7 +156,6 @@ export class WalletService {
       ...dto,
       business_unit: { id: dto.business_unit_id } as any,
       wallet: { id: dto.wallet_id } as any,
-      orders: { id: dto.wallet_order_id },
       unlock_date: unlockDate,
       expiry_date: expiryDate,
     };

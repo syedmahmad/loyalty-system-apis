@@ -15,8 +15,26 @@ export class CustomerActivity {
   @Column()
   customer_uuid: string;
 
+  @Column({ nullable: true })
+  campaign_id: number;
+
+  @Column({ nullable: true })
+  coupon_id: number;
+
+  @Column({ nullable: true })
+  rule_id: number;
+
+  @Column({ nullable: true })
+  rule_name: string;
+
+  @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
+  amount: number;
+
   @Column()
-  activity_type: string;
+  activity_type: string; // e.g. 'rule', 'campaign', 'coupon'
+
+  @Column({ type: 'json', nullable: true })
+  meta: Record<string, any>;
 
   @CreateDateColumn()
   created_at: Date;

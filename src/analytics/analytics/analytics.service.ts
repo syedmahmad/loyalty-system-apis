@@ -217,16 +217,18 @@ export class LoyaltyAnalyticsService {
   }
 
   async getCouponAnalytics(startDate?: string, endDate?: string) {
-    const [stats, set, lineData] = await Promise.all([
+    const [stats, set, lineData, barData] = await Promise.all([
       this.getCouponCount(startDate, endDate, 'couponSummary'),
       this.getCouponCount(startDate, endDate, 'couponSetSummary'),
       this.getCouponLineData(startDate, endDate),
+      this.getCouponBarData(startDate, endDate),
     ]);
 
     return {
       stats,
       set,
       lineData,
+      barData,
     };
   }
 
@@ -284,5 +286,33 @@ export class LoyaltyAnalyticsService {
       date: item.date,
       count: parseInt(item.count, 10),
     }));
+  }
+
+  async getCouponBarData(startDate, endDate) {
+    const qb = this.walletTransactionRepository
+      .createQueryBuilder('tx')
+      .innerJoin('coupons', 'c', 'tx.source_id = c.id')
+      .select('c.coupon_title', 'couponName')
+      .addSelect('COUNT(*)', 'count')
+      .addSelect('SUM(tx.amount)', 'totalAmount')
+      .where('tx.source_type = :sourceType', { sourceType: 'coupon' });
+
+    if (startDate && endDate) {
+      qb.andWhere('tx.created_at BETWEEN :start AND :end', {
+        start: startDate,
+        end: endDate,
+      });
+    }
+
+    qb.groupBy('c.coupon_title');
+
+    const usageData = await qb.getRawMany();
+
+    const barData = usageData.map((item) => ({
+      name: `${item.couponName} (totalAmount = ${item.totalAmount})`,
+      count: parseInt(item.count, 10),
+    }));
+
+    return barData;
   }
 }

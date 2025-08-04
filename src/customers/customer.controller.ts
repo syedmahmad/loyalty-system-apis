@@ -18,6 +18,7 @@ import * as jwt from 'jsonwebtoken';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from 'src/users/entities/user.entity';
+import { CreateCustomerActivityDto } from './dto/create-customer-activity.dto';
 
 @Controller('customers')
 export class CustomerController {
@@ -55,7 +56,7 @@ export class CustomerController {
       id,
       page,
       pageSize,
-      query
+      query,
     );
   }
 
@@ -67,5 +68,10 @@ export class CustomerController {
   @Get('/single/:uuid')
   async getCustomerByUuid(@Req() req: Request, @Param('uuid') uuid: string) {
     return this.customerService.getCustomerByUuid(req, uuid);
+  }
+
+  @Post('/activity')
+  async createCustomerActivity(@Body() body: CreateCustomerActivityDto) {
+    return this.customerService.createCustomerActivity(body);
   }
 }

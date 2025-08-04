@@ -238,4 +238,20 @@ export class CustomerService {
       tier: tiersInfo,
     };
   }
+
+  async createCustomerActivity(body) {
+    const customer = await this.customerRepo.findOne({
+      where: { uuid: body.customer_uuid },
+    });
+
+    if (!customer) {
+      throw new NotFoundException(`Customer not found`);
+    }
+
+    const customerActivity = this.customeractivityRepo.create({
+      ...body,
+    });
+
+    return this.customeractivityRepo.save(customerActivity);
+  }
 }
