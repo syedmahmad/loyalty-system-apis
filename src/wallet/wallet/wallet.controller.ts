@@ -62,7 +62,12 @@ export class WalletController {
     @Query('pageSize') pageSize?: number,
     @Query('query') query?: string,
   ) {
-    return this.walletService.getWalletTransactions(walletId, page, pageSize, query);
+    return this.walletService.getWalletTransactions(
+      walletId,
+      page,
+      pageSize,
+      query,
+    );
   }
 
   @Get()
@@ -73,6 +78,11 @@ export class WalletController {
   @Get('settings/:businessUnitId')
   async getSettings(@Param('businessUnitId') id: number) {
     return this.walletService.getSettingsByBusinessUnit(id);
+  }
+
+  @Get('all-settings')
+  async getAllWalltetSettings() {
+    return this.walletService.getAllWalltetSettings();
   }
 
   @Post('settings')

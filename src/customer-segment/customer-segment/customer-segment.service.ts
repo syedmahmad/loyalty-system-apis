@@ -1,11 +1,17 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository, InjectDataSource } from '@nestjs/typeorm';
-import { Repository, DataSource } from 'typeorm';
+import { Repository, DataSource, ILike, FindOptionsWhere } from 'typeorm';
 import { CustomerSegment } from '../entities/customer-segment.entity';
 import { CreateCustomerSegmentDto } from '../dto/create.dto';
 import { UpdateCustomerSegmentDto } from '../dto/update-customer-segment.dto';
 import { Customer } from 'src/customers/entities/customer.entity';
 import { CustomerSegmentMember } from '../entities/customer-segment-member.entity';
+
+type SegmentFilter = {
+  tenant_id: number;
+  status: number;
+  nameOrDescription?: string;
+};
 
 @Injectable()
 export class CustomerSegmentsService {
@@ -49,12 +55,25 @@ export class CustomerSegmentsService {
     }
   }
 
-  async findAll(client_id: number) {
+  async findAll(client_id: number, name: string) {
+    const baseConditions = {
+      tenant_id: client_id,
+      status: 1,
+    };
+
+    let where: any;
+
+    if (name) {
+      where = [
+        { ...baseConditions, name: ILike(`%${name}%`) },
+        { ...baseConditions, description: ILike(`%${name}%`) },
+      ];
+    } else {
+      where = baseConditions;
+    }
+
     return await this.segmentRepository.find({
-      where: {
-        tenant_id: client_id,
-        status: 1,
-      },
+      where,
       relations: ['members', 'members.customer'],
     });
   }

@@ -14,4 +14,12 @@ export class LoyaltyAnalyticsController {
   ) {
     return this.loyaltyAnalyticsService.getLoyaltyDashboard(startDate, endDate);
   }
+
+  @Get('coupon')
+  getCouponAnalytics(
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    return this.loyaltyAnalyticsService.getCouponAnalytics(startDate, endDate);
+  }
 }
