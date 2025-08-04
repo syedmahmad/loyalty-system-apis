@@ -25,25 +25,39 @@ import { OciModule } from './oci/oci.module';
 import { CustomerSegmentsModule } from './customer-segment/customer-segment.module';
 import { QrCodesModule } from './qr_codes/qr_codes.module';
 import { LoyaltyAnalyticsModule } from './analytics/analytics.module';
+import { GateWayLogModule } from './gateway-logs/log.module';
+import { decrypt } from './utils/decrypt';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
-    TypeOrmModule.forRoot({
-      type: 'mysql',
-      host: process.env.DB_HOST,
-      port: +process.env.DB_PORT,
-      username: process.env.DB_USERNAME,
-      password: process.env.DB_PASSWORD,
-      database: process.env.DB_NAME,
-      autoLoadEntities: true,
-      synchronize: true,
-      subscribers: [GlobalAuditSubscriber],
+    TypeOrmModule.forRootAsync({
+      inject: [],
+      useFactory: async () => {
+        const host = await decrypt(process.env.DB_HOST || '');
+        const port = parseInt(await decrypt(process.env.DB_PORT || ''), 10);
+        const username = await decrypt(process.env.DB_USERNAME || '');
+        const password = await decrypt(process.env.DB_PASSWORD || '');
+        const database = await decrypt(process.env.DB_NAME || '');
+
+        return {
+          type: 'mysql',
+          host,
+          port,
+          username,
+          password,
+          database,
+          autoLoadEntities: true,
+          synchronize: true,
+          subscribers: [GlobalAuditSubscriber],
+        };
+      },
     }),
     UsersModule,
     CampaignModule,
     CustomerModule,
     BusinessUnitsModule,
+    GateWayLogModule,
     RewardsModule,
     PointsModule,
     TiersModule,

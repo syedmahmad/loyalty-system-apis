@@ -144,6 +144,8 @@ export class LoyaltyAnalyticsService {
 
     const orders = await this.walletOrderRepository.find({ where });
 
+    console.log('orders', orders);
+
     const itemMap = new Map<string, number>();
     for (const order of orders) {
       const items = Array.isArray(order.items)
@@ -152,9 +154,9 @@ export class LoyaltyAnalyticsService {
       const seen = new Set();
 
       for (const item of items) {
-        if (item?.item_name && !seen.has(item.item_name)) {
-          seen.add(item.item_name);
-          itemMap.set(item.item_name, (itemMap.get(item.item_name) || 0) + 1);
+        if (item?.name && !seen.has(item.name)) {
+          seen.add(item.name);
+          itemMap.set(item.name, (itemMap.get(item.name) || 0) + 1);
         }
       }
     }
