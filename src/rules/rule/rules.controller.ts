@@ -61,12 +61,12 @@ export class RulesController {
     return await this.rulesService.findAll(client_id, name);
   }
 
-  @Get(':client_id/third-party')
+  @Get(':tenant_id/third-party')
   async findAllForThirdParty(
-    @Param('client_id') client_id: string,
+    @Param('tenant_id') tenant_id: string,
     @Query('name') name?: string, // optional query param
   ) {
-    return await this.rulesService.findAllForThirdParty(client_id, name);
+    return await this.rulesService.findAllForThirdParty(tenant_id, name);
   }
 
   @Get('/single/:id')

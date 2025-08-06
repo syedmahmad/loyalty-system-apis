@@ -73,6 +73,25 @@ export class RulesService {
     }
 
     return this.ruleRepository.find({
+      select: [
+        'name',
+        'slug',
+        'rule_type',
+        'condition_type',
+        'condition_operator',
+        'condition_value',
+        'min_amount_spent',
+        'reward_points',
+        'event_triggerer',
+        'max_redeemption_points_limit',
+        'points_conversion_factor',
+        'max_burn_percent_on_invoice',
+        'description',
+        'validity_after_assignment',
+        'frequency',
+        'burn_type',
+        'status',
+      ],
       where: {
         tenant_id: client_id,
         ...optionalWhereClause,
@@ -81,14 +100,12 @@ export class RulesService {
     });
   }
 
-  async findAllForThirdParty(client_id: string, name: string) {
-    console.log('client_id', client_id);
-
+  async findAllForThirdParty(tenant_id: string, name: string) {
     let optionalWhereClause = {};
 
     const tenant = await this.tenantRepository.findOne({
       where: {
-        uuid: client_id,
+        uuid: tenant_id,
       },
     });
 
@@ -103,6 +120,25 @@ export class RulesService {
     }
 
     return this.ruleRepository.find({
+      select: [
+        'name',
+        'slug',
+        'rule_type',
+        'condition_type',
+        'condition_operator',
+        'condition_value',
+        'min_amount_spent',
+        'reward_points',
+        'event_triggerer',
+        'max_redeemption_points_limit',
+        'points_conversion_factor',
+        'max_burn_percent_on_invoice',
+        'description',
+        'validity_after_assignment',
+        'frequency',
+        'burn_type',
+        'status',
+      ],
       where: {
         tenant_id: tenant.id,
         ...optionalWhereClause,
@@ -112,7 +148,28 @@ export class RulesService {
   }
 
   findOne(id: number) {
-    return this.ruleRepository.findOne({ where: { id } });
+    return this.ruleRepository.findOne({
+      select: [
+        'name',
+        'slug',
+        'rule_type',
+        'condition_type',
+        'condition_operator',
+        'condition_value',
+        'min_amount_spent',
+        'reward_points',
+        'event_triggerer',
+        'max_redeemption_points_limit',
+        'points_conversion_factor',
+        'max_burn_percent_on_invoice',
+        'description',
+        'validity_after_assignment',
+        'frequency',
+        'burn_type',
+        'status',
+      ],
+      where: { id },
+    });
   }
 
   async update(id: number, dto: UpdateRuleDto, user: string): Promise<Rule> {
