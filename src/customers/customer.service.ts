@@ -1,6 +1,8 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
+  InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -8,6 +10,7 @@ import * as QRCode from 'qrcode';
 import { Repository } from 'typeorm';
 import { BulkCreateCustomerDto } from './dto/create-customer.dto';
 import { Request } from 'express';
+import * as dayjs from 'dayjs';
 import { Customer } from './entities/customer.entity';
 import { WalletService } from 'src/wallet/wallet/wallet.service';
 import { OciService } from 'src/oci/oci.service';
@@ -17,6 +20,13 @@ import { QrCode } from '../qr_codes/entities/qr_code.entity';
 import { QrcodesService } from '../qr_codes/qr_codes/qr_codes.service';
 import { CustomerActivity } from './entities/customer-activity.entity';
 import { TiersService } from 'src/tiers/tiers/tiers.service';
+import { Rule } from 'src/rules/entities/rules.entity';
+import { WalletTransaction } from 'src/wallet/entities/wallet-transaction.entity';
+import { CampaignsService } from 'src/campaigns/campaigns/campaigns.service';
+import { CampaignCustomerSegment } from 'src/campaigns/entities/campaign-customer-segments.entity';
+import { CampaignRule } from 'src/campaigns/entities/campaign-rule.entity';
+import { CreateCustomerActivityDto } from './dto/create-customer-activity.dto';
+import { CustomerEarnDto } from './dto/customer-earn.dto';
 
 @Injectable()
 export class CustomerService {
@@ -28,9 +38,18 @@ export class CustomerService {
     @InjectRepository(QrCode)
     private readonly qrCodeRepo: Repository<QrCode>,
     private readonly qrService: QrcodesService,
+    private readonly tiersService: TiersService,
+    @InjectRepository(Rule)
+    private readonly ruleRepo: Repository<Rule>,
+    @InjectRepository(WalletTransaction)
+    private txRepo: Repository<WalletTransaction>,
+    private readonly campaignsService: CampaignsService,
+    @InjectRepository(CampaignCustomerSegment)
+    private readonly campaignCustomerSegmentRepo: Repository<CampaignCustomerSegment>,
+    @InjectRepository(CampaignRule)
+    private readonly campaignRuleRepo: Repository<CampaignRule>,
     @InjectRepository(CustomerActivity)
     private readonly customeractivityRepo: Repository<CustomerActivity>,
-    private readonly tiersService: TiersService,
   ) {}
 
   async createCustomer(req: Request, dto: BulkCreateCustomerDto) {
@@ -239,7 +258,7 @@ export class CustomerService {
     };
   }
 
-  async createCustomerActivity(body) {
+  async createCustomerActivity(body: CreateCustomerActivityDto) {
     const customer = await this.customerRepo.findOne({
       where: { uuid: body.customer_uuid },
     });
@@ -253,5 +272,401 @@ export class CustomerService {
     });
 
     return this.customeractivityRepo.save(customerActivity);
+  }
+
+  async earnPoints(bodyPayload: CustomerEarnDto) {
+    const { customer_id, campaign_type } = bodyPayload;
+
+    // Step 1: Get Customer & Wallet Info
+    const customer = await this.customerRepo.findOne({
+      where: { uuid: customer_id },
+    });
+    if (!customer) throw new NotFoundException('Customer not found');
+
+    const wallet = await this.walletService.getSingleCustomerWalletInfoById(
+      customer.id,
+    );
+    if (!wallet) throw new NotFoundException('Wallet not found');
+
+    // Step 2: handling CampaignRuleEarning, SimpleRuleEarning and CampaignCouponEarning
+    return campaign_type
+      ? this.handleCampaignEarning({ ...bodyPayload, wallet })
+      : this.handleRuleEarning({
+          ...bodyPayload,
+          wallet,
+        });
+  }
+
+  async handleCampaignEarning(payload) {
+    const { wallet, order, rule_info, campaign_type, campaign_id } = payload;
+    const { amount } = order ?? {};
+
+    switch (campaign_type) {
+      case 'DISCOUNT_POINTS': {
+        // Step 1: get matching rule
+        const { campaign_uuid, matchedRule } = await this.handleCampaignRules({
+          customer_id: wallet.customer.id,
+          business_unit_id: wallet.business_unit.id,
+          rule_info,
+          wallet,
+          campaign_id,
+          total_amount: amount,
+        });
+
+        if (!matchedRule) {
+          throw new BadRequestException('No rule found for this event.');
+        }
+
+        this.validateSpecialConditions(matchedRule, wallet, rule_info);
+        await this.checkAlreadyRewaredPoints(
+          wallet?.business_unit.id,
+          wallet?.id,
+          matchedRule,
+        );
+
+        return this.processTransaction({
+          matchedRule,
+          wallet,
+          order,
+          source_type:
+            matchedRule.rule_type === 'dynamic rule'
+              ? matchedRule.condition_type
+              : matchedRule.event_triggerer,
+          campaignId: campaign_uuid,
+        });
+      }
+      case 'DISCOUNT_COUPONS': {
+        console.log('DISCOUNT_COUPONS :::');
+        break;
+      }
+      default:
+        throw new BadRequestException(
+          `Unsupported campaign type: ${campaign_type}`,
+        );
+    }
+  }
+
+  async handleRuleEarning(payload) {
+    const { wallet, rule_info, order } = payload;
+
+    // Step 1: Resolve matching rule
+    const matchedRule = await this.getRule(rule_info.uuid, order);
+    if (!matchedRule) {
+      throw new BadRequestException('No rule found for this event.');
+    }
+
+    this.validateSpecialConditions(matchedRule, wallet, rule_info);
+    await this.checkAlreadyRewaredPoints(
+      wallet?.business_unit.id,
+      wallet?.id,
+      matchedRule,
+    );
+
+    return this.processTransaction({
+      matchedRule,
+      wallet,
+      order,
+      source_type:
+        matchedRule.rule_type === 'dynamic rule'
+          ? matchedRule.condition_type
+          : matchedRule.event_triggerer,
+    });
+  }
+
+  async getRule(uuid, order) {
+    const { amount } = order ?? {};
+    const rule = await this.ruleRepo.findOne({
+      where: {
+        status: 1,
+        uuid: uuid,
+      },
+    });
+
+    if (rule.rule_type === 'spend and earn' && !amount) {
+      throw new BadRequestException(`Amount is required`);
+    }
+
+    if (amount && amount < rule?.min_amount_spent) {
+      throw new BadRequestException(
+        `Minimum amount to earn points is ${rule.min_amount_spent}`,
+      );
+    }
+
+    return rule;
+  }
+
+  private validateSpecialConditions(
+    matchedRule: any,
+    wallet: any,
+    rule_info: any,
+  ) {
+    // Birthday
+    if (matchedRule.event_triggerer === 'birthday') {
+      const today = new Date();
+      const dob = new Date(wallet.customer.DOB);
+      const isBirthday =
+        today.getDate() === dob.getDate() &&
+        today.getMonth() === dob.getMonth();
+
+      if (!isBirthday) {
+        throw new BadRequestException(
+          "Today is not your birthday, so you're not eligible.",
+        );
+      }
+    }
+
+    // Dynamic rule
+    if (matchedRule.rule_type === 'dynamic rule') {
+      if (matchedRule.condition_type !== rule_info.condition_type) {
+        throw new BadRequestException(
+          `Expected condition '${matchedRule.condition_type}' but got '${rule_info.condition_type}'`,
+        );
+      }
+
+      const isSatisfy = this.isSatisfyingDynamicCondition(
+        rule_info.condition_value,
+        matchedRule.condition_operator,
+        matchedRule.condition_value,
+      );
+
+      if (!isSatisfy) {
+        throw new BadRequestException(
+          `Condition '${matchedRule.condition_type}' did not satisfy '${matchedRule.condition_operator} ${matchedRule.condition_value}'`,
+        );
+      }
+    }
+  }
+
+  private async processTransaction({
+    matchedRule,
+    wallet,
+    order,
+    source_type,
+    campaignId,
+  }: {
+    matchedRule: any;
+    wallet: any;
+    order?: any;
+    source_type: string;
+    campaignId?: string;
+  }) {
+    const earnPoints = matchedRule.reward_points || 0;
+    const currentDate = new Date();
+
+    const payload: any = {
+      customer_id: wallet.customer.id,
+      business_unit_id: wallet.business_unit.id,
+      wallet_id: wallet.id,
+      type: 'earn',
+      amount: earnPoints,
+      status: 'active',
+      source_type,
+      source_id: matchedRule.id,
+      description: `Earned ${earnPoints} points (${matchedRule.name})`,
+    };
+
+    if (matchedRule.validity_after_assignment) {
+      payload.expiry_date = dayjs(currentDate)
+        .add(Number(matchedRule.validity_after_assignment), 'day')
+        .format('YYYY-MM-DD');
+    }
+
+    try {
+      let wallet_order_id: number | null = null;
+      if (order) {
+        const orderRes = await this.walletService.addOrder({
+          ...order,
+          wallet_id: wallet.id,
+          business_unit_id: wallet.business_unit.id,
+        });
+        wallet_order_id = orderRes?.id || null;
+      }
+
+      const transactionRes = await this.walletService.addTransaction(
+        {
+          ...payload,
+          wallet_order_id,
+        },
+        null,
+        true,
+      );
+
+      const customerActivityPayload = {
+        customer_uuid: wallet.customer.uuid,
+        activity_type: 'rule',
+        campaign_uuid: campaignId ? campaignId : null,
+        rule_id: matchedRule.id,
+        rule_name: matchedRule.name,
+        amount: earnPoints,
+      };
+
+      await this.createCustomerActivity(customerActivityPayload);
+
+      return transactionRes;
+    } catch (error: any) {
+      const message =
+        error?.response?.data?.message || 'Failed to create wallet transaction';
+      const status = error?.response?.status || 500;
+
+      if (status >= 400 && status < 500) {
+        throw new BadRequestException(message);
+      }
+
+      throw new InternalServerErrorException(message);
+    }
+  }
+
+  async checkAlreadyRewaredPoints(business_unit_id, wallet_id, matchedRule) {
+    const { frequency, event_triggerer, rule_type, condition_type } =
+      matchedRule;
+
+    const previousRewards = await this.txRepo.find({
+      where: {
+        business_unit: { id: business_unit_id },
+        wallet: { id: wallet_id },
+      },
+    });
+
+    console.log('previousRewards :::', previousRewards);
+
+    const currentDate = new Date();
+
+    const isSameYear = (d1: Date, d2: Date) =>
+      d1.getFullYear() === d2.getFullYear();
+
+    const isSameDate = (d1: Date, d2: Date) =>
+      // d1.toDateString() === d2.toDateString();
+      d1.getHours() === d2.getHours() &&
+      d1.getMinutes() === d2.getMinutes() &&
+      d1.getSeconds() === d2.getSeconds();
+
+    const triggerer =
+      rule_type === 'dynamic rule' ? condition_type : event_triggerer;
+
+    const hasBeenRewarded = () => {
+      if (!previousRewards.length) return false;
+
+      const matchingRewards = previousRewards.filter(
+        (reward) => reward.source_type === triggerer,
+      );
+
+      if (!matchingRewards.length) return false;
+
+      return matchingRewards.some((reward) => {
+        const rewardDate = new Date(reward.created_at);
+
+        switch (frequency) {
+          case 'once': {
+            return true;
+          }
+
+          case 'yearly': {
+            return isSameYear(rewardDate, currentDate);
+          }
+
+          case 'anytime': {
+            return isSameDate(rewardDate, currentDate);
+          }
+
+          default:
+            return false;
+        }
+      });
+    };
+
+    if (hasBeenRewarded()) {
+      throw new BadRequestException('Already rewarded');
+    }
+  }
+
+  async handleCampaignRules(bodyPayload) {
+    const { total_amount, rule_info, wallet, campaign_id } = bodyPayload;
+    try {
+      const campaign =
+        await this.campaignsService.findOneThirdParty(campaign_id);
+
+      if (campaign) {
+        const campaignId = campaign.id;
+        const customerId = wallet.customer.id;
+        const hasSegments = await this.campaignCustomerSegmentRepo.findOne({
+          where: { campaign: { id: campaign.id } },
+        });
+        if (hasSegments) {
+          const result = await this.campaignCustomerSegmentRepo
+            .createQueryBuilder('ccs')
+            .innerJoin(
+              'customer_segment_members',
+              'csm',
+              'csm.segment_id = ccs.segment_id',
+            )
+            .where('ccs.campaign_id = :campaignId', { campaignId })
+            .andWhere('csm.customer_id = :customerId', { customerId })
+            .select('1')
+            .limit(1)
+            .getRawOne();
+
+          if (result.length === 0) {
+            throw new ForbiddenException(
+              'Customer is not eligible for this campaign',
+            );
+          }
+        }
+
+        const campaignRule = await this.campaignRuleRepo.findOne({
+          where: {
+            campaign: { id: campaignId },
+            rule: {
+              status: 1,
+              uuid: rule_info.uuid,
+            },
+          },
+          relations: ['rule'],
+        });
+        const rule = campaignRule?.rule;
+        if (
+          rule?.rule_type === 'spend and earn' &&
+          (total_amount === undefined ||
+            total_amount === null ||
+            total_amount === '')
+        ) {
+          throw new BadRequestException(`Amount is required`);
+        }
+        if (total_amount) {
+          if (total_amount < rule?.min_amount_spent) {
+            throw new BadRequestException(
+              `Minimum amount to earn points is ${rule.min_amount_spent}`,
+            );
+          }
+        }
+
+        return { campaign_uuid: campaign.uuid, matchedRule: rule };
+      }
+    } catch (error) {
+      throw new BadRequestException(error?.message || 'Something went wrong');
+    }
+  }
+
+  isSatisfyingDynamicCondition(
+    contextValue: any,
+    operator: string,
+    conditionValue: any,
+  ): boolean {
+    switch (operator) {
+      case '==':
+        return contextValue == conditionValue;
+      case '!==':
+        return contextValue !== conditionValue;
+      case '>':
+        return contextValue > conditionValue;
+      case '<':
+        return contextValue < conditionValue;
+      case '>=':
+        return contextValue >= conditionValue;
+      case '<=':
+        return contextValue <= conditionValue;
+      default:
+        console.warn('Unsupported operator:', operator);
+        return false;
+    }
   }
 }

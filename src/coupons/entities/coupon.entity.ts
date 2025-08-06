@@ -2,6 +2,8 @@ import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
 import { CouponType } from 'src/coupon_type/entities/coupon_type.entity';
 import { Tenant } from 'src/tenants/entities/tenant.entity';
 import {
+  BeforeInsert,
+  BeforeUpdate,
   Column,
   CreateDateColumn,
   Entity,
@@ -11,6 +13,7 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
+import { v4 as uuidv4 } from 'uuid';
 import { ActiveStatus } from '../type/types';
 import { CouponCustomerSegment } from './coupon-customer-segments.entity';
 
@@ -32,8 +35,18 @@ export class Coupon {
   @Column()
   code: string;
 
-  // @Column({ type: 'decimal', nullable: true })
-  // discount_percentage: number;
+  @Column({
+    type: 'char',
+    length: 36,
+  })
+  uuid: string = uuidv4();
+
+  @BeforeInsert()
+  assignUuid() {
+    if (!this.uuid) {
+      this.uuid = uuidv4();
+    }
+  }
 
   @Column({ type: 'decimal', nullable: false, default: 0 })
   discount_price: number;

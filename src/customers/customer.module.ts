@@ -21,6 +21,16 @@ import { TiersService } from 'src/tiers/tiers/tiers.service';
 import { RuleTarget } from 'src/rules/entities/rule-target.entity';
 import { Wallet } from 'src/wallet/entities/wallet.entity';
 import { Tenant } from 'src/tenants/entities/tenant.entity';
+import { Rule } from 'src/rules/entities/rules.entity';
+import { WalletTransaction } from 'src/wallet/entities/wallet-transaction.entity';
+import { CampaignsService } from 'src/campaigns/campaigns/campaigns.service';
+import { Campaign } from 'src/campaigns/entities/campaign.entity';
+import { CampaignRule } from 'src/campaigns/entities/campaign-rule.entity';
+import { CampaignTier } from 'src/campaigns/entities/campaign-tier.entity';
+import { CampaignCoupons } from 'src/campaigns/entities/campaign-coupon.entity';
+import { CampaignCustomerSegment } from 'src/campaigns/entities/campaign-customer-segments.entity';
+import { CustomerSegment } from 'src/customer-segment/entities/customer-segment.entity';
+import { Coupon } from 'src/coupons/entities/coupon.entity';
 
 @Module({
   imports: [
@@ -34,6 +44,15 @@ import { Tenant } from 'src/tenants/entities/tenant.entity';
       RuleTarget,
       Wallet,
       Tenant,
+      Rule,
+      WalletTransaction,
+      Campaign,
+      CampaignRule,
+      CampaignTier,
+      CampaignCoupons,
+      CampaignCustomerSegment,
+      CustomerSegment,
+      Coupon,
     ]),
     WalletModule,
     OciModule,
@@ -44,6 +63,7 @@ import { Tenant } from 'src/tenants/entities/tenant.entity';
     BusinessUnitMiddleware,
     QrcodesService,
     TiersService,
+    CampaignsService,
   ],
 })
 export class CustomerModule implements NestModule {

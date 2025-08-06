@@ -1,24 +1,22 @@
 import {
-  BadRequestException,
   Body,
   Controller,
   Get,
-  Headers,
   Param,
   ParseIntPipe,
   Patch,
   Post,
   Query,
-  Req,
+  Req
 } from '@nestjs/common';
-import { CustomerService } from './customer.service';
-import { BulkCreateCustomerDto } from './dto/create-customer.dto';
-import { Request } from 'express';
-import * as jwt from 'jsonwebtoken';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Request } from 'express';
 import { User } from 'src/users/entities/user.entity';
+import { Repository } from 'typeorm';
+import { CustomerService } from './customer.service';
 import { CreateCustomerActivityDto } from './dto/create-customer-activity.dto';
+import { BulkCreateCustomerDto } from './dto/create-customer.dto';
+import { CustomerEarnDto } from './dto/customer-earn.dto';
 
 @Controller('customers')
 export class CustomerController {
@@ -73,5 +71,10 @@ export class CustomerController {
   @Post('/activity')
   async createCustomerActivity(@Body() body: CreateCustomerActivityDto) {
     return this.customerService.createCustomerActivity(body);
+  }
+
+  @Post('earn')
+  async earnPoints(@Body() body: CustomerEarnDto) {
+    return this.customerService.earnPoints(body);
   }
 }

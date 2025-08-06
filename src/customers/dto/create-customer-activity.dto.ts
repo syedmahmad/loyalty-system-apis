@@ -5,10 +5,10 @@ export class CreateCustomerActivityDto {
   customer_uuid: string;
 
   @IsString()
-  activity_type: 'coupon' | 'rule' | 'other'; // Adjust enum values as needed
+  activity_type: string;
 
-  @IsNumber()
-  campaign_id?: number;
+  @IsString()
+  campaign_uuid?: string;
 
   @IsNumber()
   coupon_id?: number;
