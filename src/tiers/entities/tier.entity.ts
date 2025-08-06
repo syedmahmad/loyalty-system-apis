@@ -8,7 +8,9 @@ import {
   UpdateDateColumn,
   ManyToOne,
   JoinColumn,
+  BeforeInsert,
 } from 'typeorm';
+import { v4 as uuidv4 } from 'uuid';
 
 @Entity('tiers')
 export class Tier {
@@ -43,6 +45,19 @@ export class Tier {
 
   @Column('int')
   min_points: number;
+
+  @Column({
+    type: 'char',
+    length: 36,
+  })
+  uuid: string = uuidv4();
+
+  @BeforeInsert()
+  assignUuid() {
+    if (!this.uuid) {
+      this.uuid = uuidv4();
+    }
+  }
 
   @Column({ nullable: true, type: 'text' })
   benefits: string;

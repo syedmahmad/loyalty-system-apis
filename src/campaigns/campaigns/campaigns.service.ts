@@ -20,6 +20,7 @@ import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
 import { User } from 'src/users/entities/user.entity';
 import { Tenant } from 'src/tenants/entities/tenant.entity';
 import { CampaignCustomerSegment } from '../entities/campaign-customer-segments.entity';
+import { omit } from 'lodash';
 
 @Injectable()
 export class CampaignsService {
@@ -260,10 +261,7 @@ export class CampaignsService {
     });
   }
 
-  async findAllForThirdPart(
-    client_id: string,
-    name: string,
-  ): Promise<Campaign[]> {
+  async findAllForThirdPart(client_id: string, name: string): Promise<any[]> {
     let optionalWhereClause = {};
 
     const tenant = await this.tenantRepository.findOne({
@@ -275,7 +273,7 @@ export class CampaignsService {
       optionalWhereClause = { name: ILike(`%${name}%`) };
     }
 
-    return this.campaignRepository.find({
+    const campaigns = await this.campaignRepository.find({
       where: {
         tenant_id: tenant.id,
         status: 1,
@@ -283,13 +281,46 @@ export class CampaignsService {
       },
       relations: [
         'rules',
+        'rules.rule',
         'tiers',
+        'tiers.tier',
         'business_unit',
         'coupons',
         'customerSegments',
         'customerSegments.segment',
       ],
       order: { created_at: 'DESC' },
+    });
+
+    return campaigns.map((campaign) => {
+      const {
+        rules,
+        tiers,
+        business_unit,
+        coupons,
+        customerSegments,
+        ...rest
+      } = campaign;
+
+      // omit function will remove the 'id' field from each entity
+      // and return the rest of the properties
+      return {
+        ...omit(rest, 'id'),
+        // ...rest,
+        business_unit: business_unit ? omit(business_unit, 'id') : null,
+        rules:
+          rules?.map((r) => ({ ...omit(r, 'id'), rule: omit(r.rule, 'id') })) ||
+          [],
+        tiers:
+          tiers?.map((t) => ({ ...omit(t, 'id'), tier: omit(t.tier, 'id') })) ||
+          [],
+        coupons: coupons?.map((c) => omit(c, 'id')) || [],
+        customerSegments:
+          customerSegments?.map((cs) => ({
+            ...omit(cs, 'id'),
+            segment: cs.segment ? omit(cs.segment, 'id') : null,
+          })) || [],
+      };
     });
   }
 
@@ -310,21 +341,51 @@ export class CampaignsService {
     return campaign;
   }
 
-  async findOneThirdParty(id: string): Promise<Campaign> {
+  async findOneThirdParty(id: string): Promise<any> {
     const campaign = await this.campaignRepository.findOne({
       where: { uuid: id },
       relations: [
         'rules',
+        'rules.rule',
         'tiers',
+        'tiers.tier',
         'business_unit',
         'coupons',
         'customerSegments',
         'customerSegments.segment',
       ],
     });
-    if (!campaign)
+
+    if (!campaign) {
       throw new NotFoundException(`Campaign with ID ${id} not found`);
-    return campaign;
+    }
+
+    const { rules, tiers, business_unit, coupons, customerSegments, ...rest } =
+      campaign;
+
+    // omit function will remove the 'id' field from each entity
+    // and return the rest of the properties
+    return {
+      // ...rest,
+      ...omit(rest, 'id'),
+      business_unit: business_unit ? omit(business_unit, 'id') : null,
+      rules:
+        rules?.map((r) => ({
+          ...omit(r, 'id'),
+          rule: r.rule ? omit(r.rule, 'id') : null,
+        })) || [],
+      tiers:
+        tiers?.map((t) => ({
+          ...omit(t, 'id'),
+          tier: t.tier ? omit(t.tier, 'id') : null,
+        })) || [],
+      coupons: coupons?.map((c) => omit(c, 'id')) || [],
+      customerSegments:
+        customerSegments?.map((cs) => ({
+          ...omit(cs, 'id'),
+          segment: cs.segment ? omit(cs.segment, 'id') : null,
+        })) || [],
+    };
   }
 
   async update(

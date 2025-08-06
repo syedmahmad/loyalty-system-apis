@@ -7,9 +7,11 @@ import {
   OneToMany,
   ManyToOne,
   JoinColumn,
+  BeforeInsert,
 } from 'typeorm';
 import { RuleTarget } from './rule-target.entity';
 import { Tenant } from 'src/tenants/entities/tenant.entity';
+import { v4 as uuidv4 } from 'uuid';
 
 @Entity({ name: 'rules' })
 export class Rule {
@@ -70,6 +72,19 @@ export class Rule {
 
   @Column({ nullable: true })
   burn_type?: string;
+
+  @Column({
+    type: 'char',
+    length: 36,
+  })
+  uuid: string = uuidv4();
+
+  @BeforeInsert()
+  assignUuid() {
+    if (!this.uuid) {
+      this.uuid = uuidv4();
+    }
+  }
 
   @Column({ default: 0 })
   created_by: number;
