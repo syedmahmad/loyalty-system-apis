@@ -27,6 +27,7 @@ import { CampaignCustomerSegment } from 'src/campaigns/entities/campaign-custome
 import { CampaignRule } from 'src/campaigns/entities/campaign-rule.entity';
 import { CreateCustomerActivityDto } from './dto/create-customer-activity.dto';
 import { CustomerEarnDto } from './dto/customer-earn.dto';
+import { CampaignCoupons } from 'src/campaigns/entities/campaign-coupon.entity';
 
 @Injectable()
 export class CustomerService {
@@ -50,6 +51,8 @@ export class CustomerService {
     private readonly campaignRuleRepo: Repository<CampaignRule>,
     @InjectRepository(CustomerActivity)
     private readonly customeractivityRepo: Repository<CustomerActivity>,
+    @InjectRepository(CampaignCoupons)
+    private readonly campaignCouponRepo: Repository<CampaignCoupons>,
   ) {}
 
   async createCustomer(req: Request, dto: BulkCreateCustomerDto) {
@@ -298,7 +301,14 @@ export class CustomerService {
   }
 
   async handleCampaignEarning(payload) {
-    const { wallet, order, rule_info, campaign_type, campaign_id } = payload;
+    const {
+      wallet,
+      order,
+      rule_info,
+      campaign_type,
+      campaign_id,
+      coupon_info,
+    } = payload;
     const { amount } = order ?? {};
 
     switch (campaign_type) {
@@ -336,8 +346,13 @@ export class CustomerService {
         });
       }
       case 'DISCOUNT_COUPONS': {
-        console.log('DISCOUNT_COUPONS :::');
-        break;
+        return await this.handleCampaignCoupons({
+          campaign_id,
+          wallet,
+          coupon_info,
+          amount,
+          order,
+        });
       }
       default:
         throw new BadRequestException(
@@ -668,5 +683,244 @@ export class CustomerService {
         console.warn('Unsupported operator:', operator);
         return false;
     }
+  }
+
+  async checkAlreadyRewaredCoupons(customer_uuid, coupon_uuid) {
+    const previousRewards = await this.customeractivityRepo.find({
+      where: {
+        customer_uuid: customer_uuid,
+        coupon_uuid: coupon_uuid,
+      },
+    });
+
+    if (previousRewards.length) {
+      throw new BadRequestException('Already rewarded Coupon');
+    }
+  }
+
+  async handleCampaignCoupons(bodyPayload) {
+    const { campaign_id, wallet, coupon_info, amount, order } = bodyPayload;
+    const campaign = await this.campaignsService.findOneThirdParty(campaign_id);
+    if (campaign) {
+      const campaignId = campaign.id;
+      const customerId = wallet.customer.id;
+      const hasSegments = await this.campaignCustomerSegmentRepo.findOne({
+        where: { campaign: { id: campaign.id } },
+      });
+
+      if (hasSegments) {
+        const result = await this.campaignCustomerSegmentRepo
+          .createQueryBuilder('ccs')
+          .innerJoin(
+            'customer_segment_members',
+            'csm',
+            'csm.segment_id = ccs.segment_id',
+          )
+          .where('ccs.campaign_id = :campaignId', { campaignId })
+          .andWhere('csm.customer_id = :customerId', { customerId })
+          .select('1')
+          .limit(1)
+          .getRawOne();
+
+        if (result.length === 0) {
+          throw new ForbiddenException(
+            'Customer is not eligible for this campaign',
+          );
+        }
+      }
+
+      const campaignCoupon = await this.campaignCouponRepo.findOne({
+        where: {
+          campaign: { id: campaignId },
+          coupon: {
+            status: 1,
+            uuid: coupon_info.uuid,
+          },
+        },
+        relations: ['coupon'],
+      });
+
+      if (!campaignCoupon) {
+        throw new BadRequestException('Coupon not found');
+      }
+
+      const coupon = campaignCoupon.coupon;
+
+      if (coupon?.complex_coupon && coupon?.complex_coupon.length >= 1) {
+        const conditions = coupon?.complex_coupon;
+        const result = this.validateComplexCouponConditions(
+          coupon_info.complex_coupon,
+          conditions,
+        );
+        if (!result.valid) {
+          throw new BadRequestException(result.message);
+        }
+      } else if (coupon?.conditions) {
+        const result = this.validateSimpleCouponConditions(
+          coupon_info,
+          coupon.conditions,
+        );
+        if (!result.valid) {
+          throw new BadRequestException(result.message);
+        }
+      }
+
+      await this.checkAlreadyRewaredCoupons(
+        wallet.customer.uuid,
+        campaignCoupon?.coupon.uuid,
+      );
+
+      if (
+        coupon.discount_type === 'percentage_discount' &&
+        (amount === undefined || amount === null || amount === '')
+      ) {
+        throw new BadRequestException(`Amount is required11`);
+      }
+
+      const earnPoints =
+        coupon.discount_type === 'fixed_discount'
+          ? (coupon.discount_price ?? 0)
+          : (amount * coupon.discount_price) / 100;
+
+      const customerWalletPayload: any = {
+        customer_id: wallet.customer.id,
+        business_unit_id: wallet.business_unit.id,
+        wallet_id: wallet.id,
+        type: 'earn',
+        amount: earnPoints,
+        status: 'active',
+        source_type: 'coupon',
+        source_id: coupon.id,
+        description: `Earned ${earnPoints} points (${coupon?.coupon_title})`,
+      };
+
+      try {
+        let orderResponse: any = null;
+        if (order) {
+          const orderRes = await this.walletService.addOrder({
+            ...order,
+            wallet_id: wallet.id,
+            business_unit_id: wallet.business_unit.id,
+          });
+          orderResponse = orderRes?.id || null;
+        }
+
+        const transactionRes = await this.walletService.addTransaction(
+          {
+            ...customerWalletPayload,
+            wallet_order_id: orderResponse,
+          },
+          null,
+          true,
+        );
+
+        const customerActivityPayload = {
+          customer_uuid: wallet.customer.uuid,
+          activity_type: 'coupon',
+          campaign_uuid: campaign.uuid,
+          coupon_uuid: coupon.uuid,
+          amount: earnPoints,
+        };
+
+        await this.createCustomerActivity(customerActivityPayload);
+
+        return transactionRes;
+      } catch (error: any) {
+        const message =
+          error?.response?.data?.message ||
+          'Failed to get customer wallet info';
+        const status = error?.response?.status || 500;
+
+        if (status >= 400 && status < 500) {
+          throw new BadRequestException(message);
+        }
+
+        throw new InternalServerErrorException(message);
+      }
+    }
+  }
+
+  validateComplexCouponConditions(userCouponInfo, dbCouponInfo) {
+    const failedConditions: any = [];
+    for (const userCoupon of userCouponInfo) {
+      const match = dbCouponInfo.find(
+        (dbCoupon) =>
+          dbCoupon.selectedCouponType === userCoupon.selectedCouponType,
+      );
+
+      // Coupon Type mismatch in userCouponInfo and dbCouponInfo
+      if (!match) {
+        failedConditions.push(
+          `No matching condition type found for '${userCoupon.selectedCouponType}'`,
+        );
+        continue;
+      }
+
+      // condition length mismatch in userCouponInfo and dbCouponInfo
+      if (userCoupon.dynamicRows.length !== match.dynamicRows.length) {
+        failedConditions.push(
+          `condition not satisfied '${userCoupon.selectedCouponType}'`,
+        );
+        continue;
+      }
+
+      for (let i = 0; i < userCoupon.dynamicRows.length; i++) {
+        const userRow = userCoupon.dynamicRows[i];
+        const dbRow = match.dynamicRows[i];
+
+        if (
+          !(
+            userRow.type === dbRow.type &&
+            userRow.operator === dbRow.operator &&
+            userRow.value === dbRow.value
+          )
+          // JSON.stringify(userRow.models) === JSON.stringify(dbRow.models) &&
+          // JSON.stringify(userRow.variants) === JSON.stringify(dbRow.variants)
+        ) {
+          failedConditions.push(
+            `No matching condition '${userCoupon.selectedCouponType}'`,
+          );
+          continue;
+        }
+      }
+    }
+
+    if (failedConditions.length > 0) {
+      return {
+        valid: false,
+        message: `Coupon not applicable: \n${failedConditions.join('\n')}`,
+      };
+    }
+
+    return { valid: true, message: 'Coupon is applicable.' };
+  }
+
+  validateSimpleCouponConditions(userCouponInfo, dbCouponInfo) {
+    const failedConditions: any = [];
+
+    for (const userCoupon of userCouponInfo.conditions) {
+      const matched = dbCouponInfo.find(
+        (cond: any) =>
+          cond.type === userCoupon.type &&
+          (cond.operator === '' && cond.value === ''
+            ? true
+            : cond.operator === userCoupon.operator &&
+              String(cond.value) === String(userCoupon.value)),
+      );
+
+      if (!matched) {
+        failedConditions.push(`Missing condition: "${userCoupon.type}"`);
+        continue;
+      }
+    }
+
+    if (failedConditions.length > 0) {
+      return {
+        valid: false,
+        message: `Coupon not applicable:\n${failedConditions.join('\n')}`,
+      };
+    }
+
+    return { valid: true, message: 'Coupon is applicable.' };
   }
 }

@@ -4,7 +4,7 @@ import {
   CreateDateColumn,
   Entity,
   PrimaryGeneratedColumn,
-  UpdateDateColumn
+  UpdateDateColumn,
 } from 'typeorm';
 
 @Entity()
@@ -19,7 +19,7 @@ export class CustomerActivity {
   campaign_uuid: string;
 
   @Column({ nullable: true })
-  coupon_id: number;
+  coupon_uuid: string;
 
   @Column({ nullable: true })
   rule_id: number;

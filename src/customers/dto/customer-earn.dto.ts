@@ -1,11 +1,5 @@
 // create-customer-activity-record.dto.ts
-import {
-  IsString,
-  IsNumber,
-  IsOptional,
-  IsEnum,
-  IsObject,
-} from 'class-validator';
+import { IsEnum, IsObject, IsOptional, IsString } from 'class-validator';
 
 export class CustomerEarnDto {
   @IsString()

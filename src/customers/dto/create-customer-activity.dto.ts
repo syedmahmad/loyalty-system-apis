@@ -10,8 +10,8 @@ export class CreateCustomerActivityDto {
   @IsString()
   campaign_uuid?: string;
 
-  @IsNumber()
-  coupon_id?: number;
+  @IsString()
+  coupon_uuid?: string;
 
   @IsNumber()
   amount: number;
