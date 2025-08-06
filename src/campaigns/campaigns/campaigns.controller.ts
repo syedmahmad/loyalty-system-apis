@@ -80,12 +80,17 @@ export class CampaignsController {
     return this.campaignService.findAll(client_id, name, user.id);
   }
 
-  @Get('/third-party/:client_id')
+  @Get('/third-party/:tenantId/:businessUnitId')
   async findAllThirdParty(
-    @Param('client_id') client_id: string,
-    @Query('name') name?: string,
+    @Param('tenantId') tenantId: string,
+    @Param('businessUnitId') businessUnitId: string,
+    @Query('uuid') uuid?: string,
   ): Promise<Campaign[]> {
-    return this.campaignService.findAllForThirdPart(client_id, name);
+    return this.campaignService.findAllForThirdPart(
+      tenantId,
+      businessUnitId,
+      uuid,
+    );
   }
 
   @Get('/single/:id')

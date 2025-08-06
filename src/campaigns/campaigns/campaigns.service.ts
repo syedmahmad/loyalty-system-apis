@@ -261,29 +261,39 @@ export class CampaignsService {
     });
   }
 
-  async findAllForThirdPart(client_id: string, name: string): Promise<any[]> {
+  async findAllForThirdPart(
+    tenantId: string,
+    businessUnitId: string,
+    uuid: string,
+  ): Promise<any[]> {
+    // Validate tenantId and businessUnitId to ensure they are valid numbers
+    const tenantIdNum = Number(tenantId);
+    const businessUnitIdNum = Number(businessUnitId);
+
+    if (isNaN(tenantIdNum)) {
+      throw new Error('Invalid tenantId: must be a number');
+    }
+    if (isNaN(businessUnitIdNum)) {
+      throw new Error('Invalid businessUnitId: must be a number');
+    }
+
     let optionalWhereClause = {};
 
-    const tenant = await this.tenantRepository.findOne({
-      where: { uuid: client_id },
-    });
-    if (!tenant) throw new BadRequestException('Tenant not found');
-
-    if (name?.trim()) {
-      optionalWhereClause = { name: ILike(`%${name}%`) };
+    if (uuid?.trim()) {
+      optionalWhereClause = { uuid: uuid };
     }
 
     const campaigns = await this.campaignRepository.find({
       where: {
-        tenant_id: tenant.id,
+        tenant_id: tenantIdNum,
+        business_unit_id: businessUnitIdNum,
         status: 1,
         ...optionalWhereClause,
       },
       relations: [
         'rules',
-        'rules.rule',
+        'rules.rule', // <-- ensure we load the related rule entity
         'tiers',
-        'tiers.tier',
         'business_unit',
         'coupons',
         'customerSegments',
@@ -291,6 +301,23 @@ export class CampaignsService {
       ],
       order: { created_at: 'DESC' },
     });
+
+    // Helper to omit sensitive/critical fields
+    function omitCritical(obj: any, extraOmit: string[] = []) {
+      if (!obj) return null;
+      const omitFields = [
+        'id',
+        'tenant_id',
+        'created_at',
+        'updated_at',
+        'created_by',
+        'updated_by',
+        ...extraOmit,
+      ];
+      return Object.fromEntries(
+        Object.entries(obj).filter(([key]) => !omitFields.includes(key)),
+      );
+    }
 
     return campaigns.map((campaign) => {
       const {
@@ -302,24 +329,24 @@ export class CampaignsService {
         ...rest
       } = campaign;
 
-      // omit function will remove the 'id' field from each entity
-      // and return the rest of the properties
       return {
-        ...omit(rest, 'id'),
-        // ...rest,
-        business_unit: business_unit ? omit(business_unit, 'id') : null,
-        rules:
-          rules?.map((r) => ({ ...omit(r, 'id'), rule: omit(r.rule, 'id') })) ||
-          [],
-        tiers:
-          tiers?.map((t) => ({ ...omit(t, 'id'), tier: omit(t.tier, 'id') })) ||
-          [],
-        coupons: coupons?.map((c) => omit(c, 'id')) || [],
-        customerSegments:
-          customerSegments?.map((cs) => ({
-            ...omit(cs, 'id'),
-            segment: cs.segment ? omit(cs.segment, 'id') : null,
-          })) || [],
+        ...omitCritical(rest),
+        business_unit: business_unit ? omitCritical(business_unit) : null,
+        // Flatten rules to just the rule object, omitting critical fields
+        rules: rules
+          ? rules
+              .map((r) => r.rule)
+              .filter(Boolean)
+              .map((rule) => omitCritical(rule))
+          : [],
+        tiers: tiers ? tiers.map((t) => omitCritical(t)) : [],
+        coupons: coupons ? coupons.map((c) => omitCritical(c)) : [],
+        customerSegments: customerSegments
+          ? customerSegments.map((cs) => ({
+              ...omitCritical(cs),
+              segment: cs.segment ? omitCritical(cs.segment) : null,
+            }))
+          : [],
       };
     });
   }
