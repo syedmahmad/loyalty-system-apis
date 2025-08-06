@@ -141,10 +141,14 @@ export class TiersController {
     return await this.service.getCurrentCustomerTier(customerId);
   }
 
-  @Get('business-unit/:business_unit_id')
-  async getTiersByBusinessUnit(
-    @Param('business_unit_id') business_unit_id: string,
+  @Get(':tenantId/:businessUnitId')
+  async getTiersByTenantAndBusinessUnit(
+    @Param('tenantId') tenantId: string,
+    @Param('businessUnitId') businessUnitId: string,
   ) {
-    return await this.service.findByBusinessUnit(business_unit_id);
+    return await this.service.findByTenantAndBusinessUnit(
+      tenantId,
+      businessUnitId,
+    );
   }
 }

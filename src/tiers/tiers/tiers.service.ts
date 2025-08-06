@@ -183,47 +183,88 @@ export class TiersService {
     };
   }
 
-  async findByBusinessUnit(businessUnitId: string) {
+  async findByTenantAndBusinessUnit(tenantId: string, businessUnitId: string) {
+    // Find the tenant by uuid to get its id
+    const tenant = await this.tenantRepository.findOne({
+      where: { uuid: tenantId, status: 1 },
+    });
+
+    if (!tenant) {
+      throw new NotFoundException('Tenant not found');
+    }
+
+    // Find the business unit by uuid and tenant by uuid
     const businessUnit = await this.businessUnitRepository.findOne({
-      where: { uuid: businessUnitId, status: 1 },
+      where: { uuid: businessUnitId, tenant_id: tenant.id, status: 1 },
     });
 
     if (!businessUnit) {
       throw new NotFoundException('Business Unit not found');
     }
 
-    const client_id = businessUnit.tenant_id;
-    const business_unit_id = businessUnit.id;
-
-    const ruleTargets = await this.ruleTargetRepository.find({
-      where: { target_type: 'tier' },
-      relations: { rule: true },
-    });
-
     const whereClause: any = {
-      tenant_id: client_id,
-      business_unit_id,
+      tenant_id: tenant.id,
+      business_unit_id: businessUnit.id,
       status: 1,
     };
 
+    // Only select the fields you actually need from the tiers, and do not include the business_unit relation
     const tiers = await this.tiersRepository.find({
       where: whereClause,
-      relations: { business_unit: true },
+      select: [
+        'uuid',
+        'name',
+        'benefits',
+        'status',
+        // add any other fields you actually need here
+      ],
       order: { created_at: 'DESC' },
     });
 
-    return {
-      tiers: tiers.map((tier) => {
-        const targets = ruleTargets
-          .filter((rt) => rt.target_id === tier.id)
-          .map((rt) => ({
-            id: rt.id,
-            rule_id: rt.rule_id,
-          }));
-        return { ...tier, rule_targets: targets };
-      }),
-    };
+    return tiers;
   }
+
+  // async findByBusinessUnit(businessUnitId: string) {
+  //   const businessUnit = await this.businessUnitRepository.findOne({
+  //     where: { uuid: businessUnitId, status: 1 },
+  //   });
+
+  //   if (!businessUnit) {
+  //     throw new NotFoundException('Business Unit not found');
+  //   }
+
+  //   const client_id = businessUnit.tenant_id;
+  //   const business_unit_id = businessUnit.id;
+
+  //   const ruleTargets = await this.ruleTargetRepository.find({
+  //     where: { target_type: 'tier' },
+  //     relations: { rule: true },
+  //   });
+
+  //   const whereClause: any = {
+  //     tenant_id: client_id,
+  //     business_unit_id,
+  //     status: 1,
+  //   };
+
+  //   const tiers = await this.tiersRepository.find({
+  //     where: whereClause,
+  //     relations: { business_unit: true },
+  //     order: { created_at: 'DESC' },
+  //   });
+
+  //   return {
+  //     tiers: tiers.map((tier) => {
+  //       const targets = ruleTargets
+  //         .filter((rt) => rt.target_id === tier.id)
+  //         .map((rt) => ({
+  //           id: rt.id,
+  //           rule_id: rt.rule_id,
+  //         }));
+  //       return { ...tier, rule_targets: targets };
+  //     }),
+  //   };
+  // }
 
   async findOne(id: number) {
     const tier = await this.tiersRepository.findOne({
