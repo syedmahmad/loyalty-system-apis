@@ -320,6 +320,7 @@ export class CampaignsService {
         'tiers',
         'business_unit',
         'coupons',
+        'coupons.coupon', // <-- ensure we load the related coupon entity
         'customerSegments',
         'customerSegments.segment',
       ],
@@ -336,6 +337,7 @@ export class CampaignsService {
         'updated_at',
         'created_by',
         'updated_by',
+        'errors',
         ...extraOmit,
       ];
       return Object.fromEntries(
@@ -353,6 +355,8 @@ export class CampaignsService {
         ...rest
       } = campaign;
 
+      console.log('///////////////////////', rules);
+
       return {
         ...omitCritical(rest),
         business_unit: business_unit ? omitCritical(business_unit) : null,
@@ -364,7 +368,13 @@ export class CampaignsService {
               .map((rule) => omitCritical(rule))
           : [],
         tiers: tiers ? tiers.map((t) => omitCritical(t)) : [],
-        coupons: coupons ? coupons.map((c) => omitCritical(c)) : [],
+        // Flatten rules to just the rule object, omitting critical fields
+        coupons: coupons
+          ? coupons
+              .map((r) => r.coupon)
+              .filter(Boolean)
+              .map((rule) => omitCritical(rule))
+          : [],
         customerSegments: customerSegments
           ? customerSegments.map((cs) => ({
               ...omitCritical(cs),
