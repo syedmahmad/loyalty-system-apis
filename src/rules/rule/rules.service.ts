@@ -123,6 +123,7 @@ export class RulesService {
 
     return this.ruleRepository.find({
       select: [
+        'uuid',
         'name',
         'slug',
         'rule_type',

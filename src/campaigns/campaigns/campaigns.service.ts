@@ -25,7 +25,7 @@ import { omit } from 'lodash';
 import { Customer } from 'src/customers/entities/customer.entity';
 import { TiersService } from 'src/tiers/tiers/tiers.service';
 import { CustomerSegmentMember } from 'src/customer-segment/entities/customer-segment-member.entity';
-import { BurnWithCampaignDto } from '../dto/burn.dto';
+import { BurnPoints, BurnWithCampaignDto } from '../dto/burn.dto';
 import { Wallet } from 'src/wallet/entities/wallet.entity';
 import { WalletService } from 'src/wallet/wallet/wallet.service';
 import {
@@ -320,6 +320,7 @@ export class CampaignsService {
         'tiers',
         'business_unit',
         'coupons',
+        'coupons.coupon', // <-- ensure we load the related coupon entity
         'customerSegments',
         'customerSegments.segment',
       ],
@@ -336,6 +337,7 @@ export class CampaignsService {
         'updated_at',
         'created_by',
         'updated_by',
+        'errors',
         ...extraOmit,
       ];
       return Object.fromEntries(
@@ -353,6 +355,8 @@ export class CampaignsService {
         ...rest
       } = campaign;
 
+      console.log('///////////////////////', rules);
+
       return {
         ...omitCritical(rest),
         business_unit: business_unit ? omitCritical(business_unit) : null,
@@ -364,7 +368,13 @@ export class CampaignsService {
               .map((rule) => omitCritical(rule))
           : [],
         tiers: tiers ? tiers.map((t) => omitCritical(t)) : [],
-        coupons: coupons ? coupons.map((c) => omitCritical(c)) : [],
+        // Flatten rules to just the rule object, omitting critical fields
+        coupons: coupons
+          ? coupons
+              .map((r) => r.coupon)
+              .filter(Boolean)
+              .map((rule) => omitCritical(rule))
+          : [],
         customerSegments: customerSegments
           ? customerSegments.map((cs) => ({
               ...omitCritical(cs),
@@ -634,6 +644,124 @@ export class CampaignsService {
     } finally {
       await queryRunner.release();
     }
+  }
+
+  async burnPoints(bodyPayload: BurnPoints) {
+    const { customer_id, order, rule_uuid } = bodyPayload;
+
+    const total_amount = Number(order.amount);
+
+    const customerInfo = await this.customerRepository.find({
+      where: { uuid: customer_id },
+      relations: ['business_unit'],
+    });
+
+    const wallet = await this.walletRepository.findOne({
+      where: { customer: { uuid: customer_id } },
+      relations: ['business_unit'],
+    });
+
+    const customer = customerInfo[0];
+    if (!customer) throw new NotFoundException('Customer not found');
+
+    const rule = await this.ruleRepository.findOne({
+      where: { uuid: rule_uuid },
+    });
+    if (!rule)
+      throw new NotFoundException('Burn rule not found for this campaign');
+
+    // Step 5: Validate rule conditions
+    if (total_amount < rule.min_amount_spent) {
+      throw new BadRequestException(
+        `Minimum amount to burn is ${rule.min_amount_spent}`,
+      );
+    }
+
+    if (wallet.available_balance < rule.max_redeemption_points_limit) {
+      throw new BadRequestException(
+        `You don't have enough loyalty points, ${rule.max_redeemption_points_limit} loyalty point are required for this campaign and you've ${wallet.available_balance} loyalty points`,
+      );
+    }
+
+    // Step 6: Determine applicable conversion rate
+    const conversionRate = rule.points_conversion_factor;
+
+    // Step 7: Calculate points and discount
+    let discountAmount = 0;
+    let pointsToBurn = 0;
+
+    if (rule.burn_type === 'FIXED') {
+      pointsToBurn = rule.max_redeemption_points_limit;
+      discountAmount = pointsToBurn * conversionRate;
+    } else if (rule.burn_type === 'PERCENTAGE') {
+      discountAmount = (total_amount * rule.max_burn_percent_on_invoice) / 100;
+      pointsToBurn = rule.max_redeemption_points_limit;
+    } else {
+      throw new BadRequestException('Invalid burn type in rule');
+    }
+
+    if (discountAmount > total_amount) {
+      throw new BadRequestException(
+        'Cannot gave discount because invoice amount is smaller than the discount amount',
+      );
+    }
+    // Step 8: Create burn transaction
+    // Import WalletTransactionType at the top if not already imported:
+    // import { WalletTransactionType } from 'src/wallet/entities/wallet-transaction.entity';
+    const burnPayload = {
+      customer_id: customer.id,
+      business_unit_id: customer.business_unit.id,
+      wallet_id: wallet.id,
+      type: WalletTransactionType.BURN,
+      amount: pointsToBurn,
+      status: WalletTransactionStatus.ACTIVE,
+      source_type: rule.name,
+      source_id: rule.id,
+      description: `Burned ${pointsToBurn} points for discount of ${discountAmount} on amount ${total_amount}`,
+    };
+
+    // Step 9: Create burn transaction in wallet
+
+    const orderResponse = await this.walletService.addOrder({
+      ...order,
+      delivery_date: order.delivery_date
+        ? new Date(order.delivery_date)
+        : undefined,
+      order_date: order.order_date ? new Date(order.order_date) : undefined,
+      subtotal: total_amount - discountAmount,
+      discount: discountAmount,
+      wallet_id: wallet?.id,
+      business_unit_id: customer?.business_unit?.id,
+      items: order.items ? JSON.stringify(order.items) : undefined,
+    });
+
+    await this.walletService.addTransaction(
+      {
+        ...burnPayload,
+        wallet_order_id: orderResponse?.id,
+        wallet_id: wallet?.id,
+        business_unit_id: customer?.business_unit?.id,
+      },
+      customer?.id,
+      true,
+    );
+
+    const walletInfo = await this.walletRepository.findOne({
+      where: { id: wallet.id },
+      relations: ['business_unit'],
+    });
+
+    const updatedOrder = {
+      ...omit(orderResponse, ['wallet', 'business_unit']),
+      discount: discountAmount,
+      payable_amount: total_amount - discountAmount,
+    };
+
+    return {
+      message: 'Burn successful',
+      wallet: omit(walletInfo, ['customer', 'id', 'business_unit.id']),
+      order: updatedOrder,
+    };
   }
 
   async burnPointsWithCampaign(bodyPayload: BurnWithCampaignDto) {

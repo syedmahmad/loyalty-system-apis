@@ -79,3 +79,19 @@ export class BurnWithCampaignDto {
   @Type(() => OrderDto)
   order: OrderDto;
 }
+
+export class BurnPoints {
+  @IsNotEmpty()
+  @IsString()
+  customer_id: string;
+
+  @IsNotEmpty()
+  @IsString()
+  rule_uuid: string;
+
+  @IsNotEmpty()
+  @IsObject()
+  @ValidateNested()
+  @Type(() => OrderDto)
+  order: OrderDto;
+}

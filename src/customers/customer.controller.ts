@@ -7,7 +7,7 @@ import {
   Patch,
   Post,
   Query,
-  Req
+  Req,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Request } from 'express';
@@ -75,6 +75,7 @@ export class CustomerController {
 
   @Post('earn')
   async earnPoints(@Body() body: CustomerEarnDto) {
+    console.log('///////////////////////');
     return this.customerService.earnPoints(body);
   }
 }

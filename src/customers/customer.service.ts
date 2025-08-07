@@ -368,6 +368,7 @@ export class CustomerService {
 
     // Step 1: Resolve matching rule
     const matchedRule = await this.getRule(rule_info.uuid, order);
+    console.log('matchedRule', matchedRule);
     if (!matchedRule) {
       throw new BadRequestException('No rule found for this event.');
     }
@@ -608,6 +609,7 @@ export class CustomerService {
         const hasSegments = await this.campaignCustomerSegmentRepo.findOne({
           where: { campaign: { id: campaign.id } },
         });
+
         if (hasSegments) {
           const result = await this.campaignCustomerSegmentRepo
             .createQueryBuilder('ccs')
@@ -621,7 +623,7 @@ export class CustomerService {
             .select('1')
             .limit(1)
             .getRawOne();
-
+          console.log('//////////////////////// mmmm', result);
           if (result.length === 0) {
             throw new ForbiddenException(
               'Customer is not eligible for this campaign',
