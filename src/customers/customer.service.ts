@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as QRCode from 'qrcode';
-import { Repository } from 'typeorm';
+import { In, Not, Repository } from 'typeorm';
 import { BulkCreateCustomerDto } from './dto/create-customer.dto';
 import { Request } from 'express';
 import * as dayjs from 'dayjs';
@@ -29,6 +29,7 @@ import { CreateCustomerActivityDto } from './dto/create-customer-activity.dto';
 import { CustomerEarnDto } from './dto/customer-earn.dto';
 import { CampaignCoupons } from 'src/campaigns/entities/campaign-coupon.entity';
 import { CouponTypeService } from 'src/coupon_type/coupon_type/coupon_type.service';
+import { CustomerSegmentMember } from 'src/customer-segment/entities/customer-segment-member.entity';
 
 @Injectable()
 export class CustomerService {
@@ -55,6 +56,8 @@ export class CustomerService {
     @InjectRepository(CampaignCoupons)
     private readonly campaignCouponRepo: Repository<CampaignCoupons>,
     private readonly couponTypeService: CouponTypeService,
+    @InjectRepository(CustomerSegmentMember)
+    private readonly customerSegmentMemberRepository: Repository<CustomerSegmentMember>,
   ) {}
 
   async createCustomer(req: Request, dto: BulkCreateCustomerDto) {
@@ -397,10 +400,11 @@ export class CustomerService {
       where: {
         status: 1,
         uuid: uuid,
+        rule_type: Not('burn'),
       },
     });
 
-    if (rule.rule_type === 'spend and earn' && !amount) {
+    if (rule?.rule_type === 'spend and earn' && !amount) {
       throw new BadRequestException(`Amount is required`);
     }
 
@@ -606,25 +610,26 @@ export class CustomerService {
       if (campaign) {
         const campaignId = campaign.id;
         const customerId = wallet.customer.id;
-        const hasSegments = await this.campaignCustomerSegmentRepo.findOne({
+
+        // Segment validation
+        const hasSegments = await this.campaignCustomerSegmentRepo.find({
           where: { campaign: { id: campaign.id } },
+          relations: ['segment'],
         });
 
-        if (hasSegments) {
-          const result = await this.campaignCustomerSegmentRepo
-            .createQueryBuilder('ccs')
-            .innerJoin(
-              'customer_segment_members',
-              'csm',
-              'csm.segment_id = ccs.segment_id',
-            )
-            .where('ccs.campaign_id = :campaignId', { campaignId })
-            .andWhere('csm.customer_id = :customerId', { customerId })
-            .select('1')
-            .limit(1)
-            .getRawOne();
-          console.log('//////////////////////// mmmm', result);
-          if (result.length === 0) {
+        if (hasSegments.length > 0) {
+          // Extract segment IDs
+          const segmentIds = hasSegments.map((cs) => cs.segment.id);
+          if (segmentIds.length === 0) {
+            throw new ForbiddenException('Customer segment not found');
+          }
+          const match = await this.customerSegmentMemberRepository.findOne({
+            where: {
+              segment: { id: In(segmentIds) },
+              customer: { id: customerId },
+            },
+          });
+          if (!match) {
             throw new ForbiddenException(
               'Customer is not eligible for this campaign',
             );
@@ -708,25 +713,29 @@ export class CustomerService {
     if (campaign) {
       const campaignId = campaign.id;
       const customerId = wallet.customer.id;
-      const hasSegments = await this.campaignCustomerSegmentRepo.findOne({
+
+      // Segment validation
+      const hasSegments = await this.campaignCustomerSegmentRepo.find({
         where: { campaign: { id: campaign.id } },
+        relations: ['segment'],
       });
 
-      if (hasSegments) {
-        const result = await this.campaignCustomerSegmentRepo
-          .createQueryBuilder('ccs')
-          .innerJoin(
-            'customer_segment_members',
-            'csm',
-            'csm.segment_id = ccs.segment_id',
-          )
-          .where('ccs.campaign_id = :campaignId', { campaignId })
-          .andWhere('csm.customer_id = :customerId', { customerId })
-          .select('1')
-          .limit(1)
-          .getRawOne();
+      if (hasSegments.length > 0) {
+        // Extract segment IDs
+        const segmentIds = hasSegments.map((cs) => cs.segment.id);
 
-        if (result.length === 0) {
+        if (segmentIds.length === 0) {
+          return false;
+        }
+
+        const match = await this.customerSegmentMemberRepository.findOne({
+          where: {
+            segment: { id: In(segmentIds) },
+            customer: { id: customerId },
+          },
+        });
+
+        if (!match) {
           throw new ForbiddenException(
             'Customer is not eligible for this campaign',
           );

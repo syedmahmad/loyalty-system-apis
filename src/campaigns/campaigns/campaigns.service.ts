@@ -386,7 +386,7 @@ export class CampaignsService {
   }
 
   async findOne(id: number): Promise<Campaign> {
-    const campaign = await this.campaignRepository.findOne({
+    const campaign: any = await this.campaignRepository.findOne({
       where: { id },
       relations: [
         'rules',
@@ -399,6 +399,13 @@ export class CampaignsService {
     });
     if (!campaign)
       throw new NotFoundException(`Campaign with ID ${id} not found`);
+
+    // Use lodash.omit to remove `id` from each customerSegment
+    campaign.customerSegments = campaign.customerSegments.map((cs: any) => {
+      const segment = cs.segment ? omit(cs.segment, 'id') : {};
+      return segment;
+    });
+
     return campaign;
   }
 
