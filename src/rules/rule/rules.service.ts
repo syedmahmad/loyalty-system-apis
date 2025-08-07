@@ -74,6 +74,7 @@ export class RulesService {
 
     return this.ruleRepository.find({
       select: [
+        'id',
         'name',
         'slug',
         'rule_type',
