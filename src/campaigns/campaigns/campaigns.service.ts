@@ -731,6 +731,12 @@ export class CampaignsService {
       );
     }
 
+    if (wallet.available_balance < rule.max_redeemption_points_limit) {
+      throw new BadRequestException(
+        `You don't have enough loyalty points, ${rule.max_redeemption_points_limit} loyalty point are required for this campaign and you've ${wallet.available_balance} loyalty points`,
+      );
+    }
+
     // Step 6: Determine applicable conversion rate
     let conversionRate = rule.points_conversion_factor;
 
@@ -819,14 +825,14 @@ export class CampaignsService {
     });
 
     const updatedOrder = {
-      ...orderResponse,
+      ...omit(orderResponse, ['wallet', 'business_unit']),
       discount: discountAmount,
       payable_amount: total_amount - discountAmount,
     };
 
     return {
       message: 'Burn successful',
-      wallet: omit(walletInfo, 'customer'),
+      wallet: omit(walletInfo, ['customer', 'id', 'business_unit.id']),
       order: updatedOrder,
     };
   }
