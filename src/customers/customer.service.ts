@@ -28,6 +28,7 @@ import { CampaignRule } from 'src/campaigns/entities/campaign-rule.entity';
 import { CreateCustomerActivityDto } from './dto/create-customer-activity.dto';
 import { CustomerEarnDto } from './dto/customer-earn.dto';
 import { CampaignCoupons } from 'src/campaigns/entities/campaign-coupon.entity';
+import { CouponTypeService } from 'src/coupon_type/coupon_type/coupon_type.service';
 
 @Injectable()
 export class CustomerService {
@@ -53,6 +54,7 @@ export class CustomerService {
     private readonly customeractivityRepo: Repository<CustomerActivity>,
     @InjectRepository(CampaignCoupons)
     private readonly campaignCouponRepo: Repository<CampaignCoupons>,
+    private readonly couponTypeService: CouponTypeService,
   ) {}
 
   async createCustomer(req: Request, dto: BulkCreateCustomerDto) {
@@ -743,7 +745,6 @@ export class CustomerService {
       if (!campaignCoupon) {
         throw new BadRequestException('Coupon not found');
       }
-
       const coupon = campaignCoupon.coupon;
 
       if (coupon?.complex_coupon && coupon?.complex_coupon.length >= 1) {
@@ -756,12 +757,40 @@ export class CustomerService {
           throw new BadRequestException(result.message);
         }
       } else if (coupon?.conditions) {
-        const result = this.validateSimpleCouponConditions(
-          coupon_info,
-          coupon.conditions,
+        const couponType = await this.couponTypeService.findOne(
+          coupon?.coupon_type_id,
         );
-        if (!result.valid) {
-          throw new BadRequestException(result.message);
+
+        if (couponType.coupon_type === 'BIRTHDAY') {
+          const today = new Date();
+          const dob = new Date(wallet.customer.DOB);
+          const isBirthday =
+            today.getDate() === dob.getDate() &&
+            today.getMonth() === dob.getMonth();
+
+          if (!isBirthday) {
+            throw new BadRequestException(
+              "Today is not your birthday, so you're not eligible.",
+            );
+          }
+        } else if (couponType.coupon_type === 'TIER_BASED') {
+          const customerTierInfo =
+            await this.tiersService.getCurrentCustomerTier(wallet.customer.id);
+
+          const cutomerFallInTier = coupon_info.conditions.find(
+            (singleTier) => singleTier.tier === customerTierInfo.tier.id,
+          );
+          coupon.discount_type = 'percentage_discount';
+          coupon.discount_price = cutomerFallInTier.value;
+        } else {
+          const result = this.validateSimpleCouponConditions(
+            coupon_info,
+            coupon.conditions,
+            couponType,
+          );
+          if (!result.valid) {
+            throw new BadRequestException(result.message);
+          }
         }
       }
 
@@ -774,13 +803,13 @@ export class CustomerService {
         coupon.discount_type === 'percentage_discount' &&
         (amount === undefined || amount === null || amount === '')
       ) {
-        throw new BadRequestException(`Amount is required11`);
+        throw new BadRequestException(`Amount is required`);
       }
 
       const earnPoints =
         coupon.discount_type === 'fixed_discount'
           ? (coupon.discount_price ?? 0)
-          : (amount * coupon.discount_price) / 100;
+          : (amount * Number(coupon.discount_price)) / 100;
 
       const customerWalletPayload: any = {
         customer_id: wallet.customer.id,
@@ -895,18 +924,47 @@ export class CustomerService {
     return { valid: true, message: 'Coupon is applicable.' };
   }
 
-  validateSimpleCouponConditions(userCouponInfo, dbCouponInfo) {
+  validateSimpleCouponConditions(userCouponInfo, dbCouponInfo, couponType) {
     const failedConditions: any = [];
 
     for (const userCoupon of userCouponInfo.conditions) {
-      const matched = dbCouponInfo.find(
-        (cond: any) =>
+      const matched = dbCouponInfo.find((cond: any) => {
+        const baseMatch =
           cond.type === userCoupon.type &&
           (cond.operator === '' && cond.value === ''
             ? true
             : cond.operator === userCoupon.operator &&
-              String(cond.value) === String(userCoupon.value)),
-      );
+              String(cond.value) === String(userCoupon.value));
+
+        if (couponType.coupon_type === 'VEHICLE_SPECIFIC') {
+          const makeMatch =
+            userCoupon.make !== undefined
+              ? cond.make === userCoupon.make
+              : true;
+          const yearMatch =
+            userCoupon.year !== undefined
+              ? cond.year === userCoupon.year
+              : true;
+          const modelMatch =
+            userCoupon.model !== undefined
+              ? cond.model === userCoupon.model
+              : true;
+
+          const variantMatch =
+            userCoupon.variant !== undefined
+              ? Array.isArray(cond.variant) &&
+                Array.isArray(userCoupon.variant) &&
+                cond.variant.length === userCoupon.variant.length &&
+                cond.variant.every((v: any) => userCoupon.variant.includes(v))
+              : true;
+
+          return (
+            baseMatch && makeMatch && yearMatch && modelMatch && variantMatch
+          );
+        }
+
+        return baseMatch;
+      });
 
       if (!matched) {
         failedConditions.push(`Missing condition: "${userCoupon.type}"`);

@@ -31,6 +31,8 @@ import { CampaignCoupons } from 'src/campaigns/entities/campaign-coupon.entity';
 import { CampaignCustomerSegment } from 'src/campaigns/entities/campaign-customer-segments.entity';
 import { CustomerSegment } from 'src/customer-segment/entities/customer-segment.entity';
 import { Coupon } from 'src/coupons/entities/coupon.entity';
+import { CouponTypeService } from 'src/coupon_type/coupon_type/coupon_type.service';
+import { CouponType } from 'src/coupon_type/entities/coupon_type.entity';
 
 @Module({
   imports: [
@@ -53,6 +55,7 @@ import { Coupon } from 'src/coupons/entities/coupon.entity';
       CampaignCustomerSegment,
       CustomerSegment,
       Coupon,
+      CouponType,
     ]),
     WalletModule,
     OciModule,
@@ -64,6 +67,7 @@ import { Coupon } from 'src/coupons/entities/coupon.entity';
     QrcodesService,
     TiersService,
     CampaignsService,
+    CouponTypeService,
   ],
 })
 export class CustomerModule implements NestModule {
