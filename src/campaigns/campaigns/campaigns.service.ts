@@ -675,7 +675,7 @@ export class CampaignsService {
 
     const campaign = campaignInfo;
     if (!campaign) {
-      throw new NotFoundException('No active campaign found with this UUID');
+      throw new NotFoundException('No active campaign found');
     }
     const campaignTiers = campaignInfo.tiers || [];
 
