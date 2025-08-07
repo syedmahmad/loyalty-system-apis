@@ -749,9 +749,11 @@ export class CustomerService {
 
       if (coupon?.complex_coupon && coupon?.complex_coupon.length >= 1) {
         const conditions = coupon?.complex_coupon;
-        const result = this.validateComplexCouponConditions(
+        const result = await this.validateComplexCouponConditions(
           coupon_info.complex_coupon,
           conditions,
+          wallet,
+          coupon,
         );
         if (!result.valid) {
           throw new BadRequestException(result.message);
@@ -869,7 +871,12 @@ export class CustomerService {
     }
   }
 
-  validateComplexCouponConditions(userCouponInfo, dbCouponInfo) {
+  async validateComplexCouponConditions(
+    userCouponInfo,
+    dbCouponInfo,
+    wallet,
+    coupon,
+  ) {
     const failedConditions: any = [];
     for (const userCoupon of userCouponInfo) {
       const match = dbCouponInfo.find(
@@ -885,31 +892,62 @@ export class CustomerService {
         continue;
       }
 
-      // condition length mismatch in userCouponInfo and dbCouponInfo
-      if (userCoupon.dynamicRows.length !== match.dynamicRows.length) {
-        failedConditions.push(
-          `condition not satisfied '${userCoupon.selectedCouponType}'`,
-        );
-        continue;
-      }
+      if (match.selectedCouponType === 'BIRTHDAY') {
+        const today = new Date();
+        const dob = new Date(wallet.customer.DOB);
+        const isBirthday =
+          today.getDate() === dob.getDate() &&
+          today.getMonth() === dob.getMonth();
 
-      for (let i = 0; i < userCoupon.dynamicRows.length; i++) {
-        const userRow = userCoupon.dynamicRows[i];
-        const dbRow = match.dynamicRows[i];
-
-        if (
-          !(
-            userRow.type === dbRow.type &&
-            userRow.operator === dbRow.operator &&
-            userRow.value === dbRow.value
-          )
-          // JSON.stringify(userRow.models) === JSON.stringify(dbRow.models) &&
-          // JSON.stringify(userRow.variants) === JSON.stringify(dbRow.variants)
-        ) {
+        if (!isBirthday) {
           failedConditions.push(
-            `No matching condition '${userCoupon.selectedCouponType}'`,
+            "Today is not your birthday, so you're not eligible.",
           );
           continue;
+        }
+      } else if (match.selectedCouponType === 'TIER_BASED') {
+        const customerTierInfo = await this.tiersService.getCurrentCustomerTier(
+          wallet.customer.id,
+        );
+
+        const cutomerFallInTier = match.dynamicRows.find(
+          (singleTier) => singleTier.tier === customerTierInfo?.tier?.id,
+        );
+
+        if (!cutomerFallInTier?.tier) {
+          failedConditions.push(`Customer doesn't fall in any tier`);
+          continue;
+        }
+
+        coupon['discount_type'] = 'percentage_discount111';
+        coupon['discount_price'] = cutomerFallInTier.value;
+      } else {
+        // condition length mismatch in userCouponInfo and dbCouponInfo
+        if (userCoupon.dynamicRows.length !== match.dynamicRows.length) {
+          failedConditions.push(
+            `condition not satisfied '${userCoupon.selectedCouponType}'`,
+          );
+          continue;
+        }
+
+        for (let i = 0; i < userCoupon.dynamicRows.length; i++) {
+          const userRow = userCoupon.dynamicRows[i];
+          const dbRow = match.dynamicRows[i];
+
+          if (
+            !(
+              userRow.type === dbRow.type &&
+              userRow.operator === dbRow.operator &&
+              userRow.value === dbRow.value
+            )
+            // JSON.stringify(userRow.models) === JSON.stringify(dbRow.models) &&
+            // JSON.stringify(userRow.variants) === JSON.stringify(dbRow.variants)
+          ) {
+            failedConditions.push(
+              `No matching condition '${userCoupon.selectedCouponType}'`,
+            );
+            continue;
+          }
         }
       }
     }
