@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, In, ILike } from 'typeorm';
@@ -21,6 +22,16 @@ import { User } from 'src/users/entities/user.entity';
 import { Tenant } from 'src/tenants/entities/tenant.entity';
 import { CampaignCustomerSegment } from '../entities/campaign-customer-segments.entity';
 import { omit } from 'lodash';
+import { Customer } from 'src/customers/entities/customer.entity';
+import { TiersService } from 'src/tiers/tiers/tiers.service';
+import { CustomerSegmentMember } from 'src/customer-segment/entities/customer-segment-member.entity';
+import { BurnWithCampaignDto } from '../dto/burn.dto';
+import { Wallet } from 'src/wallet/entities/wallet.entity';
+import { WalletService } from 'src/wallet/wallet/wallet.service';
+import {
+  WalletTransactionStatus,
+  WalletTransactionType,
+} from 'src/wallet/entities/wallet-transaction.entity';
 
 @Injectable()
 export class CampaignsService {
@@ -58,8 +69,21 @@ export class CampaignsService {
     @InjectRepository(User)
     private userRepository: Repository<User>,
 
+    @InjectRepository(CustomerSegmentMember)
+    private readonly customerSegmentMemberRepository: Repository<CustomerSegmentMember>,
+
+    @InjectRepository(Customer)
+    private customerRepository: Repository<Customer>,
+
+    @InjectRepository(Wallet)
+    private readonly walletRepository: Repository<Wallet>,
+
     @InjectRepository(Tenant)
     private tenantRepository: Repository<Tenant>,
+
+    private readonly tierService: TiersService,
+
+    private readonly walletService: WalletService,
 
     private readonly dataSource: DataSource,
   ) {}
@@ -610,6 +634,201 @@ export class CampaignsService {
     } finally {
       await queryRunner.release();
     }
+  }
+
+  async burnPointsWithCampaign(bodyPayload: BurnWithCampaignDto) {
+    const { customer_id, campaign_uuid, order, rule_uuid } = bodyPayload;
+
+    const total_amount = Number(order.amount);
+
+    const customerInfo = await this.customerRepository.find({
+      where: { uuid: customer_id },
+      relations: ['business_unit'],
+    });
+
+    const wallet = await this.walletRepository.findOne({
+      where: { customer: { uuid: customer_id } },
+      relations: ['business_unit'],
+    });
+
+    const customer = customerInfo[0];
+    if (!customer) throw new NotFoundException('Customer not found');
+
+    const currentCustomerTier = await this.tierService.getCurrentCustomerTier(
+      customer?.id,
+    );
+
+    // Step 2: Fetch active campaign
+    const campaignInfo = await this.campaignRepository.findOne({
+      where: { uuid: campaign_uuid, status: 1 },
+      relations: [
+        'rules',
+        'rules.rule',
+        'tiers',
+        'tiers.tier',
+        'business_unit',
+        'coupons',
+        'customerSegments',
+        'customerSegments.segment',
+      ],
+    });
+
+    const campaign = campaignInfo;
+    if (!campaign) {
+      throw new NotFoundException('No active campaign found with this UUID');
+    }
+    const campaignTiers = campaignInfo.tiers || [];
+
+    // Step 3: Segment validation
+    const hasSegments = await this.campaignSegmentRepository.find({
+      where: { campaign: { id: campaign.id } },
+      relations: ['segment'],
+    });
+
+    if (hasSegments.length > 0) {
+      // Extract segment IDs
+      const segmentIds = hasSegments.map((cs) => cs.segment.id);
+
+      if (segmentIds.length === 0) {
+        return false;
+      }
+
+      const match = await this.customerSegmentMemberRepository.findOne({
+        where: {
+          segment: { id: In(segmentIds) },
+          customer: { id: customer.id },
+        },
+      });
+
+      if (!match) {
+        throw new ForbiddenException(
+          'Customer is not eligible for this campaign',
+        );
+      }
+    }
+
+    // Step 4: Fetch burn rule
+    const campaignRule = await this.campaignRuleRepository.findOne({
+      where: {
+        campaign: { id: campaign.id },
+        rule: {
+          uuid: rule_uuid,
+          rule_type: 'burn',
+          status: 1,
+        },
+      },
+      relations: ['rule'],
+    });
+
+    const rule = campaignRule.rule;
+    if (!rule)
+      throw new NotFoundException('Burn rule not found for this campaign');
+
+    // Step 5: Validate rule conditions
+    if (total_amount < rule.min_amount_spent) {
+      throw new BadRequestException(
+        `Minimum amount to burn is ${rule.min_amount_spent}`,
+      );
+    }
+
+    // Step 6: Determine applicable conversion rate
+    let conversionRate = rule.points_conversion_factor;
+
+    if (campaignTiers.length > 0) {
+      const matchedTier = campaignTiers.find((ct) => {
+        return (
+          ct.tier &&
+          currentCustomerTier?.tier &&
+          ct.tier.name === currentCustomerTier.tier.name &&
+          ct.tier.level === currentCustomerTier.tier.level
+        );
+      });
+
+      if (matchedTier) {
+        conversionRate = matchedTier.point_conversion_rate;
+      } else {
+        throw new ForbiddenException(
+          'Customer tier is not eligible for this campaign',
+        );
+      }
+    }
+
+    // Step 7: Calculate points and discount
+    let discountAmount = 0;
+    let pointsToBurn = 0;
+
+    if (rule.burn_type === 'FIXED') {
+      pointsToBurn = rule.max_redeemption_points_limit;
+      discountAmount = pointsToBurn * conversionRate;
+    } else if (rule.burn_type === 'PERCENTAGE') {
+      discountAmount = (total_amount * rule.max_burn_percent_on_invoice) / 100;
+      pointsToBurn = rule.max_redeemption_points_limit;
+    } else {
+      throw new BadRequestException('Invalid burn type in rule');
+    }
+
+    if (discountAmount > total_amount) {
+      throw new BadRequestException(
+        'Cannot gave discount because invoice amount is smaller than the discount amount',
+      );
+    }
+    // Step 8: Create burn transaction
+    // Import WalletTransactionType at the top if not already imported:
+    // import { WalletTransactionType } from 'src/wallet/entities/wallet-transaction.entity';
+    const burnPayload = {
+      customer_id: customer.id,
+      business_unit_id: customer.business_unit.id,
+      wallet_id: wallet.id,
+      type: WalletTransactionType.BURN,
+      amount: pointsToBurn,
+      status: WalletTransactionStatus.ACTIVE,
+      source_type: rule.name,
+      source_id: rule.id,
+      description: `Burned ${pointsToBurn} points for discount of ${discountAmount} on amount ${total_amount}`,
+    };
+
+    // Step 9: Create burn transaction in wallet
+
+    const orderResponse = await this.walletService.addOrder({
+      ...order,
+      delivery_date: order.delivery_date
+        ? new Date(order.delivery_date)
+        : undefined,
+      order_date: order.order_date ? new Date(order.order_date) : undefined,
+      subtotal: total_amount - discountAmount,
+      discount: discountAmount,
+      wallet_id: wallet?.id,
+      business_unit_id: customer?.business_unit?.id,
+      items: order.items ? JSON.stringify(order.items) : undefined,
+    });
+
+    await this.walletService.addTransaction(
+      {
+        ...burnPayload,
+        wallet_order_id: orderResponse?.id,
+        wallet_id: wallet?.id,
+        business_unit_id: customer?.business_unit?.id,
+      },
+      customer?.id,
+      true,
+    );
+
+    const walletInfo = await this.walletRepository.findOne({
+      where: { id: wallet.id },
+      relations: ['business_unit'],
+    });
+
+    const updatedOrder = {
+      ...orderResponse,
+      discount: discountAmount,
+      payable_amount: total_amount - discountAmount,
+    };
+
+    return {
+      message: 'Burn successful',
+      wallet: omit(walletInfo, 'customer'),
+      order: updatedOrder,
+    };
   }
 
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)

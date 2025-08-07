@@ -8,7 +8,7 @@ import { DataSource, ILike, In, LessThanOrEqual, Repository } from 'typeorm';
 import { Tier } from '../entities/tier.entity';
 import { CreateTierDto } from '../dto/create-tier.dto';
 import { UpdateTierDto } from '../dto/update-tier.dto';
-import { RuleTarget } from '../../rules/entities/rule-target.entity'; // adjust path as needed
+// import { RuleTarget } from '../../rules/entities/rule-target.entity'; // adjust path as needed
 import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
 import { User } from 'src/users/entities/user.entity';
 import { Tenant } from 'src/tenants/entities/tenant.entity';
@@ -20,8 +20,8 @@ export class TiersService {
     @InjectRepository(Tier)
     private tiersRepository: Repository<Tier>,
 
-    @InjectRepository(RuleTarget)
-    private ruleTargetRepository: Repository<RuleTarget>,
+    // @InjectRepository(RuleTarget)
+    // private ruleTargetRepository: Repository<RuleTarget>,
 
     @InjectRepository(BusinessUnit)
     private businessUnitRepository: Repository<BusinessUnit>, // adjust path as needed
@@ -77,10 +77,10 @@ export class TiersService {
   }
 
   async findAll(client_id: number, name: string, userId: number) {
-    const ruleTargets = await this.ruleTargetRepository.find({
-      where: { target_type: 'tier' },
-      relations: { rule: true },
-    });
+    // const ruleTargets = await this.ruleTargetRepository.find({
+    //   where: { target_type: 'tier' },
+    //   relations: { rule: true },
+    // });
 
     const user = await this.userRepository.findOne({ where: { id: userId } });
     if (!user) {
@@ -124,13 +124,16 @@ export class TiersService {
 
       return {
         tiers: tiers.map((tier) => {
-          const targets = ruleTargets
-            .filter((rt) => rt.target_id === tier.id)
-            .map((rt) => ({
-              id: rt.id,
-              rule_id: rt.rule_id,
-            }));
-          return { ...tier, rule_targets: targets };
+          // const targets = ruleTargets
+          //   .filter((rt) => rt.target_id === tier.id)
+          //   .map((rt) => ({
+          //     id: rt.id,
+          //     rule_id: rt.rule_id,
+          //   }));
+          return {
+            ...tier,
+            // rule_targets: targets
+          };
         }),
       };
     }
@@ -172,13 +175,16 @@ export class TiersService {
 
     return {
       tiers: specificTiers.map((tier) => {
-        const targets = ruleTargets
-          .filter((rt) => rt.target_id === tier.id)
-          .map((rt) => ({
-            id: rt.id,
-            rule_id: rt.rule_id,
-          }));
-        return { ...tier, rule_targets: targets };
+        // const targets = ruleTargets
+        //   .filter((rt) => rt.target_id === tier.id)
+        //   .map((rt) => ({
+        //     id: rt.id,
+        //     rule_id: rt.rule_id,
+        //   }));
+        return {
+          ...tier,
+          // rule_targets: targets
+        };
       }),
     };
   }
@@ -275,22 +281,22 @@ export class TiersService {
 
     if (!tier) throw new NotFoundException('Tier not found');
 
-    const ruleTargets = await this.ruleTargetRepository.find({
-      where: {
-        target_type: 'tier',
-        target_id: id,
-      },
-      relations: { rule: true },
-    });
+    // const ruleTargets = await this.ruleTargetRepository.find({
+    //   where: {
+    //     target_type: 'tier',
+    //     target_id: id,
+    //   },
+    //   relations: { rule: true },
+    // });
 
-    const rule_targets = ruleTargets.map((rt) => ({
-      id: rt.id,
-      rule_id: rt.rule_id,
-    }));
+    // const rule_targets = ruleTargets.map((rt) => ({
+    //   id: rt.id,
+    //   rule_id: rt.rule_id,
+    // }));
 
     return {
       ...tier,
-      rule_targets,
+      // rule_targets,
     };
   }
 

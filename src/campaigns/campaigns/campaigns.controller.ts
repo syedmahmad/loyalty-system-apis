@@ -21,6 +21,7 @@ import { AuthTokenGuard } from 'src/users/guards/authTokenGuard';
 import { InjectRepository } from '@nestjs/typeorm';
 import { User } from 'src/users/entities/user.entity';
 import { Repository } from 'typeorm';
+import { BurnWithCampaignDto } from '../dto/burn.dto';
 
 @Controller('campaigns')
 export class CampaignsController {
@@ -164,5 +165,10 @@ export class CampaignsController {
     }
 
     return await this.campaignService.remove(+id, user.uuid);
+  }
+
+  @Post('burn')
+  async burnCampaign(@Body() dto: BurnWithCampaignDto) {
+    return await this.campaignService.burnPointsWithCampaign(dto);
   }
 }

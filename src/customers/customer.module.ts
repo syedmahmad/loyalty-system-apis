@@ -33,6 +33,7 @@ import { CustomerSegment } from 'src/customer-segment/entities/customer-segment.
 import { Coupon } from 'src/coupons/entities/coupon.entity';
 import { CouponTypeService } from 'src/coupon_type/coupon_type/coupon_type.service';
 import { CouponType } from 'src/coupon_type/entities/coupon_type.entity';
+import { CustomerSegmentMember } from 'src/customer-segment/entities/customer-segment-member.entity';
 
 @Module({
   imports: [
@@ -56,6 +57,7 @@ import { CouponType } from 'src/coupon_type/entities/coupon_type.entity';
       CustomerSegment,
       Coupon,
       CouponType,
+      CustomerSegmentMember,
     ]),
     WalletModule,
     OciModule,
