@@ -69,15 +69,15 @@ export class RulesController {
     return await this.rulesService.findAllForThirdParty(tenant_id, name);
   }
 
-  @Get('/single/:id')
-  findOne(@Param('id') id: number) {
-    return this.rulesService.findOne(id);
+  @Get('/single/:uuid')
+  findOne(@Param('uuid') uuid: string) {
+    return this.rulesService.findOne(uuid);
   }
 
-  @Put(':id')
+  @Put(':uuid')
   async update(
     @Headers('user-secret') userSecret: string,
-    @Param('id') id: number,
+    @Param('uuid') uuid: string,
     @Body() dto: UpdateRuleDto,
   ) {
     if (!userSecret) {
@@ -96,13 +96,13 @@ export class RulesController {
       throw new BadRequestException('user not found against provided token');
     }
 
-    return this.rulesService.update(id, dto, user.uuid);
+    return this.rulesService.update(uuid, dto, user.uuid);
   }
 
-  @Delete(':id')
+  @Delete(':uuid')
   async remove(
     @Headers('user-secret') userSecret: string,
-    @Param('id') id: number,
+    @Param('uuid') uuid: string,
   ) {
     if (!userSecret) {
       throw new BadRequestException('user-secret not found in headers');
@@ -120,6 +120,6 @@ export class RulesController {
       throw new BadRequestException('user not found against provided token');
     }
 
-    return this.rulesService.remove(id, user.uuid);
+    return this.rulesService.remove(uuid, user.uuid);
   }
 }

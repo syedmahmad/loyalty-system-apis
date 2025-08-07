@@ -260,9 +260,10 @@ export class LoyaltyAnalyticsService {
 
     const availableCoupons = Number(total) - Number(totalCouponsUsage);
     return [
-      { label: 'Coupons', count: Number(total) },
+      { label: 'Total Coupons', count: Number(total) },
       { label: 'Assigned Coupons', count: Number(totalCouponsUsage) },
       { label: 'Available Coupons', count: Number(availableCoupons) },
+      { label: 'Coupons Usage', count: Number(totalCouponsUsage) },
     ];
   }
 

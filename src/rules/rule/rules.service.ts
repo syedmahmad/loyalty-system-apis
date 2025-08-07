@@ -91,6 +91,7 @@ export class RulesService {
         'frequency',
         'burn_type',
         'status',
+        'uuid',
       ],
       where: {
         tenant_id: client_id,
@@ -147,7 +148,7 @@ export class RulesService {
     });
   }
 
-  findOne(id: number) {
+  async findOne(uuid: string) {
     return this.ruleRepository.findOne({
       select: [
         'name',
@@ -168,11 +169,11 @@ export class RulesService {
         'burn_type',
         'status',
       ],
-      where: { id },
+      where: { uuid },
     });
   }
 
-  async update(id: number, dto: UpdateRuleDto, user: string): Promise<Rule> {
+  async update(uuid: string, dto: UpdateRuleDto, user: string): Promise<Rule> {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -181,7 +182,7 @@ export class RulesService {
     try {
       const manager = queryRunner.manager;
 
-      const rule = await manager.findOne(Rule, { where: { id } });
+      const rule = await manager.findOne(Rule, { where: { uuid } });
       if (!rule) throw new Error('Rule not found');
 
       rule.name = dto.name ?? rule.name;
@@ -208,7 +209,7 @@ export class RulesService {
       await manager.save(rule);
       await queryRunner.commitTransaction();
 
-      return await this.findOne(id); // from your service
+      return await this.findOne(uuid); // from your service
     } catch (err) {
       await queryRunner.rollbackTransaction();
       throw err;
@@ -217,7 +218,7 @@ export class RulesService {
     }
   }
 
-  async remove(id: number, user: string): Promise<{ deleted: boolean }> {
+  async remove(uuid: string, user: string): Promise<{ deleted: boolean }> {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -226,7 +227,7 @@ export class RulesService {
     try {
       const manager = queryRunner.manager;
 
-      const rule = await manager.findOne(Rule, { where: { id } });
+      const rule = await manager.findOne(Rule, { where: { uuid } });
       if (!rule) throw new Error('Rule not found');
 
       rule.status = 0; // 👈 Soft delete by updating status
