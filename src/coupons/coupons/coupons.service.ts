@@ -169,18 +169,8 @@ export class CouponsService {
     return { coupons: coupons };
   }
 
-  async findAllThirdParty(client_id: string, name: string, limit: number) {
-    const tenant = await this.tenantRepository.findOne({
-      where: {
-        uuid: client_id,
-      },
-    });
-
-    if (!tenant) {
-      throw new BadRequestException('Tenant not found ');
-    }
-
-    const baseConditions = { status: Not(2), tenant_id: tenant.id };
+  async findAllThirdParty(tenant_id: string, name: string, limit: number) {
+    const baseConditions = { status: Not(2), tenant_id: tenant_id };
     let whereClause = {};
 
     whereClause = name
