@@ -611,13 +611,14 @@ export class CustomerService {
   async handleCampaignRules(bodyPayload) {
     const { total_amount, rule_info, wallet, campaign_id } = bodyPayload;
     try {
-      const where: any = {
-        uuid: campaign_id,
-        status: 1,
-      };
-
+      const today = new Date();
       const campaign = await this.campaignRepository.findOne({
-        where,
+        where: {
+          uuid: campaign_id,
+          status: 1,
+          start_date: LessThanOrEqual(today),
+          end_date: MoreThanOrEqual(today),
+        },
         relations: [
           'rules',
           'rules.rule',
@@ -716,7 +717,9 @@ export class CustomerService {
         return { campaign_uuid: campaign.uuid, matchedRule: rule };
       }
 
-      throw new NotFoundException('Campaign not found');
+      throw new NotFoundException(
+        'Campaign not found or it may not started yet',
+      );
     } catch (error) {
       throw new BadRequestException(error?.message || 'Something went wrong');
     }
