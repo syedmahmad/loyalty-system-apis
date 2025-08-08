@@ -6,7 +6,6 @@ import {
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import axios from 'axios';
 import { DataSource, ILike, In, Not, Repository } from 'typeorm';
-
 import { CreateCouponDto } from '../dto/create-coupon.dto';
 import { UpdateCouponDto } from '../dto/update-coupon.dto';
 import { Coupon } from '../entities/coupon.entity';
@@ -168,6 +167,73 @@ export class CouponsService {
     });
 
     return { coupons: coupons };
+  }
+
+  async findAllThirdParty(client_id: string, name: string, limit: number) {
+    const tenant = await this.tenantRepository.findOne({
+      where: {
+        uuid: client_id,
+      },
+    });
+
+    if (!tenant) {
+      throw new BadRequestException('Tenant not found ');
+    }
+
+    const baseConditions = { status: Not(2), tenant_id: tenant.id };
+    let whereClause = {};
+
+    whereClause = name
+      ? [
+          { ...baseConditions, code: ILike(`%${name}%`) },
+          { ...baseConditions, coupon_title: ILike(`%${name}%`) },
+        ]
+      : [baseConditions];
+
+    const coupons = await this.couponsRepository.find({
+      where: whereClause,
+      relations: [
+        'business_unit',
+        'customerSegments',
+        'customerSegments.segment',
+      ],
+      order: { created_at: 'DESC' },
+      ...(name && { take: 20 }),
+      ...(limit && { take: limit }),
+    });
+
+    function omitCritical(obj: any, extraOmit: string[] = []): any {
+      if (Array.isArray(obj)) {
+        return obj.map((item) => omitCritical(item, extraOmit));
+      }
+
+      if (obj !== null && typeof obj === 'object') {
+        const omitFields = new Set([
+          'id',
+          'tenant_id',
+          'created_at',
+          'updated_at',
+          'created_by',
+          'updated_by',
+          'errors',
+          ...extraOmit,
+        ]);
+
+        const cleanedObj: Record<string, any> = {};
+
+        for (const [key, value] of Object.entries(obj)) {
+          if (!omitFields.has(key)) {
+            cleanedObj[key] = omitCritical(value, extraOmit);
+          }
+        }
+
+        return cleanedObj;
+      }
+
+      return obj; // Return primitive values as-is
+    }
+
+    return omitCritical(coupons);
   }
 
   async findOne(id: number) {

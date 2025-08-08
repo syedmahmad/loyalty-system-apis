@@ -77,6 +77,15 @@ export class CouponsController {
     return await this.service.findAll(client_id, name, limit, user.id);
   }
 
+  @Get('/third-party/:client_id')
+  async findAllForThirdParty(
+    @Param('client_id') client_id: string,
+    @Query('name') name?: string, // optional query param,
+    @Query('limit') limit?: number, // optional query param,
+  ) {
+    return await this.service.findAllThirdParty(client_id, name, limit);
+  }
+
   @Get('edit/:id')
   async findOne(@Param('id') id: string) {
     return await this.service.findOne(+id);
