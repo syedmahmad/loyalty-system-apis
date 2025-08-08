@@ -7,7 +7,14 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as QRCode from 'qrcode';
-import { In, Not, Raw, Repository } from 'typeorm';
+import {
+  In,
+  LessThanOrEqual,
+  MoreThanOrEqual,
+  Not,
+  Raw,
+  Repository,
+} from 'typeorm';
 import { BulkCreateCustomerDto } from './dto/create-customer.dto';
 import { Request } from 'express';
 import * as dayjs from 'dayjs';
@@ -754,10 +761,13 @@ export class CustomerService {
 
   async handleCampaignCoupons(bodyPayload) {
     const { campaign_id, wallet, coupon_info, amount, order } = bodyPayload;
+    const today = new Date();
     const campaign = await this.campaignRepository.findOne({
       where: {
         uuid: campaign_id,
         status: 1,
+        start_date: LessThanOrEqual(today),
+        end_date: MoreThanOrEqual(today),
       },
       relations: [
         'rules',
@@ -962,7 +972,7 @@ export class CustomerService {
         throw new InternalServerErrorException(message);
       }
     }
-    throw new NotFoundException('Campaign not found');
+    throw new NotFoundException('Campaign not found or it may not started yet');
   }
 
   async validateComplexCouponConditions(
