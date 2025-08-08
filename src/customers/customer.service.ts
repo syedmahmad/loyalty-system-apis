@@ -647,6 +647,31 @@ export class CustomerService {
           relations: ['rule'],
         });
         const rule = campaignRule?.rule;
+
+        let conversionRate = 1;
+        // customer eligible tier checking
+        const campaignTiers = campaign.tiers || [];
+        if (campaignTiers.length > 0) {
+          const currentCustomerTier =
+            await this.tiersService.getCurrentCustomerTier(customerId);
+          const matchedTier = campaignTiers.find((ct) => {
+            return (
+              ct.tier &&
+              currentCustomerTier?.tier &&
+              ct.tier.name === currentCustomerTier.tier.name &&
+              ct.tier.level === currentCustomerTier.tier.level
+            );
+          });
+
+          if (matchedTier) {
+            conversionRate = matchedTier.point_conversion_rate;
+          } else {
+            throw new ForbiddenException(
+              'Customer tier is not eligible for this campaign',
+            );
+          }
+        }
+
         if (
           rule?.rule_type === 'spend and earn' &&
           (total_amount === undefined ||
@@ -655,6 +680,7 @@ export class CustomerService {
         ) {
           throw new BadRequestException(`Amount is required`);
         }
+
         if (total_amount) {
           if (total_amount < rule?.min_amount_spent) {
             throw new BadRequestException(
@@ -663,6 +689,7 @@ export class CustomerService {
           }
         }
 
+        rule['reward_points'] = rule.reward_points * conversionRate;
         return { campaign_uuid: campaign.uuid, matchedRule: rule };
       }
     } catch (error) {
@@ -738,6 +765,27 @@ export class CustomerService {
         if (!match) {
           throw new ForbiddenException(
             'Customer is not eligible for this campaign',
+          );
+        }
+      }
+
+      // customer eligible tier checking
+      const campaignTiers = campaign.tiers || [];
+      if (campaignTiers.length > 0) {
+        const currentCustomerTier =
+          await this.tiersService.getCurrentCustomerTier(customerId);
+        const matchedTier = campaignTiers.find((ct) => {
+          return (
+            ct.tier &&
+            currentCustomerTier?.tier &&
+            ct.tier.name === currentCustomerTier.tier.name &&
+            ct.tier.level === currentCustomerTier.tier.level
+          );
+        });
+
+        if (!matchedTier) {
+          throw new ForbiddenException(
+            'Customer tier is not eligible for this campaign',
           );
         }
       }

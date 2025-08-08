@@ -10,10 +10,10 @@ export class CustomerEarnDto {
   campaign_id?: string;
 
   @IsOptional()
-  @IsEnum(['rule', 'campaign', 'coupon'], {
-    message: 'campaign_type must be one of: rule, campaign, coupon',
+  @IsEnum(['DISCOUNT_POINTS', 'DISCOUNT_COUPONS'], {
+    message: 'campaign_type must be one of: DISCOUNT_POINTS, DISCOUNT_COUPONS',
   })
-  campaign_type?: 'rule' | 'campaign' | 'coupon';
+  campaign_type?: 'DISCOUNT_POINTS' | 'DISCOUNT_COUPONS';
 
   @IsOptional()
   @IsObject()

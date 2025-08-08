@@ -371,10 +371,23 @@ export class CampaignsService {
         // Flatten rules to just the rule object, omitting critical fields
         coupons: coupons
           ? coupons
-              .map((r) => r.coupon)
+              .map((r) => r.coupon) // get actual coupon object
               .filter(Boolean)
-              .map((rule) => omitCritical(rule))
+              .map((coupon) => {
+                // clean top-level coupon
+                const cleaned = omitCritical(coupon);
+
+                // deep-clean complex_coupon array
+                if (Array.isArray(cleaned.complex_coupon)) {
+                  cleaned.complex_coupon = cleaned.complex_coupon.map((cc) =>
+                    omitCritical(cc, ['conditionOfCouponTypes', 'conditions']),
+                  );
+                }
+
+                return cleaned;
+              })
           : [],
+
         customerSegments: customerSegments
           ? customerSegments.map((cs) => ({
               ...omitCritical(cs),
