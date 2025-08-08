@@ -686,7 +686,7 @@ export class CampaignsService {
   }
 
   async burnPoints(bodyPayload: BurnPoints) {
-    const { customer_id, order, rule_uuid } = bodyPayload;
+    const { customer_id, order, rule_id: rule_uuid } = bodyPayload;
 
     const total_amount = Number(order.amount);
 
@@ -804,7 +804,12 @@ export class CampaignsService {
   }
 
   async burnPointsWithCampaign(bodyPayload: BurnWithCampaignDto) {
-    const { customer_id, campaign_uuid, order, rule_uuid } = bodyPayload;
+    const {
+      customer_id,
+      campaign_id: campaign_uuid,
+      order,
+      rule_id: rule_uuid,
+    } = bodyPayload;
 
     const total_amount = Number(order.amount);
 
@@ -1004,8 +1009,16 @@ export class CampaignsService {
     };
   }
 
+  /**
+   * Scheduled task that runs every day at midnight to check for expired campaigns.
+   *
+   * - Finds all campaigns that have an end_date equal to today and are still active.
+   * - Deactivates each expired campaign by setting its 'active' property to false.
+   * - Saves the updated campaign and logs the deactivation.
+   */
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
   async handleCron() {
+    // Set 'today' to midnight (00:00:00) to match campaigns ending today
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     console.log('Running campaign expiry check...');

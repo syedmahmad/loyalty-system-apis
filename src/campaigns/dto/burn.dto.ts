@@ -67,11 +67,11 @@ export class BurnWithCampaignDto {
 
   @IsNotEmpty()
   @IsString()
-  campaign_uuid: string;
+  campaign_id: string;
 
   @IsNotEmpty()
   @IsString()
-  rule_uuid: string;
+  rule_id: string;
 
   @IsNotEmpty()
   @IsObject()
@@ -87,7 +87,7 @@ export class BurnPoints {
 
   @IsNotEmpty()
   @IsString()
-  rule_uuid: string;
+  rule_id: string;
 
   @IsNotEmpty()
   @IsObject()
