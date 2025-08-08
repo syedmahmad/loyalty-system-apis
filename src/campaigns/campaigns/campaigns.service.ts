@@ -497,10 +497,14 @@ export class CampaignsService {
         (id) => !existingRuleIds.includes(id),
       );
       if (ruleIdsToRemove.length) {
-        await manager.delete(CampaignRule, {
-          campaign: { id },
-          rule: In(ruleIdsToRemove),
+        const rulesToRemove = await manager.find(CampaignRule, {
+          where: {
+            campaign: { id },
+            rule: In(ruleIdsToRemove),
+          },
+          relations: ['rule', 'campaign'],
         });
+        await manager.remove(CampaignRule, rulesToRemove);
       }
       if (ruleIdsToAdd.length) {
         const rulesToAdd = await this.ruleRepository.findBy({
@@ -525,10 +529,14 @@ export class CampaignsService {
         (id) => !existingCouponIds.includes(id),
       );
       if (couponIdsToRemove.length) {
-        await manager.delete(CampaignCoupons, {
-          campaign: { id },
-          coupon: In(couponIdsToRemove),
+        const couponsToRemove = await manager.find(CampaignCoupons, {
+          where: {
+            campaign: { id },
+            coupon: In(couponIdsToRemove),
+          },
+          relations: ['coupon', 'campaign'],
         });
+        await manager.remove(CampaignCoupons, couponsToRemove);
       }
       if (couponIdsToAdd.length) {
         const couponsToAdd = await this.couponRepository.findBy({
@@ -554,10 +562,14 @@ export class CampaignsService {
         (id) => !existingTierIds.includes(id),
       );
       if (tierIdsToRemove.length) {
-        await manager.delete(CampaignTier, {
-          campaign: { id },
-          tier: In(tierIdsToRemove),
+        const tiersToRemove = await manager.find(CampaignTier, {
+          where: {
+            campaign: { id },
+            tier: In(tierIdsToRemove),
+          },
+          relations: ['tier', 'campaign'],
         });
+        await manager.remove(CampaignTier, tiersToRemove);
       }
       if (tierIdsToAdd.length) {
         const tiersToAdd = await this.tierRepository.findBy({
@@ -573,6 +585,7 @@ export class CampaignsService {
         });
         await manager.save(CampaignTier, newTiers);
       }
+
       // update point_conversion_rate of existing
       const existingCampaignTiers = await manager.find(CampaignTier, {
         where: { campaign: { id }, tier: In(existingTierIds) },
@@ -601,10 +614,16 @@ export class CampaignsService {
       );
 
       if (segmentIdsToRemove.length) {
-        await manager.delete(CampaignCustomerSegment, {
-          campaign: { id },
-          segment: In(segmentIdsToRemove),
+        const segmentsToRemove = await manager.find(CampaignCustomerSegment, {
+          where: {
+            campaign: { id },
+            segment: In(segmentIdsToRemove),
+          },
+          relations: ['segment', 'campaign'],
         });
+        if (segmentsToRemove.length) {
+          await manager.remove(CampaignCustomerSegment, segmentsToRemove);
+        }
       }
 
       if (segmentIdsToAdd.length) {
