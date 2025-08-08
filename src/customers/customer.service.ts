@@ -551,8 +551,6 @@ export class CustomerService {
       },
     });
 
-    console.log('previousRewards :::', previousRewards);
-
     const currentDate = new Date();
 
     const isSameYear = (d1: Date, d2: Date) =>
@@ -756,7 +754,23 @@ export class CustomerService {
 
   async handleCampaignCoupons(bodyPayload) {
     const { campaign_id, wallet, coupon_info, amount, order } = bodyPayload;
-    const campaign = await this.campaignsService.findOneThirdParty(campaign_id);
+    const campaign = await this.campaignRepository.findOne({
+      where: {
+        uuid: campaign_id,
+        status: 1,
+      },
+      relations: [
+        'rules',
+        'rules.rule',
+        'tiers',
+        'tiers.tier',
+        'business_unit',
+        'coupons',
+        'customerSegments',
+        'customerSegments.segment',
+      ],
+    });
+
     if (campaign) {
       const campaignId = campaign.id;
       const customerId = wallet.customer.id;
@@ -948,6 +962,7 @@ export class CustomerService {
         throw new InternalServerErrorException(message);
       }
     }
+    throw new NotFoundException('Campaign not found');
   }
 
   async validateComplexCouponConditions(
