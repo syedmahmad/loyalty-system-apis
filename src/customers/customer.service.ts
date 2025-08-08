@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as QRCode from 'qrcode';
-import { In, Not, Repository } from 'typeorm';
+import { In, Not, Raw, Repository } from 'typeorm';
 import { BulkCreateCustomerDto } from './dto/create-customer.dto';
 import { Request } from 'express';
 import * as dayjs from 'dayjs';
@@ -30,6 +30,7 @@ import { CustomerEarnDto } from './dto/customer-earn.dto';
 import { CampaignCoupons } from 'src/campaigns/entities/campaign-coupon.entity';
 import { CouponTypeService } from 'src/coupon_type/coupon_type/coupon_type.service';
 import { CustomerSegmentMember } from 'src/customer-segment/entities/customer-segment-member.entity';
+import { Campaign } from 'src/campaigns/entities/campaign.entity';
 
 @Injectable()
 export class CustomerService {
@@ -58,6 +59,8 @@ export class CustomerService {
     private readonly couponTypeService: CouponTypeService,
     @InjectRepository(CustomerSegmentMember)
     private readonly customerSegmentMemberRepository: Repository<CustomerSegmentMember>,
+    @InjectRepository(Campaign)
+    private readonly campaignRepository: Repository<Campaign>,
   ) {}
 
   async createCustomer(req: Request, dto: BulkCreateCustomerDto) {
@@ -603,8 +606,24 @@ export class CustomerService {
   async handleCampaignRules(bodyPayload) {
     const { total_amount, rule_info, wallet, campaign_id } = bodyPayload;
     try {
-      const campaign =
-        await this.campaignsService.findOneThirdParty(campaign_id);
+      const where: any = {
+        uuid: campaign_id,
+        status: 1,
+      };
+
+      const campaign = await this.campaignRepository.findOne({
+        where,
+        relations: [
+          'rules',
+          'rules.rule',
+          'tiers',
+          'tiers.tier',
+          'business_unit',
+          'coupons',
+          'customerSegments',
+          'customerSegments.segment',
+        ],
+      });
 
       if (campaign) {
         const campaignId = campaign.id;
@@ -691,6 +710,8 @@ export class CustomerService {
         rule['reward_points'] = rule.reward_points * conversionRate;
         return { campaign_uuid: campaign.uuid, matchedRule: rule };
       }
+
+      throw new NotFoundException('Campaign not found');
     } catch (error) {
       throw new BadRequestException(error?.message || 'Something went wrong');
     }
@@ -977,7 +998,7 @@ export class CustomerService {
           continue;
         }
 
-        coupon['discount_type'] = 'percentage_discount111';
+        coupon['discount_type'] = 'percentage_discount';
         coupon['discount_price'] = cutomerFallInTier.value;
       } else {
         // condition length mismatch in userCouponInfo and dbCouponInfo

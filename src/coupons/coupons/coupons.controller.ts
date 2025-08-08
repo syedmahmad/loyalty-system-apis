@@ -157,4 +157,9 @@ export class CouponsController {
   async findVariants(@Param('modelId') modelId: string) {
     return await this.service.findVariants(modelId);
   }
+
+  @Post('redeemCoupon')
+  async redeemCoupon(@Body() bodyPayload: any) {
+    return await this.service.redeemCoupon(bodyPayload);
+  }
 }

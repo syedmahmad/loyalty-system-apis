@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
@@ -14,6 +15,16 @@ import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
 import { User } from 'src/users/entities/user.entity';
 import { Tenant } from 'src/tenants/entities/tenant.entity';
 import { CouponCustomerSegment } from '../entities/coupon-customer-segments.entity';
+import { CouponTypeService } from 'src/coupon_type/coupon_type/coupon_type.service';
+import { Customer } from 'src/customers/entities/customer.entity';
+import { TiersService } from 'src/tiers/tiers/tiers.service';
+import { CustomerActivity } from 'src/customers/entities/customer-activity.entity';
+import { WalletService } from 'src/wallet/wallet/wallet.service';
+import { CustomerService } from 'src/customers/customer.service';
+import {
+  CouponStatus,
+  UserCoupon,
+} from 'src/wallet/entities/user-coupon.entity';
 
 @Injectable()
 export class CouponsService {
@@ -38,6 +49,20 @@ export class CouponsService {
 
     @InjectDataSource()
     private readonly dataSource: DataSource,
+
+    @InjectRepository(Customer)
+    private readonly customerRepo: Repository<Customer>,
+
+    @InjectRepository(CustomerActivity)
+    private readonly customeractivityRepo: Repository<CustomerActivity>,
+
+    @InjectRepository(UserCoupon)
+    private couponRepo: Repository<UserCoupon>,
+
+    private readonly couponTypeService: CouponTypeService,
+    private readonly tiersService: TiersService,
+    private readonly walletService: WalletService,
+    private readonly customerService: CustomerService,
   ) {}
 
   async create(dto: CreateCouponDto, user: string) {
@@ -369,6 +394,320 @@ export class CouponsService {
       return response.data;
     } catch (error) {
       throw error;
+    }
+  }
+
+  async redeemCoupon(bodyPayload) {
+    const { customer_id, coupon_info, order } = bodyPayload;
+    const { amount } = order ?? {};
+
+    // Step 1: Get Customer & Wallet Info
+    const customer = await this.customerRepo.findOne({
+      where: { uuid: customer_id },
+    });
+    if (!customer) throw new NotFoundException('Customer not found');
+
+    const wallet = await this.walletService.getSingleCustomerWalletInfoById(
+      customer.id,
+    );
+    if (!wallet) throw new NotFoundException('Customer Wallet not found');
+
+    const couponInfo = await this.couponsRepository.findOne({
+      where: { uuid: coupon_info.uuid },
+    });
+
+    if (!couponInfo) throw new NotFoundException('Coupon not found');
+
+    if (couponInfo?.complex_coupon && couponInfo?.complex_coupon.length >= 1) {
+      const result = await this.validateComplexCouponConditions(
+        coupon_info.complex_coupon,
+        couponInfo?.complex_coupon,
+        customer,
+        couponInfo,
+      );
+      if (!result.valid) {
+        throw new BadRequestException(result.message);
+      }
+    } else if (couponInfo?.conditions) {
+      const couponType = await this.couponTypeService.findOne(
+        couponInfo?.coupon_type_id,
+      );
+      if (couponType.coupon_type === 'BIRTHDAY') {
+        const today = new Date();
+        const dob = new Date(wallet.customer.DOB);
+        const isBirthday =
+          today.getDate() === dob.getDate() &&
+          today.getMonth() === dob.getMonth();
+
+        if (!isBirthday) {
+          throw new BadRequestException(
+            "Today is not your birthday, so you're not eligible.",
+          );
+        }
+      } else if (couponType.coupon_type === 'TIER_BASED') {
+        const customerTierInfo = await this.tiersService.getCurrentCustomerTier(
+          wallet.customer.id,
+        );
+        const cutomerFallInTier = coupon_info.conditions.find(
+          (singleTier) => singleTier.tier === customerTierInfo.tier.id,
+        );
+        couponInfo.discount_type = 'percentage_discount';
+        couponInfo.discount_price = cutomerFallInTier.value;
+      } else {
+        const result = this.validateSimpleCouponConditions(
+          coupon_info,
+          couponInfo.conditions,
+          couponType,
+        );
+        if (!result.valid) {
+          throw new BadRequestException(result.message);
+        }
+      }
+    }
+    await this.checkAlreadyRedeemCoupon(wallet.customer.uuid, coupon_info.uuid);
+
+    if (
+      couponInfo.discount_type === 'percentage_discount' &&
+      (amount === undefined || amount === null || amount === '')
+    ) {
+      throw new BadRequestException(`Amount is required`);
+    }
+
+    const earnPoints =
+      couponInfo.discount_type === 'fixed_discount'
+        ? (couponInfo.discount_price ?? 0)
+        : (amount * Number(couponInfo.discount_price)) / 100;
+
+    const customerWalletPayload: any = {
+      customer_id: wallet.customer.id,
+      business_unit_id: wallet.business_unit.id,
+      wallet_id: wallet.id,
+      type: 'earn',
+      amount: earnPoints,
+      status: 'active',
+      source_type: 'coupon',
+      source_id: couponInfo.id,
+      description: `Redeem ${earnPoints} points (${couponInfo?.coupon_title})`,
+    };
+
+    try {
+      let orderResponse: any = null;
+      if (order) {
+        const orderRes = await this.walletService.addOrder({
+          ...order,
+          wallet_id: wallet.id,
+          business_unit_id: wallet.business_unit.id,
+        });
+        orderResponse = orderRes?.id || null;
+      }
+
+      const transactionRes = await this.walletService.addTransaction(
+        {
+          ...customerWalletPayload,
+          wallet_order_id: orderResponse,
+        },
+        null,
+        true,
+      );
+
+      const customerActivityPayload = {
+        customer_uuid: wallet.customer.uuid,
+        activity_type: 'coupon',
+        coupon_uuid: couponInfo.uuid,
+        amount: earnPoints,
+      };
+
+      await this.customerService.createCustomerActivity(
+        customerActivityPayload,
+      );
+
+      const userCouponPayload = {
+        coupon_code: couponInfo.code,
+        status: CouponStatus.USED,
+        redeemed_at: new Date(),
+        customerId: wallet.customer.id,
+        business_unit_id: wallet.business_unit.id,
+        issued_from_type: 'coupon',
+        issued_from_id: couponInfo.id,
+      };
+
+      await this.couponRepo.save(userCouponPayload);
+
+      return {
+        type: transactionRes.type,
+        status: transactionRes.status,
+        amount: transactionRes.amount,
+        description: transactionRes.description,
+      };
+    } catch (error: any) {
+      const message =
+        error?.response?.data?.message || 'Failed to get customer wallet info';
+      const status = error?.response?.status || 500;
+
+      if (status >= 400 && status < 500) {
+        throw new BadRequestException(message);
+      }
+
+      throw new InternalServerErrorException(message);
+    }
+  }
+
+  async validateComplexCouponConditions(
+    userCouponInfo,
+    dbCouponInfo,
+    wallet,
+    coupon,
+  ) {
+    const failedConditions: any = [];
+    for (const userCoupon of userCouponInfo) {
+      const match = dbCouponInfo.find(
+        (dbCoupon) =>
+          dbCoupon.selectedCouponType === userCoupon.selectedCouponType,
+      );
+
+      // Coupon Type mismatch in userCouponInfo and dbCouponInfo
+      if (!match) {
+        failedConditions.push(
+          `No matching condition type found for '${userCoupon.selectedCouponType}'`,
+        );
+        continue;
+      }
+
+      if (match.selectedCouponType === 'BIRTHDAY') {
+        const today = new Date();
+        const dob = new Date(wallet.customer.DOB);
+        const isBirthday =
+          today.getDate() === dob.getDate() &&
+          today.getMonth() === dob.getMonth();
+
+        if (!isBirthday) {
+          failedConditions.push(
+            "Today is not your birthday, so you're not eligible.",
+          );
+          continue;
+        }
+      } else if (match.selectedCouponType === 'TIER_BASED') {
+        const customerTierInfo = await this.tiersService.getCurrentCustomerTier(
+          wallet.customer.id,
+        );
+
+        const cutomerFallInTier = match.dynamicRows.find(
+          (singleTier) => singleTier.tier === customerTierInfo?.tier?.id,
+        );
+
+        if (!cutomerFallInTier?.tier) {
+          failedConditions.push(`Customer doesn't fall in any tier`);
+          continue;
+        }
+
+        coupon['discount_type'] = 'percentage_discount';
+        coupon['discount_price'] = cutomerFallInTier.value;
+      } else {
+        // condition length mismatch in userCouponInfo and dbCouponInfo
+        if (userCoupon.dynamicRows.length !== match.dynamicRows.length) {
+          failedConditions.push(
+            `condition not satisfied '${userCoupon.selectedCouponType}'`,
+          );
+          continue;
+        }
+
+        for (let i = 0; i < userCoupon.dynamicRows.length; i++) {
+          const userRow = userCoupon.dynamicRows[i];
+          const dbRow = match.dynamicRows[i];
+
+          if (
+            !(
+              userRow.type === dbRow.type &&
+              userRow.operator === dbRow.operator &&
+              userRow.value === dbRow.value
+            )
+          ) {
+            failedConditions.push(
+              `No matching condition '${userCoupon.selectedCouponType}'`,
+            );
+            continue;
+          }
+        }
+      }
+    }
+
+    if (failedConditions.length > 0) {
+      return {
+        valid: false,
+        message: `Coupon not applicable: \n${failedConditions.join('\n')}`,
+      };
+    }
+
+    return { valid: true, message: 'Coupon is applicable.' };
+  }
+
+  validateSimpleCouponConditions(userCouponInfo, dbCouponInfo, couponType) {
+    const failedConditions: any = [];
+    for (const userCoupon of userCouponInfo.conditions) {
+      const matched = dbCouponInfo.find((cond: any) => {
+        const baseMatch =
+          cond.type === userCoupon.type &&
+          (cond.operator === '' && cond.value === ''
+            ? true
+            : cond.operator === userCoupon.operator &&
+              String(cond.value) === String(userCoupon.value));
+
+        if (couponType.coupon_type === 'VEHICLE_SPECIFIC') {
+          const makeMatch =
+            userCoupon.make !== undefined
+              ? cond.make === userCoupon.make
+              : true;
+          const yearMatch =
+            userCoupon.year !== undefined
+              ? cond.year === userCoupon.year
+              : true;
+          const modelMatch =
+            userCoupon.model !== undefined
+              ? cond.model === userCoupon.model
+              : true;
+
+          const variantMatch =
+            userCoupon.variant !== undefined
+              ? Array.isArray(cond.variant) &&
+                Array.isArray(userCoupon.variant) &&
+                cond.variant.length === userCoupon.variant.length &&
+                cond.variant.every((v: any) => userCoupon.variant.includes(v))
+              : true;
+
+          return (
+            baseMatch && makeMatch && yearMatch && modelMatch && variantMatch
+          );
+        }
+
+        return baseMatch;
+      });
+
+      if (!matched) {
+        failedConditions.push(`Missing condition: "${userCoupon.type}"`);
+        continue;
+      }
+    }
+
+    if (failedConditions.length > 0) {
+      return {
+        valid: false,
+        message: `Coupon not applicable:\n${failedConditions.join('\n')}`,
+      };
+    }
+
+    return { valid: true, message: 'Coupon is applicable.' };
+  }
+
+  async checkAlreadyRedeemCoupon(customer_uuid, coupon_uuid) {
+    const previousRewards = await this.customeractivityRepo.find({
+      where: {
+        customer_uuid: customer_uuid,
+        coupon_uuid: coupon_uuid,
+      },
+    });
+
+    if (previousRewards.length) {
+      throw new BadRequestException('Already redeemed this coupon');
     }
   }
 }

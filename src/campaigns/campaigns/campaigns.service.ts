@@ -414,10 +414,10 @@ export class CampaignsService {
       throw new NotFoundException(`Campaign with ID ${id} not found`);
 
     // Use lodash.omit to remove `id` from each customerSegment
-    campaign.customerSegments = campaign.customerSegments.map((cs: any) => {
-      const segment = cs.segment ? omit(cs.segment, 'id') : {};
-      return segment;
-    });
+    // campaign.customerSegments = campaign.customerSegments.map((cs: any) => {
+    //   const segment = cs.segment ? omit(cs.segment, 'id') : {};
+    //   return segment;
+    // });
 
     return campaign;
   }
