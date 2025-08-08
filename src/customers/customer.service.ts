@@ -371,9 +371,8 @@ export class CustomerService {
 
     // Step 1: Resolve matching rule
     const matchedRule = await this.getRule(rule_info.uuid, order);
-    console.log('matchedRule', matchedRule);
     if (!matchedRule) {
-      throw new BadRequestException('No rule found for this event.');
+      throw new BadRequestException('No earning rule found for this event.');
     }
 
     this.validateSpecialConditions(matchedRule, wallet, rule_info);
