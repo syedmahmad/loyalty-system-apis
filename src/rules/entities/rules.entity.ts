@@ -86,6 +86,9 @@ export class Rule {
     }
   }
 
+  @Column({ type: 'varchar', nullable: true })
+  reward_condition: string;
+
   @Column({ default: 0 })
   created_by: number;
 

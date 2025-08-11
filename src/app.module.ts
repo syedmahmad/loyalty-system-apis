@@ -27,6 +27,7 @@ import { QrCodesModule } from './qr_codes/qr_codes.module';
 import { LoyaltyAnalyticsModule } from './analytics/analytics.module';
 import { GateWayLogModule } from './gateway-logs/log.module';
 import { decrypt } from './utils/decrypt';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
@@ -53,6 +54,7 @@ import { decrypt } from './utils/decrypt';
         };
       },
     }),
+    ScheduleModule.forRoot(),
     UsersModule,
     CampaignModule,
     CustomerModule,

@@ -7,14 +7,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as QRCode from 'qrcode';
-import {
-  In,
-  LessThanOrEqual,
-  MoreThanOrEqual,
-  Not,
-  Raw,
-  Repository,
-} from 'typeorm';
+import { In, LessThanOrEqual, MoreThanOrEqual, Not, Repository } from 'typeorm';
 import { BulkCreateCustomerDto } from './dto/create-customer.dto';
 import { Request } from 'express';
 import * as dayjs from 'dayjs';
@@ -38,6 +31,11 @@ import { CampaignCoupons } from 'src/campaigns/entities/campaign-coupon.entity';
 import { CouponTypeService } from 'src/coupon_type/coupon_type/coupon_type.service';
 import { CustomerSegmentMember } from 'src/customer-segment/entities/customer-segment-member.entity';
 import { Campaign } from 'src/campaigns/entities/campaign.entity';
+import { Coupon } from 'src/coupons/entities/coupon.entity';
+import {
+  CouponStatus,
+  UserCoupon,
+} from 'src/wallet/entities/user-coupon.entity';
 
 @Injectable()
 export class CustomerService {
@@ -68,6 +66,11 @@ export class CustomerService {
     private readonly customerSegmentMemberRepository: Repository<CustomerSegmentMember>,
     @InjectRepository(Campaign)
     private readonly campaignRepository: Repository<Campaign>,
+    @InjectRepository(Coupon)
+    private readonly couponRepo: Repository<Coupon>,
+
+    @InjectRepository(UserCoupon)
+    private userCouponRepo: Repository<UserCoupon>,
   ) {}
 
   async createCustomer(req: Request, dto: BulkCreateCustomerDto) {
@@ -423,6 +426,14 @@ export class CustomerService {
       );
     }
 
+    if (
+      rule.reward_condition === 'perAmount' &&
+      amount >= rule?.min_amount_spent
+    ) {
+      const multiplier = amount / rule?.min_amount_spent;
+      rule.reward_points = multiplier * rule.reward_points;
+    }
+
     return rule;
   }
 
@@ -533,7 +544,10 @@ export class CustomerService {
 
       await this.createCustomerActivity(customerActivityPayload);
 
-      return transactionRes;
+      return {
+        success: true,
+        point: Number(transactionRes.amount),
+      };
     } catch (error: any) {
       const message =
         error?.response?.data?.message || 'Failed to create wallet transaction';
@@ -713,6 +727,14 @@ export class CustomerService {
           }
         }
 
+        if (
+          rule.reward_condition === 'perAmount' &&
+          total_amount >= rule?.min_amount_spent
+        ) {
+          const multiplier = Math.floor(total_amount / rule?.min_amount_spent);
+          rule.reward_points = multiplier * rule.reward_points;
+        }
+
         rule['reward_points'] = rule.reward_points * conversionRate;
         return { campaign_uuid: campaign.uuid, matchedRule: rule };
       }
@@ -749,7 +771,7 @@ export class CustomerService {
     }
   }
 
-  async checkAlreadyRewaredCoupons(customer_uuid, coupon_uuid) {
+  async checkAlreadyRewaredCoupons(customer_uuid, coupon_uuid, coupon) {
     const previousRewards = await this.customeractivityRepo.find({
       where: {
         customer_uuid: customer_uuid,
@@ -757,9 +779,19 @@ export class CustomerService {
       },
     });
 
-    if (previousRewards.length) {
-      throw new BadRequestException('Already rewarded Coupon');
+    // Check per-user limit
+    if (
+      coupon.max_usage_per_user &&
+      previousRewards.length >= coupon.max_usage_per_user
+    ) {
+      throw new BadRequestException(
+        'You have reached the maximum usage limit for this coupon',
+      );
     }
+
+    // if (previousRewards.length) {
+    //   throw new BadRequestException('Already rewarded Coupon');
+    // }
   }
 
   async handleCampaignCoupons(bodyPayload) {
@@ -841,17 +873,29 @@ export class CustomerService {
         where: {
           campaign: { id: campaignId },
           coupon: {
-            status: 1,
+            // status: 1,
             uuid: coupon_info.uuid,
           },
         },
         relations: ['coupon'],
       });
 
+      // Coupon Not Found
       if (!campaignCoupon) {
         throw new BadRequestException('Coupon not found');
       }
+
       const coupon = campaignCoupon.coupon;
+
+      // Coupon is expried
+      const now = new Date();
+      if (coupon.date_to && coupon.date_to < now && coupon?.status === 0) {
+        throw new BadRequestException('This coupon has been expired!');
+      }
+
+      // Coupon is inactive
+      if (coupon.status === 0)
+        throw new BadRequestException('Coupon is not active');
 
       if (coupon?.complex_coupon && coupon?.complex_coupon.length >= 1) {
         const conditions = coupon?.complex_coupon;
@@ -902,9 +946,25 @@ export class CustomerService {
         }
       }
 
+      // Check total usage limit
+      if (
+        coupon.usage_limit &&
+        coupon.number_of_times_used >= coupon.usage_limit
+      ) {
+        const errMsgEn =
+          coupon.errors?.general_error_message_en ||
+          'Coupon usage limit reached';
+        const errMsgAr =
+          coupon.errors?.general_error_message_ar ||
+          'تم الوصول إلى الحد الأقصى لاستخدام القسيمة';
+
+        throw new BadRequestException(`${errMsgEn} / ${errMsgAr}`);
+      }
+
       await this.checkAlreadyRewaredCoupons(
         wallet.customer.uuid,
         campaignCoupon?.coupon.uuid,
+        coupon,
       );
 
       if (
@@ -961,7 +1021,25 @@ export class CustomerService {
 
         await this.createCustomerActivity(customerActivityPayload);
 
-        return transactionRes;
+        const userCouponPayload = {
+          coupon_code: coupon.code,
+          status: CouponStatus.USED,
+          redeemed_at: new Date(),
+          customerId: wallet.customer.id,
+          business_unit_id: wallet.business_unit.id,
+          issued_from_type: 'coupon',
+          issued_from_id: coupon.id,
+        };
+
+        await this.userCouponRepo.save(userCouponPayload);
+
+        coupon.number_of_times_used = Number(coupon?.number_of_times_used + 1);
+        await this.couponRepo.save(coupon);
+
+        return {
+          success: true,
+          amount: Number(transactionRes.amount),
+        };
       } catch (error: any) {
         const message =
           error?.response?.data?.message ||

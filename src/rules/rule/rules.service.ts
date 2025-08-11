@@ -50,6 +50,7 @@ export class RulesService {
         condition_value: dto.condition_value,
         status: 1, // Default to active,
         burn_type: dto?.burn_type || null,
+        reward_condition: dto?.reward_condition || null,
       });
 
       const savedRule = await queryRunner.manager.save(rule);
@@ -93,6 +94,7 @@ export class RulesService {
         'burn_type',
         'status',
         'uuid',
+        'reward_condition',
       ],
       where: {
         tenant_id: client_id,
@@ -141,6 +143,7 @@ export class RulesService {
         'frequency',
         'burn_type',
         'status',
+        'reward_condition',
       ],
       where: {
         tenant_id: tenant.id,
@@ -170,6 +173,7 @@ export class RulesService {
         'frequency',
         'burn_type',
         'status',
+        'reward_condition',
       ],
       where: { uuid },
     });
@@ -207,6 +211,7 @@ export class RulesService {
       rule.updated_by = dto.updated_by ?? rule.updated_by;
       rule.frequency = dto.frequency ?? rule.frequency;
       rule.burn_type = dto.burn_type ?? rule.burn_type;
+      rule.reward_condition = dto.reward_condition ?? rule.reward_condition;
 
       await manager.save(rule);
       await queryRunner.commitTransaction();

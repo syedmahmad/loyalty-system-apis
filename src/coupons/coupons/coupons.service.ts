@@ -6,7 +6,14 @@ import {
 } from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import axios from 'axios';
-import { DataSource, ILike, In, Not, Repository } from 'typeorm';
+import {
+  DataSource,
+  ILike,
+  In,
+  LessThanOrEqual,
+  Not,
+  Repository,
+} from 'typeorm';
 import { CreateCouponDto } from '../dto/create-coupon.dto';
 import { UpdateCouponDto } from '../dto/update-coupon.dto';
 import { Coupon } from '../entities/coupon.entity';
@@ -25,6 +32,7 @@ import {
   CouponStatus,
   UserCoupon,
 } from 'src/wallet/entities/user-coupon.entity';
+import { Cron, CronExpression } from '@nestjs/schedule';
 
 @Injectable()
 export class CouponsService {
@@ -57,7 +65,10 @@ export class CouponsService {
     private readonly customeractivityRepo: Repository<CustomerActivity>,
 
     @InjectRepository(UserCoupon)
-    private couponRepo: Repository<UserCoupon>,
+    private userCouponRepo: Repository<UserCoupon>,
+
+    @InjectRepository(Coupon)
+    private readonly couponRepo: Repository<Coupon>,
 
     private readonly couponTypeService: CouponTypeService,
     private readonly tiersService: TiersService,
@@ -531,13 +542,16 @@ export class CouponsService {
         issued_from_id: couponInfo.id,
       };
 
-      await this.couponRepo.save(userCouponPayload);
+      await this.userCouponRepo.save(userCouponPayload);
+
+      couponInfo.number_of_times_used = Number(
+        couponInfo?.number_of_times_used + 1,
+      );
+      await this.couponRepo.save(couponInfo);
 
       return {
-        type: transactionRes.type,
-        status: transactionRes.status,
+        success: true,
         amount: transactionRes.amount,
-        description: transactionRes.description,
       };
     } catch (error: any) {
       const message =
@@ -708,6 +722,23 @@ export class CouponsService {
 
     if (previousRewards.length) {
       throw new BadRequestException('Already redeemed this coupon');
+    }
+  }
+
+  @Cron(CronExpression.EVERY_5_SECONDS)
+  async markExpiredCoupons() {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    console.log('Running coupon expiry check...');
+
+    const expiredCoupons = await this.couponsRepository.find({
+      where: { date_to: LessThanOrEqual(today), status: 1 },
+    });
+
+    for (const coupon of expiredCoupons) {
+      coupon.status = 0;
+      await this.couponsRepository.save(coupon);
+      console.log(`Deactivated coupon: ${coupon.coupon_title}`);
     }
   }
 }

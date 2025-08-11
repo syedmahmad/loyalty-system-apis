@@ -81,6 +81,10 @@ export class CreateRuleDto {
   @IsString()
   burn_type?: string;
 
+  @IsOptional()
+  @IsString()
+  reward_condition?: string;
+
   @IsNumber()
   created_by: number;
 }

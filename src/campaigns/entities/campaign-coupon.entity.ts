@@ -16,4 +16,5 @@ export class CampaignCoupons {
   @ManyToOne(() => Coupon, { eager: true })
   @JoinColumn({ name: 'coupon_id' })
   coupon: Coupon;
+  status: number;
 }
