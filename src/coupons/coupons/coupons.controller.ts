@@ -51,6 +51,11 @@ export class CouponsController {
     return await this.service.create(dto, user.uuid);
   }
 
+  @Get('/check-existing-code')
+  async checkExistingCode(@Query('code') code: string) {
+    return await this.service.checkExistingCode(code);
+  }
+
   @Get('/:client_id')
   async findAll(
     @Param('client_id') client_id: number,

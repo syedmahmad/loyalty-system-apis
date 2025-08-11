@@ -27,7 +27,7 @@ export class UserCoupon {
   @JoinColumn({ name: 'business_unit_id' })
   business_unit: BusinessUnit;
 
-  @Column({ unique: true })
+  @Column()
   coupon_code: string;
 
   @Column({ type: 'enum', enum: CouponStatus })

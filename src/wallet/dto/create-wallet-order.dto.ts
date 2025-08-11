@@ -46,4 +46,20 @@ export class CreateWalletOrderDto {
 
   delivery_date?: Date;
   order_date?: Date;
+
+  @IsOptional()
+  @IsString()
+  store_id?: string;
+
+  @IsOptional()
+  @IsString()
+  product_type?: string;
+
+  @IsOptional()
+  @IsString()
+  qualtiy?: string;
+
+  @IsOptional()
+  @IsString()
+  quantity?: string;
 }

@@ -887,8 +887,14 @@ export class CustomerService {
 
       const coupon = campaignCoupon.coupon;
 
-      // Coupon is expried
       const now = new Date();
+
+      // Check From Date
+      if (coupon.date_from && now < coupon.date_from) {
+        throw new BadRequestException('Coupon is not yet valid');
+      }
+
+      // Coupon is expried
       if (coupon.date_to && coupon.date_to < now && coupon?.status === 0) {
         throw new BadRequestException('This coupon has been expired!');
       }
@@ -897,7 +903,42 @@ export class CustomerService {
       if (coupon.status === 0)
         throw new BadRequestException('Coupon is not active');
 
-      if (coupon?.complex_coupon && coupon?.complex_coupon.length >= 1) {
+      // Check reuse interval for this user
+      const lastUsage = await this.userCouponRepo.findOne({
+        where: { customer: { id: customerId }, coupon_code: coupon.code },
+        order: { redeemed_at: 'DESC' },
+      });
+
+      if (lastUsage && coupon.reuse_interval > 0) {
+        const nextAvailable = new Date(lastUsage.redeemed_at);
+        nextAvailable.setDate(nextAvailable.getDate() + coupon.reuse_interval);
+
+        if (now < nextAvailable) {
+          throw new BadRequestException(
+            `You can reuse this coupon after ${nextAvailable.toDateString()}`,
+          );
+        }
+      }
+
+      // Check total usage limit
+      if (
+        coupon.usage_limit &&
+        coupon.number_of_times_used >= coupon.usage_limit
+      ) {
+        const errMsgEn =
+          coupon.errors?.general_error_message_en ||
+          'Coupon usage limit reached';
+        const errMsgAr =
+          coupon.errors?.general_error_message_ar ||
+          'تم الوصول إلى الحد الأقصى لاستخدام القسيمة';
+
+        throw new BadRequestException(`${errMsgEn} / ${errMsgAr}`);
+      }
+
+      if (
+        // coupon?.complex_coupon && coupon?.complex_coupon.length >= 1
+        coupon?.coupon_type_id === null
+      ) {
         const conditions = coupon?.complex_coupon;
         const result = await this.validateComplexCouponConditions(
           coupon_info.complex_coupon,
@@ -908,7 +949,9 @@ export class CustomerService {
         if (!result.valid) {
           throw new BadRequestException(result.message);
         }
-      } else if (coupon?.conditions) {
+      }
+      // else if (coupon?.conditions) {
+      else {
         const couponType = await this.couponTypeService.findOne(
           coupon?.coupon_type_id,
         );
@@ -934,6 +977,25 @@ export class CustomerService {
           );
           coupon.discount_type = 'percentage_discount';
           coupon.discount_price = cutomerFallInTier.value;
+        } else if (couponType.coupon_type === 'USER_SPECIFIC') {
+          const decryptedEmail = await this.ociService.decryptData(
+            wallet.customer.email,
+          );
+          const decryptedPhone = await this.ociService.decryptData(
+            wallet.customer.phone,
+          );
+          const isApplicableForUser = await this.matchConditions(
+            coupon_info.conditions,
+            {
+              email: decryptedEmail,
+              phone_number: decryptedPhone,
+            },
+          );
+          if (!isApplicableForUser) {
+            throw new BadRequestException(
+              "you're not eligible for this coupon",
+            );
+          }
         } else {
           const result = this.validateSimpleCouponConditions(
             coupon_info,
@@ -944,21 +1006,6 @@ export class CustomerService {
             throw new BadRequestException(result.message);
           }
         }
-      }
-
-      // Check total usage limit
-      if (
-        coupon.usage_limit &&
-        coupon.number_of_times_used >= coupon.usage_limit
-      ) {
-        const errMsgEn =
-          coupon.errors?.general_error_message_en ||
-          'Coupon usage limit reached';
-        const errMsgAr =
-          coupon.errors?.general_error_message_ar ||
-          'تم الوصول إلى الحد الأقصى لاستخدام القسيمة';
-
-        throw new BadRequestException(`${errMsgEn} / ${errMsgAr}`);
       }
 
       await this.checkAlreadyRewaredCoupons(
@@ -1025,8 +1072,8 @@ export class CustomerService {
           coupon_code: coupon.code,
           status: CouponStatus.USED,
           redeemed_at: new Date(),
-          customerId: wallet.customer.id,
-          business_unit_id: wallet.business_unit.id,
+          customer: { id: wallet.customer.id },
+          business_unit: { id: wallet.business_unit.id },
           issued_from_type: 'coupon',
           issued_from_id: coupon.id,
         };
@@ -1203,5 +1250,35 @@ export class CustomerService {
     }
 
     return { valid: true, message: 'Coupon is applicable.' };
+  }
+
+  matchConditions(couponConditions, customer) {
+    return couponConditions.every((condition) => {
+      const valuesArray = condition.value.split(',').map((v) => v.trim());
+
+      switch (condition.type) {
+        case 'EMAIL': {
+          return condition.operator === '=='
+            ? valuesArray.includes(customer.email)
+            : !valuesArray.includes(customer.email);
+        }
+
+        case 'PHONE_NUMBER': {
+          return condition.operator === '=='
+            ? valuesArray.includes(customer.phone_number)
+            : !valuesArray.includes(customer.phone_number);
+        }
+
+        // case 'NOT_APPLICABLE':
+        //   return condition.operator === '=='
+        //     ? valuesArray.includes(customer.email) ||
+        //         valuesArray.includes(customer.phone_number)
+        //     : !valuesArray.includes(customer.email) &&
+        //         !valuesArray.includes(customer.phone_number);
+
+        default:
+          return false;
+      }
+    });
   }
 }

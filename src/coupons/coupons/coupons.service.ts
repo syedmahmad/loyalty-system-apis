@@ -431,8 +431,67 @@ export class CouponsService {
     });
 
     if (!couponInfo) throw new NotFoundException('Coupon not found');
+    const now = new Date();
 
-    if (couponInfo?.complex_coupon && couponInfo?.complex_coupon.length >= 1) {
+    // Check From Date
+    if (couponInfo.date_from && now < couponInfo.date_from) {
+      throw new BadRequestException('Coupon is not yet valid');
+    }
+
+    // Coupon is expried
+    if (
+      couponInfo.date_to &&
+      couponInfo.date_to < now &&
+      couponInfo?.status === 0
+    ) {
+      throw new BadRequestException('This coupon has been expired!');
+    }
+
+    // Coupon is inactive
+    if (couponInfo.status === 0)
+      throw new BadRequestException('Coupon is not active');
+
+    // Check reuse interval for this user
+    const lastUsage = await this.userCouponRepo.findOne({
+      where: {
+        customer: { id: wallet.customer.id },
+        coupon_code: couponInfo.code,
+      },
+      order: { redeemed_at: 'DESC' },
+    });
+
+    if (lastUsage && couponInfo.reuse_interval > 0) {
+      const nextAvailable = new Date(lastUsage.redeemed_at);
+      nextAvailable.setDate(
+        nextAvailable.getDate() + couponInfo.reuse_interval,
+      );
+
+      if (now < nextAvailable) {
+        throw new BadRequestException(
+          `You can reuse this coupon after ${nextAvailable.toDateString()}`,
+        );
+      }
+    }
+
+    // Check total usage limit
+    if (
+      couponInfo.usage_limit &&
+      couponInfo.number_of_times_used >= couponInfo.usage_limit
+    ) {
+      const errMsgEn =
+        couponInfo.errors?.general_error_message_en ||
+        'Coupon usage limit reached';
+      const errMsgAr =
+        couponInfo.errors?.general_error_message_ar ||
+        'تم الوصول إلى الحد الأقصى لاستخدام القسيمة';
+
+      throw new BadRequestException(`${errMsgEn} / ${errMsgAr}`);
+    }
+
+    if (
+      // couponInfo?.complex_coupon && couponInfo?.complex_coupon.length >= 1
+      couponInfo?.coupon_type_id === null
+    ) {
       const result = await this.validateComplexCouponConditions(
         coupon_info.complex_coupon,
         couponInfo?.complex_coupon,
@@ -442,7 +501,9 @@ export class CouponsService {
       if (!result.valid) {
         throw new BadRequestException(result.message);
       }
-    } else if (couponInfo?.conditions) {
+    }
+    // else if (couponInfo?.conditions) {
+    else {
       const couponType = await this.couponTypeService.findOne(
         couponInfo?.coupon_type_id,
       );
@@ -478,6 +539,7 @@ export class CouponsService {
         }
       }
     }
+
     await this.checkAlreadyRedeemCoupon(wallet.customer.uuid, coupon_info.uuid);
 
     if (
@@ -539,8 +601,8 @@ export class CouponsService {
         coupon_code: couponInfo.code,
         status: CouponStatus.USED,
         redeemed_at: new Date(),
-        customerId: wallet.customer.id,
-        business_unit_id: wallet.business_unit.id,
+        customer: { id: wallet.customer.id },
+        business_unit: { id: wallet.business_unit.id },
         issued_from_type: 'coupon',
         issued_from_id: couponInfo.id,
       };
@@ -726,6 +788,24 @@ export class CouponsService {
     if (previousRewards.length) {
       throw new BadRequestException('Already redeemed this coupon');
     }
+  }
+
+  async checkExistingCode(code: string) {
+    const coupon = await this.couponsRepository.findOne({
+      where: { code },
+    });
+
+    if (!coupon) {
+      return {
+        success: false,
+        message: 'code does not exists',
+      };
+    }
+
+    return {
+      success: true,
+      message: 'This code already exists',
+    };
   }
 
   @Cron(CronExpression.EVERY_5_SECONDS)

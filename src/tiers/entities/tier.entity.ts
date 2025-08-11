@@ -59,8 +59,8 @@ export class Tier {
     }
   }
 
-  @Column({ nullable: true, type: 'text' })
-  benefits: string;
+  @Column({ nullable: true, type: 'simple-json' })
+  benefits: string[];
 
   @Column('int')
   created_by: number;

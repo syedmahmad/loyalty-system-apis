@@ -56,4 +56,16 @@ export class WalletOrder {
 
   @Column({ type: 'date', nullable: true })
   order_date: Date;
+
+  @Column({ nullable: true })
+  store_id?: string;
+
+  @Column({ nullable: true })
+  product_type?: string;
+
+  @Column({ nullable: true })
+  qualtiy?: string;
+
+  @Column({ nullable: true })
+  quantity?: string;
 }

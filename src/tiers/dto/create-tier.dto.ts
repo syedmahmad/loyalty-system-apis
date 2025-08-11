@@ -22,7 +22,7 @@ export class CreateTierDto {
 
   @IsString()
   @IsOptional()
-  benefits?: string;
+  benefits?: string[];
 
   created_by?: number;
 
