@@ -57,13 +57,17 @@ export class WalletService {
 
       const privileges: any[] = user.user_privileges || [];
 
+      const isSuperAdmin = privileges.some(
+        (p: any) => p.name === 'all_tenants',
+      );
+
       // check for global business unit access for this tenant
       const hasGlobalBusinessUnitAccess = privileges.some(
         (p) =>
           p.module === 'businessUnits' && p.name.includes('_All Business Unit'),
       );
 
-      if (!hasGlobalBusinessUnitAccess) {
+      if (!hasGlobalBusinessUnitAccess && !isSuperAdmin) {
         throw new BadRequestException(
           'User does not have permission to perform this action',
         );

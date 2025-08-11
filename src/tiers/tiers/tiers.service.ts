@@ -100,6 +100,8 @@ export class TiersService {
 
     const tenantName = tenant.name;
 
+    const isSuperAdmin = privileges.some((p: any) => p.name === 'all_tenants');
+
     // check for global business unit access for this tenant
     const hasGlobalBusinessUnitAccess = privileges.some(
       (p) =>
@@ -115,7 +117,7 @@ export class TiersService {
       };
     }
 
-    if (hasGlobalBusinessUnitAccess) {
+    if (hasGlobalBusinessUnitAccess || isSuperAdmin) {
       const tiers = await this.tiersRepository.find({
         where: { tenant_id: client_id, status: 1, ...optionalWhereClause },
         relations: { business_unit: true },

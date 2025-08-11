@@ -227,6 +227,8 @@ export class CampaignsService {
     if (!tenant) throw new BadRequestException('Tenant not found');
     const tenantName = tenant.name;
 
+    const isSuperAdmin = privileges.some((p: any) => p.name === 'all_tenants');
+
     const hasGlobalAccess = privileges.some(
       (p) =>
         p.module === 'businessUnits' &&
@@ -237,7 +239,7 @@ export class CampaignsService {
       optionalWhereClause = { name: ILike(`%${name}%`) };
     }
 
-    if (hasGlobalAccess) {
+    if (hasGlobalAccess || isSuperAdmin) {
       return this.campaignRepository.find({
         where: {
           tenant_id: Number(client_id),

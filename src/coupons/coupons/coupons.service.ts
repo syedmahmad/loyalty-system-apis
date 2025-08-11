@@ -141,6 +141,9 @@ export class CouponsService {
     }
 
     const tenantName = tenant.name;
+
+    const isSuperAdmin = privileges.some((p: any) => p.name === 'all_tenants');
+
     const hasGlobalAccess = privileges.some(
       (p) =>
         p.module === 'businessUnits' &&
@@ -150,7 +153,7 @@ export class CouponsService {
     const baseConditions = { status: Not(2), tenant_id: client_id };
     let whereClause = {};
 
-    if (hasGlobalAccess) {
+    if (hasGlobalAccess || isSuperAdmin) {
       whereClause = name
         ? [
             { ...baseConditions, code: ILike(`%${name}%`) },
