@@ -340,6 +340,7 @@ export class WalletService {
       wallet.total_balance = obj.total_balance;
     }
 
-    return this.walletRepo.save(wallet);
+    const data = await this.walletRepo.save(wallet);
+    return data;
   }
 }

@@ -1522,21 +1522,28 @@ export class CustomerService {
     });
   }
 
-  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
-  async handleCron() {
+  @Cron(CronExpression.EVERY_10_SECONDS)
+  async unLockWalletPointsAndAddThemInAvailableBalance() {
+    console.log('unLockWalletPointsAndAddThemInAvailableBalance');
     // 1. Find all wallet transactions where unlock_date is today or earlier and status is 'pending'
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    // const today = new Date();
 
     // Find all transactions that should be unlocked
+    // To handle date-only unlock_date (e.g., '2025-08-12') vs. JS Date (with time),
+    // we need to find all transactions where unlock_date is <= today (date part only).
+    // We'll use a raw query or Between/LessThanOrEqual with date string.
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Set to start of today
     const transactionsToUnlock = await this.txRepo.find({
       where: {
-        unlock_date: today,
+        unlock_date: LessThanOrEqual(today),
         status: WalletTransactionStatus.PENDING,
         type: WalletTransactionType.EARN,
       },
       relations: ['wallet'],
     });
+
+    // console.log('transactionsToUnlock', transactionsToUnlock, today);
 
     for (const tx of transactionsToUnlock) {
       const wallet = tx.wallet;
@@ -1544,11 +1551,11 @@ export class CustomerService {
 
       // Move points from locked_balance to available_balance, so picking how much locked points are for this transaction
       const amount = Number(tx.amount);
-
       // Update wallet balances
       wallet.locked_balance = Number(wallet.locked_balance) - amount;
       wallet.available_balance = Number(wallet.available_balance) + amount;
 
+      console.log('/////////////////////////////', wallet);
       // Update transaction status to 'active'
       tx.status = WalletTransactionStatus.ACTIVE;
 
