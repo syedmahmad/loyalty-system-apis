@@ -46,7 +46,12 @@ export class TiersService {
 
     try {
       // 1. Create and save the Tier
-      const tier = this.tiersRepository.create({ ...dto, status: 1 }); // Default to active status
+      const tier = this.tiersRepository.create({
+        ...dto,
+        status: 1,
+      }); // Default to active status
+
+      tier.benefits = dto.benefits;
       const savedTier = await queryRunner.manager.save(tier);
 
       // 2. Optionally create RuleTarget records
@@ -134,6 +139,7 @@ export class TiersService {
           //   }));
           return {
             ...tier,
+            benefits: tier.benefits,
             // rule_targets: targets
           };
         }),
@@ -183,8 +189,10 @@ export class TiersService {
         //     id: rt.id,
         //     rule_id: rt.rule_id,
         //   }));
+
         return {
           ...tier,
+          benefits: tier.benefits,
           // rule_targets: targets
         };
       }),
@@ -296,8 +304,10 @@ export class TiersService {
     //   rule_id: rt.rule_id,
     // }));
 
+    const benefits = tier.benefits;
     return {
       ...tier,
+      benefits,
       // rule_targets,
     };
   }
@@ -333,6 +343,7 @@ export class TiersService {
         tier.business_unit = bu;
       }
 
+      tier.benefits = dto.benefits;
       Object.assign(tier, dto);
       const updatedTier = await queryRunner.manager.save(tier);
 
