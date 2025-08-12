@@ -44,6 +44,9 @@ import { EarnWithEvent } from 'src/customers/dto/earn-with-event.dto';
 import { WalletSettings } from 'src/wallet/entities/wallet-settings.entity';
 import { WalletOrder } from 'src/wallet/entities/wallet-order.entity';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { BurnWithEvent } from './dto/burn-with-event.dto';
+import { omit } from 'lodash';
+import { Wallet } from 'src/wallet/entities/wallet.entity';
 
 @Injectable()
 export class CustomerService {
@@ -60,6 +63,8 @@ export class CustomerService {
     private readonly ruleRepo: Repository<Rule>,
     @InjectRepository(WalletTransaction)
     private txRepo: Repository<WalletTransaction>,
+    @InjectRepository(Wallet)
+    private walletRepo: Repository<Wallet>,
     @InjectRepository(WalletOrder)
     private WalletOrderrepo: Repository<WalletOrder>,
     @InjectRepository(WalletSettings)
@@ -558,6 +563,149 @@ export class CustomerService {
       available_balance: wallet.available_balance,
       locked_balance: wallet.locked_balance,
       total_balance: wallet.total_balance,
+    };
+  }
+
+  async burnWithEvent(bodyPayload: BurnWithEvent) {
+    const { customer_id, metadata, event } = bodyPayload;
+
+    if (!metadata.amount) {
+      throw new BadRequestException('Amount is required in metadata');
+    }
+
+    const total_amount = Number(metadata.amount);
+
+    const customerInfo = await this.customerRepo.find({
+      where: { uuid: customer_id },
+      relations: ['business_unit'],
+    });
+
+    const wallet = await this.walletRepo.findOne({
+      where: { customer: { uuid: customer_id } },
+      relations: ['business_unit'],
+    });
+
+    const customer = customerInfo[0];
+    if (!customer) throw new NotFoundException('Customer not found');
+
+    const rule = await this.ruleRepo.findOne({
+      where: { name: event, status: 1, rule_type: 'burn' },
+    });
+    if (!rule)
+      throw new NotFoundException('Burn rule not found for this campaign');
+
+    // Step 5: Validate rule conditions
+    if (total_amount < rule.min_amount_spent) {
+      throw new BadRequestException(
+        `Minimum amount to burn is ${rule.min_amount_spent}`,
+      );
+    }
+
+    if (wallet.available_balance < rule.max_redeemption_points_limit) {
+      throw new BadRequestException(
+        `You don't have enough loyalty points, ${rule.max_redeemption_points_limit} loyalty point are required for this campaign and you've ${wallet.available_balance} loyalty points`,
+      );
+    }
+
+    // Step 6: Determine applicable conversion rate
+    const conversionRate = rule.points_conversion_factor;
+
+    // Step 7: Calculate points and discount
+    let discountAmount = 0;
+    let pointsToBurn = 0;
+
+    if (rule.burn_type === 'FIXED') {
+      pointsToBurn = rule.max_redeemption_points_limit;
+      discountAmount = pointsToBurn * conversionRate;
+    } else if (rule.burn_type === 'PERCENTAGE') {
+      discountAmount = (total_amount * rule.max_burn_percent_on_invoice) / 100;
+      pointsToBurn = rule.max_redeemption_points_limit;
+    } else {
+      throw new BadRequestException('Invalid burn type in rule');
+    }
+
+    if (discountAmount > total_amount) {
+      throw new BadRequestException(
+        'Cannot gave discount because invoice amount is smaller than the discount amount',
+      );
+    }
+    // Step 8: Create burn transaction
+    // Import WalletTransactionType at the top if not already imported:
+    // import { WalletTransactionType } from 'src/wallet/entities/wallet-transaction.entity';
+    const burnPayload = {
+      customer_id: customer.id,
+      business_unit_id: customer.business_unit.id,
+      wallet_id: wallet.id,
+      type: WalletTransactionType.BURN,
+      amount: pointsToBurn,
+      status: WalletTransactionStatus.ACTIVE,
+      source_type: rule.name,
+      source_id: rule.id,
+      description: `Burned ${pointsToBurn} points for discount of ${discountAmount} on amount ${total_amount}`,
+    };
+
+    // 8. Now, we need to generate wallet_order if any
+    // const walletOrderId: number | null = null;
+    // Try to map metadata to wallet_order if possible (optional, depends on event)
+    // For event-based, wallet_order may not exist, so we keep it null
+    let walletOrderRes;
+    if (metadata) {
+      // Check if metadata is present, is an object, and contains 'amount'
+      if (
+        metadata &&
+        typeof metadata === 'object' &&
+        metadata.amount !== undefined
+      ) {
+        // You can access metadata.amount here if needed
+        // For example, you might want to log or process the amount
+        console.log('Amount in metadata:', metadata);
+        // Add any additional logic here as required
+
+        const walletOrder: Partial<WalletOrder> = {
+          wallet: wallet, // pass the full Wallet entity instance
+          // wallet_order_id: walletOrderId,
+          business_unit: wallet.business_unit, // pass the full BusinessUnit entity instance
+          amount: metadata.amount,
+          store_id: metadata.store_id,
+          product_type: metadata.product_type,
+          quantity: metadata.quantity as string,
+          discount: 0,
+          subtotal: 0,
+        };
+
+        // Save order or metatDataInfo
+        walletOrderRes = await this.WalletOrderrepo.save(walletOrder);
+      }
+    }
+
+    // Step 9: Create burn transaction in wallet
+
+    await this.walletService.addTransaction(
+      {
+        ...burnPayload,
+        wallet_order_id: walletOrderRes?.id,
+        wallet_id: wallet?.id,
+        business_unit_id: customer?.business_unit?.id,
+      },
+      customer?.id,
+      true,
+    );
+
+    const walletInfo = await this.walletRepo.findOne({
+      where: { id: wallet.id },
+      relations: ['business_unit'],
+    });
+
+    const updatedOrder = {
+      ...omit(walletOrderRes, ['wallet', 'business_unit']),
+      discount: discountAmount,
+      payable_amount: total_amount - discountAmount,
+    };
+
+    return {
+      message: 'Burn successful',
+      wallet: omit(walletInfo, ['customer', 'id', 'business_unit.id']),
+      order: updatedOrder,
     };
   }
 
