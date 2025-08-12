@@ -23,6 +23,7 @@ import { TiersService } from 'src/tiers/tiers/tiers.service';
 import { Rule } from 'src/rules/entities/rules.entity';
 import {
   WalletTransaction,
+  WalletTransactionStatus,
   WalletTransactionType,
 } from 'src/wallet/entities/wallet-transaction.entity';
 import { CampaignsService } from 'src/campaigns/campaigns/campaigns.service';
@@ -42,6 +43,7 @@ import {
 import { EarnWithEvent } from 'src/customers/dto/earn-with-event.dto';
 import { WalletSettings } from 'src/wallet/entities/wallet-settings.entity';
 import { WalletOrder } from 'src/wallet/entities/wallet-order.entity';
+import { Cron, CronExpression } from '@nestjs/schedule';
 
 @Injectable()
 export class CustomerService {
@@ -360,45 +362,44 @@ export class CustomerService {
 
     // 4. Check frequency and if user already got this reward
     // const alreadyRewarded = false;
-    if (rule.rule_type === 'event based earn') {
-      // Find previous wallet transaction for this event, customer, and business_unit
-      const txWhere: any = {
-        wallet: { id: wallet.id },
-        business_unit: { id: parseInt(BUId) },
-        type: 'earn',
-        source_type: event,
-      };
-      // if (walletOrderId) txWhere.wallet_order_id = walletOrderId;
+    // Find previous wallet transaction for this event, customer, and business_unit
+    const txWhere: any = {
+      wallet: { id: wallet.id },
+      business_unit: { id: parseInt(BUId) },
+      type: 'earn',
+      source_type: event,
+    };
+    // if (walletOrderId) txWhere.wallet_order_id = walletOrderId;
 
-      const previousTx = await this.txRepo.findOne({
-        where: txWhere,
-      });
+    const previousTx = await this.txRepo.findOne({
+      where: txWhere,
+      order: { created_at: 'DESC' },
+    });
 
-      // Frequency logic
-      if (rule.frequency === 'once' && previousTx) {
+    // Frequency logic
+    if (rule.frequency === 'once' && previousTx) {
+      throw new BadRequestException(
+        'Reward for this event already granted (once per customer)',
+      );
+    }
+    if (rule.frequency === 'daily' && previousTx) {
+      // Check if already rewarded today
+      const today = dayjs().startOf('day');
+      const txDate = dayjs(previousTx.created_at).startOf('day');
+      if (txDate.isSame(today)) {
         throw new BadRequestException(
-          'Reward for this event already granted (once per customer)',
+          'Reward for this event already granted today',
         );
       }
-      if (rule.frequency === 'daily' && previousTx) {
-        // Check if already rewarded today
-        const today = dayjs().startOf('day');
-        const txDate = dayjs(previousTx.created_at).startOf('day');
-        if (txDate.isSame(today)) {
-          throw new BadRequestException(
-            'Reward for this event already granted today',
-          );
-        }
-      }
-      if (rule.frequency === 'yearly' && previousTx) {
-        // Check if already rewarded this year
-        const thisYear = dayjs().year();
-        const txYear = dayjs(previousTx.created_at).year();
-        if (txYear === thisYear) {
-          throw new BadRequestException(
-            'Reward for this event already granted this year',
-          );
-        }
+    }
+    if (rule.frequency === 'yearly' && previousTx) {
+      // Check if already rewarded this year
+      const thisYear = dayjs().year();
+      const txYear = dayjs(previousTx.created_at).year();
+      if (txYear === thisYear) {
+        throw new BadRequestException(
+          'Reward for this event already granted this year',
+        );
       }
     }
     // 'anytime' means no restriction
@@ -419,7 +420,7 @@ export class CustomerService {
         const multiplier = Math.floor(Orderamount / rule.min_amount_spent);
         rewardPoints = multiplier * rewardPoints;
       } else if (
-        rule.reward_condition === 'min_spend' ||
+        rule.reward_condition === 'minimum' ||
         rule.reward_condition === null
       ) {
         if (Orderamount < rule.min_amount_spent) {
@@ -440,13 +441,10 @@ export class CustomerService {
       where: { business_unit: { id: parseInt(BUId) } },
     });
 
-    console.log('walletSettings', walletSettings);
-
     // 6. Check business unit's pending_method
     const pendingMethod = walletSettings?.pending_method || 'none';
     const pendingDays = walletSettings?.pending_days || 0;
-    // TODO: need to with cron job to unlcok these locked balance
-    console.log(pendingDays);
+    // Via the cron job to unlcok these locked balance on each midnight.
 
     // 7. Update wallet balances because it is priority
     if (pendingMethod === 'none') {
@@ -501,7 +499,6 @@ export class CustomerService {
         walletOrderRes = await this.WalletOrderrepo.save(walletOrder);
       }
     }
-    console.log('walletOrderRes', walletOrderRes);
 
     // 9. Create wallet_transaction
     const walletTransaction: Partial<WalletTransaction> = {
@@ -512,6 +509,10 @@ export class CustomerService {
       type: WalletTransactionType.EARN,
       source_type: event,
       amount: rewardPoints,
+      status:
+        pendingDays > 0
+          ? WalletTransactionStatus.PENDING
+          : WalletTransactionStatus.ACTIVE,
       description: `Earned ${rewardPoints} points ${event}`,
       // Set the unlock_date for the wallet transaction.
       // If there are pendingDays (i.e., points are locked for a period), set unlock_date to the date after pendingDays.
@@ -1509,5 +1510,43 @@ export class CustomerService {
           return false;
       }
     });
+  }
+
+  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
+  async handleCron() {
+    // 1. Find all wallet transactions where unlock_date is today or earlier and status is 'pending'
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // Find all transactions that should be unlocked
+    const transactionsToUnlock = await this.txRepo.find({
+      where: {
+        unlock_date: today,
+        status: WalletTransactionStatus.PENDING,
+        type: WalletTransactionType.EARN,
+      },
+      relations: ['wallet'],
+    });
+
+    for (const tx of transactionsToUnlock) {
+      const wallet = tx.wallet;
+      if (!wallet) continue;
+
+      // Move points from locked_balance to available_balance, so picking how much locked points are for this transaction
+      const amount = Number(tx.amount);
+
+      // Update wallet balances
+      wallet.locked_balance = Number(wallet.locked_balance) - amount;
+      wallet.available_balance = Number(wallet.available_balance) + amount;
+
+      // Update transaction status to 'active'
+      tx.status = WalletTransactionStatus.ACTIVE;
+
+      // Save changes
+      await this.walletService.updateWalletBalances(wallet.id, {
+        ...wallet,
+      });
+      await this.txRepo.save(tx);
+    }
   }
 }
