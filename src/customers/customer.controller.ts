@@ -17,6 +17,7 @@ import { CustomerService } from './customer.service';
 import { CreateCustomerActivityDto } from './dto/create-customer-activity.dto';
 import { BulkCreateCustomerDto } from './dto/create-customer.dto';
 import { CustomerEarnDto } from './dto/customer-earn.dto';
+import { EarnWithEvent } from 'src/customers/dto/earn-with-event.dto';
 
 @Controller('customers')
 export class CustomerController {
@@ -75,7 +76,11 @@ export class CustomerController {
 
   @Post('earn')
   async earnPoints(@Body() body: CustomerEarnDto) {
-    console.log('///////////////////////');
     return this.customerService.earnPoints(body);
+  }
+
+  @Post('earn_with_event')
+  async earnWithEvent(@Body() body: EarnWithEvent) {
+    return this.customerService.earnWithEvent(body);
   }
 }

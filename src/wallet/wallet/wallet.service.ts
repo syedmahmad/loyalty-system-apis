@@ -316,4 +316,30 @@ export class WalletService {
     });
     return await this.orderRepo.save(order);
   }
+
+  async updateWalletBalances(
+    walletId: number,
+    obj: {
+      available_balance?: number;
+      locked_balance?: number;
+      total_balance?: number;
+    },
+  ) {
+    const wallet = await this.walletRepo.findOne({ where: { id: walletId } });
+    if (!wallet) {
+      throw new BadRequestException('Wallet not found');
+    }
+
+    if (typeof obj.available_balance === 'number') {
+      wallet.available_balance = obj.available_balance;
+    }
+    if (typeof obj.locked_balance === 'number') {
+      wallet.locked_balance = obj.locked_balance;
+    }
+    if (typeof obj.total_balance === 'number') {
+      wallet.total_balance = obj.total_balance;
+    }
+
+    return this.walletRepo.save(wallet);
+  }
 }

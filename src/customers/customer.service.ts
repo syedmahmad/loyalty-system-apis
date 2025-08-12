@@ -21,7 +21,10 @@ import { QrcodesService } from '../qr_codes/qr_codes/qr_codes.service';
 import { CustomerActivity } from './entities/customer-activity.entity';
 import { TiersService } from 'src/tiers/tiers/tiers.service';
 import { Rule } from 'src/rules/entities/rules.entity';
-import { WalletTransaction } from 'src/wallet/entities/wallet-transaction.entity';
+import {
+  WalletTransaction,
+  WalletTransactionType,
+} from 'src/wallet/entities/wallet-transaction.entity';
 import { CampaignsService } from 'src/campaigns/campaigns/campaigns.service';
 import { CampaignCustomerSegment } from 'src/campaigns/entities/campaign-customer-segments.entity';
 import { CampaignRule } from 'src/campaigns/entities/campaign-rule.entity';
@@ -36,6 +39,9 @@ import {
   CouponStatus,
   UserCoupon,
 } from 'src/wallet/entities/user-coupon.entity';
+import { EarnWithEvent } from 'src/customers/dto/earn-with-event.dto';
+import { WalletSettings } from 'src/wallet/entities/wallet-settings.entity';
+import { WalletOrder } from 'src/wallet/entities/wallet-order.entity';
 
 @Injectable()
 export class CustomerService {
@@ -52,6 +58,10 @@ export class CustomerService {
     private readonly ruleRepo: Repository<Rule>,
     @InjectRepository(WalletTransaction)
     private txRepo: Repository<WalletTransaction>,
+    @InjectRepository(WalletOrder)
+    private WalletOrderrepo: Repository<WalletOrder>,
+    @InjectRepository(WalletSettings)
+    private walletSettingsRepo: Repository<WalletSettings>,
     private readonly campaignsService: CampaignsService,
     @InjectRepository(CampaignCustomerSegment)
     private readonly campaignCustomerSegmentRepo: Repository<CampaignCustomerSegment>,
@@ -320,6 +330,221 @@ export class CustomerService {
           ...bodyPayload,
           wallet,
         });
+  }
+
+  async earnWithEvent(bodyPayload: EarnWithEvent) {
+    const { customer_id, event, BUId, metadata } = bodyPayload;
+    // 1. Find customer by uuid
+    const customer = await this.customerRepo.findOne({
+      where: { uuid: customer_id, business_unit: { id: parseInt(BUId) } },
+    });
+    if (!customer) throw new NotFoundException('Customer not found');
+
+    // 2. Find earning rule by event name (case-insensitive)
+    const rule = await this.ruleRepo.findOne({
+      where: {
+        status: 1,
+        name: event,
+        rule_type: Not('burn'),
+        // event_triggerer: 'event based earn',
+      },
+    });
+    if (!rule)
+      throw new NotFoundException('Earning rule not found for this event');
+
+    // // 3. Get customer wallet info
+    const wallet = await this.walletService.getSingleCustomerWalletInfoById(
+      customer.id,
+    );
+    if (!wallet) throw new NotFoundException('Wallet not found');
+
+    // 4. Check frequency and if user already got this reward
+    // const alreadyRewarded = false;
+    if (rule.rule_type === 'event based earn') {
+      // Find previous wallet transaction for this event, customer, and business_unit
+      const txWhere: any = {
+        wallet: { id: wallet.id },
+        business_unit: { id: parseInt(BUId) },
+        type: 'earn',
+        source_type: event,
+      };
+      // if (walletOrderId) txWhere.wallet_order_id = walletOrderId;
+
+      const previousTx = await this.txRepo.findOne({
+        where: txWhere,
+      });
+
+      // Frequency logic
+      if (rule.frequency === 'once' && previousTx) {
+        throw new BadRequestException(
+          'Reward for this event already granted (once per customer)',
+        );
+      }
+      if (rule.frequency === 'daily' && previousTx) {
+        // Check if already rewarded today
+        const today = dayjs().startOf('day');
+        const txDate = dayjs(previousTx.created_at).startOf('day');
+        if (txDate.isSame(today)) {
+          throw new BadRequestException(
+            'Reward for this event already granted today',
+          );
+        }
+      }
+      if (rule.frequency === 'yearly' && previousTx) {
+        // Check if already rewarded this year
+        const thisYear = dayjs().year();
+        const txYear = dayjs(previousTx.created_at).year();
+        if (txYear === thisYear) {
+          throw new BadRequestException(
+            'Reward for this event already granted this year',
+          );
+        }
+      }
+    }
+    // 'anytime' means no restriction
+
+    // 5. Calculate reward points
+    let rewardPoints = rule.reward_points;
+    const Orderamount = metadata?.amount ? Number(metadata.amount) : undefined;
+
+    if (rule.rule_type === 'spend and earn') {
+      if (!Orderamount) {
+        throw new BadRequestException(
+          'Amount is required for spend and earn rule',
+        );
+      }
+      // in this case give rewards in the multple of what user spends.
+      if (rule.reward_condition === 'perAmount') {
+        // Points per amount spent
+        const multiplier = Math.floor(Orderamount / rule.min_amount_spent);
+        rewardPoints = multiplier * rewardPoints;
+      } else if (
+        rule.reward_condition === 'min_spend' ||
+        rule.reward_condition === null
+      ) {
+        if (Orderamount < rule.min_amount_spent) {
+          throw new BadRequestException(
+            `Minimum amount to earn points is ${rule.min_amount_spent}`,
+          );
+        }
+        // Give fixed reward points, I think, don't need to assign it again.
+        // rewardPoints = rule.reward_points;
+      }
+    }
+
+    if (!rewardPoints || rewardPoints <= 0) {
+      throw new BadRequestException('No reward points to grant');
+    }
+
+    const walletSettings = await this.walletSettingsRepo.findOne({
+      where: { business_unit: { id: parseInt(BUId) } },
+    });
+
+    console.log('walletSettings', walletSettings);
+
+    // 6. Check business unit's pending_method
+    const pendingMethod = walletSettings?.pending_method || 'none';
+    const pendingDays = walletSettings?.pending_days || 0;
+    // TODO: need to with cron job to unlcok these locked balance
+    console.log(pendingDays);
+
+    // 7. Update wallet balances because it is priority
+    if (pendingMethod === 'none') {
+      // Immediately add to available_balance and total_balance
+      wallet.available_balance += rewardPoints;
+      wallet.total_balance += rewardPoints;
+      await this.walletService.updateWalletBalances(wallet.id, {
+        available_balance: wallet.available_balance,
+        total_balance: wallet.total_balance,
+      });
+    } else if (pendingMethod === 'fixed_days') {
+      // Add to locked_balance and total_balance, available_balance unchanged
+      wallet.locked_balance += rewardPoints;
+      wallet.total_balance += rewardPoints;
+      await this.walletService.updateWalletBalances(wallet.id, {
+        locked_balance: wallet.locked_balance,
+        total_balance: wallet.total_balance,
+      });
+      // Cron job will unlock after pending_days
+    }
+
+    // 8. Now, we need to generate wallet_order if any
+    // const walletOrderId: number | null = null;
+    // Try to map metadata to wallet_order if possible (optional, depends on event)
+    // For event-based, wallet_order may not exist, so we keep it null
+    let walletOrderRes;
+    if (metadata) {
+      // Check if metadata is present, is an object, and contains 'amount'
+      if (
+        metadata &&
+        typeof metadata === 'object' &&
+        metadata.amount !== undefined
+      ) {
+        // You can access metadata.amount here if needed
+        // For example, you might want to log or process the amount
+        console.log('Amount in metadata:', metadata);
+        // Add any additional logic here as required
+
+        const walletOrder: Partial<WalletOrder> = {
+          wallet: wallet, // pass the full Wallet entity instance
+          // wallet_order_id: walletOrderId,
+          business_unit: wallet.business_unit, // pass the full BusinessUnit entity instance
+          amount: metadata.amount,
+          store_id: metadata.store_id,
+          product_type: metadata.product_type,
+          quantity: metadata.quantity as string,
+          discount: 0,
+          subtotal: 0,
+        };
+
+        // Save order or metatDataInfo
+        walletOrderRes = await this.WalletOrderrepo.save(walletOrder);
+      }
+    }
+    console.log('walletOrderRes', walletOrderRes);
+
+    // 9. Create wallet_transaction
+    const walletTransaction: Partial<WalletTransaction> = {
+      wallet: wallet, // pass the full Wallet entity instance
+      orders: walletOrderRes,
+      // wallet_order_id: walletOrderId,
+      business_unit: wallet.business_unit, // pass the full BusinessUnit entity instance
+      type: WalletTransactionType.EARN,
+      source_type: event,
+      amount: rewardPoints,
+      description: `Earned ${rewardPoints} points ${event}`,
+      // Set the unlock_date for the wallet transaction.
+      // If there are pendingDays (i.e., points are locked for a period), set unlock_date to the date after pendingDays.
+      // Otherwise, set unlock_date to null (no unlock needed).
+      unlock_date:
+        pendingDays > 0 ? dayjs().add(pendingDays, 'day').toDate() : null,
+
+      // Set the expiry_date for the wallet transaction.
+      // If the rule has a validity_after_assignment value:
+      //   - If there are pendingDays (i.e., points are locked for a period), expiry is after (pendingDays + validity_after_assignment) days.
+      //   - If there are no pendingDays, expiry is after validity_after_assignment days.
+      // If the rule does not have validity_after_assignment, expiry_date is null (no expiry).
+      expiry_date: rule.validity_after_assignment
+        ? pendingDays > 0
+          ? dayjs()
+              .add(pendingDays + rule.validity_after_assignment, 'day')
+              .toDate()
+          : dayjs().add(rule.validity_after_assignment, 'day').toDate()
+        : null,
+    };
+    // Save transaction
+    const savedTx = await this.txRepo.save(walletTransaction);
+    console.log('savedTx', savedTx);
+
+    return {
+      message: 'Points earned successfully',
+      points: rewardPoints,
+      status: walletTransaction.status,
+      transaction_id: savedTx.id,
+      available_balance: wallet.available_balance,
+      locked_balance: wallet.locked_balance,
+      total_balance: wallet.total_balance,
+    };
   }
 
   async handleCampaignEarning(payload) {

@@ -35,6 +35,8 @@ import { CouponTypeService } from 'src/coupon_type/coupon_type/coupon_type.servi
 import { CouponType } from 'src/coupon_type/entities/coupon_type.entity';
 import { CustomerSegmentMember } from 'src/customer-segment/entities/customer-segment-member.entity';
 import { UserCoupon } from 'src/wallet/entities/user-coupon.entity';
+import { WalletSettings } from 'src/wallet/entities/wallet-settings.entity';
+import { WalletOrder } from 'src/wallet/entities/wallet-order.entity';
 
 @Module({
   imports: [
@@ -45,6 +47,8 @@ import { UserCoupon } from 'src/wallet/entities/user-coupon.entity';
       QrCode,
       CustomerActivity,
       Tier,
+      WalletSettings,
+      WalletOrder,
       RuleTarget,
       Wallet,
       Tenant,
