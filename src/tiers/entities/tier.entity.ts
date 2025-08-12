@@ -63,7 +63,7 @@ export class Tier {
   private _benefits: string;
 
   get benefits(): string[] {
-    if (!this._benefits) return [];
+    if (!this._benefits) return [''];
     try {
       const parsed = JSON.parse(this._benefits);
       return Array.isArray(parsed) ? parsed : [parsed];

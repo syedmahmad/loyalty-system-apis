@@ -46,16 +46,20 @@ export class CustomerController {
   async getCustomerWithWallet(
     @Req() req: Request,
     @Param('id', ParseIntPipe) id: number,
-    @Query('page') page?: number,
+    @Query('pointPage') pointPage?: number,
+    @Query('couponPage') couponPage?: number,
     @Query('pageSize') pageSize?: number,
-    @Query('query') query?: string,
+    @Query('point-search-query') pointQuery?: string,
+    @Query('coupon-search-query') couponQuery?: string,
   ) {
     return this.customerService.getCustomerWithWalletAndTransactions(
       req,
       id,
-      page,
+      pointPage,
+      couponPage,
       pageSize,
-      query,
+      pointQuery,
+      couponQuery,
     );
   }
 
