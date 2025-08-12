@@ -24,6 +24,10 @@ export class CreateTierDto {
   @IsOptional()
   benefits?: string[];
 
+  @IsString()
+  @IsOptional()
+  description?: string;
+
   created_by?: number;
 
   // rule_targets?: {

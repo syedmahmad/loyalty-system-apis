@@ -59,8 +59,29 @@ export class Tier {
     }
   }
 
-  @Column({ nullable: true, type: 'simple-json' })
-  benefits: string[];
+  @Column({ nullable: true, type: 'text' })
+  private _benefits: string;
+
+  get benefits(): string[] {
+    if (!this._benefits) return [];
+    try {
+      const parsed = JSON.parse(this._benefits);
+      return Array.isArray(parsed) ? parsed : [parsed];
+    } catch {
+      return [this._benefits];
+    }
+  }
+
+  set benefits(value: string[] | string) {
+    if (Array.isArray(value)) {
+      this._benefits = JSON.stringify(value);
+    } else {
+      this._benefits = JSON.stringify([value]);
+    }
+  }
+
+  @Column({ nullable: true })
+  description: string;
 
   @Column('int')
   created_by: number;
