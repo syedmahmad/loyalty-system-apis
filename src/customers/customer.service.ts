@@ -560,7 +560,7 @@ export class CustomerService {
     const { amount } = order ?? {};
 
     switch (campaign_type) {
-      case 'DISCOUNT_POINTS': {
+      case 'POINTS': {
         // Step 1: get matching rule
         const { campaign_uuid, matchedRule } = await this.handleCampaignRules({
           customer_id: wallet.customer.id,
@@ -593,7 +593,7 @@ export class CustomerService {
           campaignId: campaign_uuid,
         });
       }
-      case 'DISCOUNT_COUPONS': {
+      case 'COUPONS': {
         return await this.handleCampaignCoupons({
           campaign_id,
           wallet,
@@ -831,6 +831,16 @@ export class CustomerService {
         switch (frequency) {
           case 'once': {
             return true;
+          }
+
+          case 'daily': {
+            const today = dayjs().startOf('day');
+            const rewardedDate = dayjs(reward.created_at).startOf('day');
+            if (rewardedDate.isSame(today)) {
+              throw new BadRequestException(
+                'Already rewarded today, try again tomorrow',
+              );
+            }
           }
 
           case 'yearly': {
