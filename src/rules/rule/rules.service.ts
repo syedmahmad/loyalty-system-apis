@@ -210,7 +210,7 @@ export class RulesService {
       rule.condition_value = dto.condition_value ?? rule.condition_value;
       rule.updated_by = dto.updated_by ?? rule.updated_by;
       rule.frequency = dto.frequency ?? rule.frequency;
-      rule.burn_type = dto.burn_type ?? rule.burn_type;
+      rule.burn_type = dto.burn_type ? rule.burn_type : null;
       rule.reward_condition = dto.reward_condition ?? rule.reward_condition;
 
       await manager.save(rule);
