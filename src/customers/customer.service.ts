@@ -258,9 +258,11 @@ export class CustomerService {
   async getCustomerWithWalletAndTransactions(
     req: Request,
     customerId: number,
-    page: number,
+    pointPage: number = 1,
+    couponPage: number = 1,
     pageSize: number,
-    query: string,
+    pointQuery: string,
+    couponQuery: string,
   ) {
     const customer = await this.customerRepo.findOne({
       where: { id: customerId },
@@ -269,12 +271,22 @@ export class CustomerService {
     const walletinfo = await this.walletService.getSingleCustomerWalletInfoById(
       customer.id,
     );
+
     const transactionInfo = await this.walletService.getWalletTransactions(
       walletinfo?.id,
-      page,
+      pointPage,
       pageSize,
-      query,
+      pointQuery,
     );
+
+    const couponTransactionInfo =
+      await this.walletService.getWalletTransactions(
+        walletinfo?.id,
+        couponPage,
+        pageSize,
+        couponQuery,
+        'coupon',
+      );
 
     const tiersInfo =
       await this.tiersService.getCurrentCustomerTier(customerId);
@@ -287,6 +299,7 @@ export class CustomerService {
       ...customer,
       wallet: walletinfo,
       transactions: transactionInfo,
+      couponTransactionInfo: couponTransactionInfo,
       tier: tiersInfo,
     };
   }
@@ -1275,7 +1288,7 @@ export class CustomerService {
         status: 'active',
         source_type: 'coupon',
         source_id: coupon.id,
-        description: `Earned ${earnPoints} points (${coupon?.coupon_title})`,
+        description: `Redeemed ${earnPoints} amount (${coupon?.coupon_title})`,
       };
 
       try {

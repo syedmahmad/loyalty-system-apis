@@ -10,7 +10,7 @@ import {
   WalletSettings,
   ExpirationMethod,
 } from '../entities/wallet-settings.entity';
-import { ILike, Repository } from 'typeorm';
+import { ILike, Not, Repository } from 'typeorm';
 import { CreateWalletDto } from '../dto/create-wallet.dto';
 import { CreateWalletTransactionDto } from '../dto/create-wallet-transaction.dto';
 import * as dayjs from 'dayjs';
@@ -208,22 +208,29 @@ export class WalletService {
     page: number = 1,
     pageSize: number = 7,
     query: string = '',
+    transactionType: string = 'points',
   ) {
     const take = pageSize;
     const skip = (page - 1) * take;
 
-    let whereClause: any = {
+    let whereClause: any;
+
+    const baseCondition = {
       wallet: { id: walletId },
+      ...(transactionType === 'points' && { source_type: Not('coupon') }),
+      ...(transactionType === 'coupon' && { source_type: 'coupon' }),
     };
 
     if (query) {
       const searchTerm = `%${query}%`;
       whereClause = [
-        { wallet: { id: walletId }, type: ILike(searchTerm) },
-        { wallet: { id: walletId }, amount: ILike(searchTerm) },
-        { wallet: { id: walletId }, status: ILike(searchTerm) },
-        { wallet: { id: walletId }, description: ILike(searchTerm) },
+        { ...baseCondition, type: ILike(searchTerm) },
+        { ...baseCondition, amount: ILike(searchTerm) },
+        { ...baseCondition, status: ILike(searchTerm) },
+        { ...baseCondition, description: ILike(searchTerm) },
       ];
+    } else {
+      whereClause = baseCondition;
     }
 
     const [data, total] = await this.txRepo.findAndCount({

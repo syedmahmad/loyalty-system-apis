@@ -563,7 +563,7 @@ export class CouponsService {
       status: 'active',
       source_type: 'coupon',
       source_id: couponInfo.id,
-      description: `Redeem ${earnPoints} points (${couponInfo?.coupon_title})`,
+      description: `Redeem ${earnPoints} amount (${couponInfo?.coupon_title})`,
     };
 
     try {
@@ -634,7 +634,7 @@ export class CouponsService {
   async validateComplexCouponConditions(
     userCouponInfo,
     dbCouponInfo,
-    wallet,
+    customer,
     coupon,
   ) {
     const failedConditions: any = [];
@@ -654,7 +654,7 @@ export class CouponsService {
 
       if (match.selectedCouponType === 'BIRTHDAY') {
         const today = new Date();
-        const dob = new Date(wallet.customer.DOB);
+        const dob = new Date(customer.DOB);
         const isBirthday =
           today.getDate() === dob.getDate() &&
           today.getMonth() === dob.getMonth();
@@ -667,7 +667,7 @@ export class CouponsService {
         }
       } else if (match.selectedCouponType === 'TIER_BASED') {
         const customerTierInfo = await this.tiersService.getCurrentCustomerTier(
-          wallet.customer.id,
+          customer.id,
         );
 
         const cutomerFallInTier = match.dynamicRows.find(
