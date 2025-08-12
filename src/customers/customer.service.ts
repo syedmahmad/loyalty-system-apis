@@ -296,7 +296,7 @@ export class CustomerService {
   }
 
   async earnPoints(bodyPayload: CustomerEarnDto) {
-    const { customer_id, campaign_type } = bodyPayload;
+    const { customer_id, campaign_type, campaign_id } = bodyPayload;
 
     // Step 1: Get Customer & Wallet Info
     const customer = await this.customerRepo.findOne({
@@ -308,6 +308,10 @@ export class CustomerService {
       customer.id,
     );
     if (!wallet) throw new NotFoundException('Wallet not found');
+
+    if (campaign_id && !campaign_type) {
+      throw new BadRequestException('campaign_type is missing');
+    }
 
     // Step 2: handling CampaignRuleEarning, SimpleRuleEarning and CampaignCouponEarning
     return campaign_type
