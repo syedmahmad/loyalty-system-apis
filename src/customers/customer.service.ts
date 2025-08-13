@@ -1002,6 +1002,21 @@ export class CustomerService {
                 'Already rewarded today, try again tomorrow',
               );
             }
+            break;
+          }
+
+          case 'monthly': {
+            const today = dayjs();
+            const rewardedDate = dayjs(reward.created_at);
+            if (
+              rewardedDate.month() === today.month() &&
+              rewardedDate.year() === today.year()
+            ) {
+              throw new BadRequestException(
+                'Already rewarded this month, try again next month',
+              );
+            }
+            break;
           }
 
           case 'yearly': {

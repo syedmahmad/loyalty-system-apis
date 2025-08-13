@@ -29,7 +29,7 @@ export class User {
   @Column({ type: 'varchar', nullable: false })
   user_role: string;
 
-  @Column({ type: 'json', nullable: true })
+  @Column({ type: 'simple-json', nullable: true })
   user_privileges: any; // use `Record<string, any>` or custom type if known
 
   @Column({ type: 'varchar', nullable: true })

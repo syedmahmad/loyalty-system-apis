@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository, InjectDataSource } from '@nestjs/typeorm';
 import { Repository, DataSource, ILike, FindOptionsWhere } from 'typeorm';
 import { CustomerSegment } from '../entities/customer-segment.entity';
@@ -35,8 +39,15 @@ export class CustomerSegmentsService {
     await queryRunner.startTransaction();
 
     try {
-      queryRunner.data = { user };
+      const checkSegmentExist = await this.segmentRepository.findOne({
+        where: { name: dto.name, status: 1 },
+      });
 
+      if (checkSegmentExist) {
+        throw new BadRequestException('Segment already exist with same name.');
+      }
+
+      queryRunner.data = { user };
       const repo = queryRunner.manager.getRepository(CustomerSegment);
       const segment = repo.create({
         ...dto,
@@ -44,8 +55,16 @@ export class CustomerSegmentsService {
       });
 
       const saved = await repo.save(segment);
-
       await queryRunner.commitTransaction();
+
+      if (saved.id) {
+        const customerIds = dto.selected_customer_ids || [];
+        for (let index = 0; index <= customerIds.length - 1; index++) {
+          const eachCustomerId = customerIds[index];
+          await this.addCustomerToSegment(saved.id, eachCustomerId);
+        }
+      }
+
       return saved;
     } catch (error) {
       await queryRunner.rollbackTransaction();
@@ -108,6 +127,7 @@ export class CustomerSegmentsService {
     const customer = await this.customerRepository.findOne({
       where: { id: customerId },
     });
+
     if (!customer) throw new NotFoundException('Customer not found');
 
     const existing = await this.memberRepository.findOne({
