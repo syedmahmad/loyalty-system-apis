@@ -65,12 +65,13 @@ export class RulesService {
   }
 
   findAll(client_id: number, name: string) {
-    let optionalWhereClause = {};
+    let optionalWhereClause: Record<string, any> = {};
 
     if (name) {
-      optionalWhereClause = {
-        name: ILike(`%${name}%`),
-      };
+      optionalWhereClause = [
+        { name: ILike(`%${name}%`) },
+        { rule_type: ILike(`%${name}%`) },
+      ];
     }
 
     return this.ruleRepository.find({
@@ -96,11 +97,16 @@ export class RulesService {
         'uuid',
         'reward_condition',
       ],
-      where: {
-        tenant_id: client_id,
-        ...optionalWhereClause,
-        status: 1, // Only active rules
-      },
+      where: name
+        ? optionalWhereClause.map((condition) => ({
+            tenant_id: client_id,
+            status: 1,
+            ...condition,
+          }))
+        : {
+            tenant_id: client_id,
+            status: 1,
+          },
     });
   }
 
