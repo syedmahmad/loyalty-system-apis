@@ -884,72 +884,97 @@ export class CustomerService {
     campaignId?: string;
   }) {
     const earnPoints = matchedRule.reward_points || 0;
-    const currentDate = new Date();
 
-    const payload: any = {
-      customer_id: wallet.customer.id,
-      business_unit_id: wallet.business_unit.id,
-      wallet_id: wallet.id,
-      type: 'earn',
-      amount: earnPoints,
-      status: 'active',
+    // 1. get wallet setting for specific business_unit
+    const walletSettings = await this.walletSettingsRepo.findOne({
+      where: { business_unit: { id: parseInt(wallet.business_unit.id) } },
+    });
+
+    // 2. Check business unit's pending_method
+    const pendingMethod = walletSettings?.pending_method || 'none';
+    const pendingDays = walletSettings?.pending_days || 0;
+
+    // 3. Update wallet balances because it is priority
+    if (pendingMethod === 'none') {
+      // Immediately add to available_balance and total_balance
+      wallet.available_balance += earnPoints;
+      wallet.total_balance += earnPoints;
+      await this.walletService.updateWalletBalances(wallet.id, {
+        available_balance: wallet.available_balance,
+        total_balance: wallet.total_balance,
+      });
+    } else if (pendingMethod === 'fixed_days') {
+      // Add to locked_balance and total_balance, available_balance unchanged
+      wallet.locked_balance += earnPoints;
+      wallet.total_balance += earnPoints;
+      await this.walletService.updateWalletBalances(wallet.id, {
+        locked_balance: wallet.locked_balance,
+        total_balance: wallet.total_balance,
+      });
+      // Cron job will unlock after pending_days
+    }
+
+    let walletOrderResponse;
+    if (order) {
+      const walletOrder: Partial<WalletOrder> = {
+        ...order,
+        wallet: wallet,
+        business_unit: wallet.business_unit,
+      };
+      walletOrderResponse = await this.WalletOrderrepo.save(walletOrder);
+    }
+
+    const walletTransaction: Partial<WalletTransaction> = {
+      wallet: wallet, // pass the full Wallet entity instance
+      orders: walletOrderResponse,
+      // wallet_order_id: walletOrderId,
+      business_unit: wallet.business_unit, // pass the full BusinessUnit entity instance
+      type: WalletTransactionType.EARN,
       source_type,
-      source_id: matchedRule.id,
+      amount: earnPoints,
+      status:
+        pendingDays > 0
+          ? WalletTransactionStatus.PENDING
+          : WalletTransactionStatus.ACTIVE,
       description: `Earned ${earnPoints} points (${matchedRule.name})`,
+      // Set the unlock_date for the wallet transaction.
+      // If there are pendingDays (i.e., points are locked for a period), set unlock_date to the date after pendingDays.
+      // Otherwise, set unlock_date to null (no unlock needed).
+      unlock_date:
+        pendingDays > 0 ? dayjs().add(pendingDays, 'day').toDate() : null,
+
+      // Set the expiry_date for the wallet transaction.
+      // If the rule has a validity_after_assignment value:
+      //   - If there are pendingDays (i.e., points are locked for a period), expiry is after (pendingDays + validity_after_assignment) days.
+      //   - If there are no pendingDays, expiry is after validity_after_assignment days.
+      // If the rule does not have validity_after_assignment, expiry_date is null (no expiry).
+      expiry_date: matchedRule.validity_after_assignment
+        ? pendingDays > 0
+          ? dayjs()
+              .add(pendingDays + matchedRule.validity_after_assignment, 'day')
+              .toDate()
+          : dayjs().add(matchedRule.validity_after_assignment, 'day').toDate()
+        : null,
     };
 
-    if (matchedRule.validity_after_assignment) {
-      payload.expiry_date = dayjs(currentDate)
-        .add(Number(matchedRule.validity_after_assignment), 'day')
-        .format('YYYY-MM-DD');
-    }
+    // Save transaction
+    const savedTx = await this.txRepo.save(walletTransaction);
 
-    try {
-      let wallet_order_id: number | null = null;
-      if (order) {
-        const orderRes = await this.walletService.addOrder({
-          ...order,
-          wallet_id: wallet.id,
-          business_unit_id: wallet.business_unit.id,
-        });
-        wallet_order_id = orderRes?.id || null;
-      }
+    const customerActivityPayload = {
+      customer_uuid: wallet.customer.uuid,
+      activity_type: 'rule',
+      campaign_uuid: campaignId ? campaignId : null,
+      rule_id: matchedRule.id,
+      rule_name: matchedRule.name,
+      amount: earnPoints,
+    };
 
-      const transactionRes = await this.walletService.addTransaction(
-        {
-          ...payload,
-          wallet_order_id,
-        },
-        null,
-        true,
-      );
+    await this.createCustomerActivity(customerActivityPayload);
 
-      const customerActivityPayload = {
-        customer_uuid: wallet.customer.uuid,
-        activity_type: 'rule',
-        campaign_uuid: campaignId ? campaignId : null,
-        rule_id: matchedRule.id,
-        rule_name: matchedRule.name,
-        amount: earnPoints,
-      };
-
-      await this.createCustomerActivity(customerActivityPayload);
-
-      return {
-        success: true,
-        point: Number(transactionRes.amount),
-      };
-    } catch (error: any) {
-      const message =
-        error?.response?.data?.message || 'Failed to create wallet transaction';
-      const status = error?.response?.status || 500;
-
-      if (status >= 400 && status < 500) {
-        throw new BadRequestException(message);
-      }
-
-      throw new InternalServerErrorException(message);
-    }
+    return {
+      success: true,
+      point: Number(savedTx.amount),
+    };
   }
 
   async checkAlreadyRewaredPoints(business_unit_id, wallet_id, matchedRule) {
@@ -1739,6 +1764,46 @@ export class CustomerService {
       await this.walletService.updateWalletBalances(wallet.id, {
         ...wallet,
       });
+      await this.txRepo.save(tx);
+    }
+  }
+
+  @Cron(CronExpression.EVERY_10_SECONDS)
+  async walletPointsExpiryCron() {
+    console.log('Wallet expire points cron started');
+
+    // Get start of today (midnight) to compare expiry dates
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // 1. Find all active EARN transactions whose points should expire today or earlier
+    const transactionsToExpire = await this.txRepo.find({
+      where: {
+        expiry_date: LessThanOrEqual(today),
+        status: WalletTransactionStatus.ACTIVE,
+        type: WalletTransactionType.EARN,
+      },
+      relations: ['wallet'],
+    });
+
+    // console.log('transactionsToExpire :::', transactionsToExpire);
+
+    // 2. Process each transaction
+    for (const tx of transactionsToExpire) {
+      const wallet = tx.wallet;
+      if (!wallet) continue; // Skip if wallet relation is missing
+
+      const amount = Number(tx.amount);
+
+      // Move expired points from available to locked balance
+      wallet.available_balance = Number(wallet.available_balance) - amount;
+      wallet.locked_balance = Number(wallet.locked_balance) + amount;
+
+      // Mark transaction as expired
+      tx.status = WalletTransactionStatus.EXPIRED;
+
+      // Save changes
+      await this.walletService.updateWalletBalances(wallet.id, { ...wallet });
       await this.txRepo.save(tx);
     }
   }

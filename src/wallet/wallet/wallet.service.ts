@@ -1,23 +1,23 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Wallet } from '../entities/wallet.entity';
+import * as dayjs from 'dayjs';
+import { User } from 'src/users/entities/user.entity';
+import { ILike, Not, Repository } from 'typeorm';
+import { CreateWalletOrderDto } from '../dto/create-wallet-order.dto';
+import { CreateWalletSettingsDto } from '../dto/create-wallet-settings.dto';
+import { CreateWalletTransactionDto } from '../dto/create-wallet-transaction.dto';
+import { CreateWalletDto } from '../dto/create-wallet.dto';
+import { CouponStatus, UserCoupon } from '../entities/user-coupon.entity';
+import { WalletOrder } from '../entities/wallet-order.entity';
+import {
+  ExpirationMethod,
+  WalletSettings,
+} from '../entities/wallet-settings.entity';
 import {
   WalletTransaction,
   WalletTransactionType,
 } from '../entities/wallet-transaction.entity';
-import { CouponStatus, UserCoupon } from '../entities/user-coupon.entity';
-import {
-  WalletSettings,
-  ExpirationMethod,
-} from '../entities/wallet-settings.entity';
-import { ILike, Not, Repository } from 'typeorm';
-import { CreateWalletDto } from '../dto/create-wallet.dto';
-import { CreateWalletTransactionDto } from '../dto/create-wallet-transaction.dto';
-import * as dayjs from 'dayjs';
-import { CreateWalletSettingsDto } from '../dto/create-wallet-settings.dto';
-import { User } from 'src/users/entities/user.entity';
-import { CreateWalletOrderDto } from '../dto/create-wallet-order.dto';
-import { WalletOrder } from '../entities/wallet-order.entity';
+import { Wallet } from '../entities/wallet.entity';
 
 @Injectable()
 export class WalletService {
