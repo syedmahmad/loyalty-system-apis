@@ -89,6 +89,16 @@ export class Rule {
   @Column({ type: 'varchar', nullable: true })
   reward_condition: string;
 
+  @Column({ type: 'simple-json', nullable: true })
+  dynamic_conditions: {
+    condition_type: number;
+    condition_operator: string;
+    condition_value: string;
+  }[];
+
+  @Column({ type: 'int', default: 0 })
+  is_priority: number;
+
   @Column({ default: 0 })
   created_by: number;
 

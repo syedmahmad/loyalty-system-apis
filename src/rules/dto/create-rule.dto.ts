@@ -1,3 +1,4 @@
+import { Type } from 'class-transformer';
 import {
   IsNumber,
   IsOptional,
@@ -5,7 +6,20 @@ import {
   IsIn,
   ValidateIf,
   IsNotEmpty,
+  IsArray,
+  ValidateNested,
 } from 'class-validator';
+
+class DynamicConditionDto {
+  @IsNumber()
+  condition_type: number;
+
+  @IsString()
+  condition_operator: string;
+
+  @IsString()
+  condition_value: string;
+}
 
 export class CreateRuleDto {
   @IsString()
@@ -84,6 +98,15 @@ export class CreateRuleDto {
   @IsOptional()
   @IsString()
   reward_condition?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => DynamicConditionDto)
+  dynamic_conditions?: DynamicConditionDto[];
+
+  @IsNumber()
+  is_priority: number;
 
   @IsNumber()
   created_by: number;

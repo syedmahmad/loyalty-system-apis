@@ -51,6 +51,8 @@ export class RulesService {
         status: 1, // Default to active,
         burn_type: dto?.burn_type || null,
         reward_condition: dto?.reward_condition || null,
+        dynamic_conditions: dto?.dynamic_conditions || null,
+        is_priority: dto?.is_priority,
       });
 
       const savedRule = await queryRunner.manager.save(rule);
@@ -96,6 +98,8 @@ export class RulesService {
         'status',
         'uuid',
         'reward_condition',
+        'dynamic_conditions',
+        'is_priority',
       ],
       where: name
         ? optionalWhereClause.map((condition) => ({
@@ -150,6 +154,8 @@ export class RulesService {
         'burn_type',
         'status',
         'reward_condition',
+        'dynamic_conditions',
+        'is_priority',
       ],
       where: {
         tenant_id: tenant.id,
@@ -180,6 +186,8 @@ export class RulesService {
         'burn_type',
         'status',
         'reward_condition',
+        'dynamic_conditions',
+        'is_priority',
       ],
       where: { uuid },
     });
@@ -218,6 +226,8 @@ export class RulesService {
       rule.frequency = dto.frequency ?? rule.frequency;
       rule.burn_type = dto.burn_type ? rule.burn_type : null;
       rule.reward_condition = dto.reward_condition ?? rule.reward_condition;
+      rule.dynamic_conditions = dto.dynamic_conditions || null;
+      rule.is_priority = dto.is_priority;
 
       await manager.save(rule);
       await queryRunner.commitTransaction();
