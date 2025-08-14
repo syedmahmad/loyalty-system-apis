@@ -208,7 +208,7 @@ export class WalletService {
     page: number = 1,
     pageSize: number = 7,
     query: string = '',
-    transactionType: string = 'points',
+    transactionType: string = '',
   ) {
     const take = pageSize;
     const skip = (page - 1) * take;

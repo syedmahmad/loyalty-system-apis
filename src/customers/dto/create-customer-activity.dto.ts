@@ -14,5 +14,11 @@ export class CreateCustomerActivityDto {
   coupon_uuid?: string;
 
   @IsNumber()
+  rule_id?: number;
+
+  @IsString()
+  rule_name?: string;
+
+  @IsNumber()
   amount: number;
 }
