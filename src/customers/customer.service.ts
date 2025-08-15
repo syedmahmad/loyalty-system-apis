@@ -34,6 +34,28 @@ import {
   WalletTransactionStatus,
   WalletTransactionType,
 } from 'src/wallet/entities/wallet-transaction.entity';
+<<<<<<< Updated upstream
+=======
+import { CampaignsService } from 'src/campaigns/campaigns/campaigns.service';
+import { CampaignCustomerSegment } from 'src/campaigns/entities/campaign-customer-segments.entity';
+import { CampaignRule } from 'src/campaigns/entities/campaign-rule.entity';
+import { CreateCustomerActivityDto } from './dto/create-customer-activity.dto';
+import { CustomerEarnDto } from './dto/customer-earn.dto';
+import { CampaignCoupons } from 'src/campaigns/entities/campaign-coupon.entity';
+import { CouponTypeService } from 'src/coupon_type/coupon_type/coupon_type.service';
+import { CustomerSegmentMember } from 'src/customer-segment/entities/customer-segment-member.entity';
+import { Campaign } from 'src/campaigns/entities/campaign.entity';
+import { Coupon } from 'src/coupons/entities/coupon.entity';
+import {
+  CouponStatus,
+  UserCoupon,
+} from 'src/wallet/entities/user-coupon.entity';
+import { EarnWithEvent } from 'src/customers/dto/earn-with-event.dto';
+import { WalletSettings } from 'src/wallet/entities/wallet-settings.entity';
+import { WalletOrder } from 'src/wallet/entities/wallet-order.entity';
+import { BurnWithEvent } from './dto/burn-with-event.dto';
+import { omit } from 'lodash';
+>>>>>>> Stashed changes
 import { Wallet } from 'src/wallet/entities/wallet.entity';
 import { WalletService } from 'src/wallet/wallet/wallet.service';
 import {
@@ -1672,6 +1694,7 @@ export class CustomerService {
       }
     });
   }
+<<<<<<< Updated upstream
 
   async creditWallet({
     wallet,
@@ -1850,4 +1873,6 @@ export class CustomerService {
       await this.txRepo.save(tx);
     }
   }
+=======
+>>>>>>> Stashed changes
 }
