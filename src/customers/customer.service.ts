@@ -53,8 +53,6 @@ import { BulkCreateCustomerDto } from './dto/create-customer.dto';
 import { CustomerEarnDto } from './dto/customer-earn.dto';
 import { CustomerActivity } from './entities/customer-activity.entity';
 import { Customer } from './entities/customer.entity';
-import { WalletOrder } from 'src/wallet/entities/wallet-order.entity';
-import { Cron, CronExpression } from '@nestjs/schedule';
 
 @Injectable()
 export class CustomerService {
