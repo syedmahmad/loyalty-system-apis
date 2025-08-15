@@ -410,8 +410,10 @@ export class CustomerService {
         throw new NotFoundException(`Earning rule not found for this station`);
       }
       if (matchingRules.length == 1) {
+        console.log('matchingRules//////////if ', matchingRules);
         rule = matchingRules[0];
       } else {
+        console.log('matchingRules////////// else ', matchingRules);
         rule = matchingRules
           .filter((singleRule) => singleRule.is_priority === 1)
           .reduce(
@@ -422,6 +424,7 @@ export class CustomerService {
                 : latest,
             null,
           );
+        console.log('matchingRules//////////111111', matchingRules, rule);
         if (!rule) {
           // Find the one with the latest created_at
           rule = matchingRules.reduce((latest, current) => {
