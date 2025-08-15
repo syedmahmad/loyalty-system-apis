@@ -3,7 +3,6 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import axios from 'axios';
 import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
@@ -20,14 +19,7 @@ import {
   UserCoupon,
 } from 'src/wallet/entities/user-coupon.entity';
 import { WalletService } from 'src/wallet/wallet/wallet.service';
-import {
-  DataSource,
-  ILike,
-  In,
-  LessThanOrEqual,
-  Not,
-  Repository,
-} from 'typeorm';
+import { DataSource, ILike, In, Not, Repository } from 'typeorm';
 import { CreateCouponDto } from '../dto/create-coupon.dto';
 import { UpdateCouponDto } from '../dto/update-coupon.dto';
 import { CouponCustomerSegment } from '../entities/coupon-customer-segments.entity';
@@ -766,22 +758,5 @@ export class CouponsService {
       success: true,
       message: 'This code already exists',
     };
-  }
-
-  @Cron(CronExpression.EVERY_HOUR)
-  async markExpiredCoupons() {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    console.log('Running coupon expiry check...');
-
-    const expiredCoupons = await this.couponsRepository.find({
-      where: { date_to: LessThanOrEqual(today), status: 1 },
-    });
-
-    for (const coupon of expiredCoupons) {
-      coupon.status = 0;
-      await this.couponsRepository.save(coupon);
-      console.log(`Deactivated coupon: ${coupon.coupon_title}`);
-    }
   }
 }

@@ -4,7 +4,6 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as dayjs from 'dayjs';
 import { Request } from 'express';
@@ -34,6 +33,9 @@ import {
   WalletTransactionStatus,
   WalletTransactionType,
 } from 'src/wallet/entities/wallet-transaction.entity';
+import { CreateCustomerActivityDto } from './dto/create-customer-activity.dto';
+import { CustomerEarnDto } from './dto/customer-earn.dto';
+import { BurnWithEvent } from './dto/burn-with-event.dto';
 import { Wallet } from 'src/wallet/entities/wallet.entity';
 import { WalletService } from 'src/wallet/wallet/wallet.service';
 import {
@@ -47,10 +49,7 @@ import {
 import { v4 as uuidv4 } from 'uuid';
 import { QrCode } from '../qr_codes/entities/qr_code.entity';
 import { QrcodesService } from '../qr_codes/qr_codes/qr_codes.service';
-import { BurnWithEvent } from './dto/burn-with-event.dto';
-import { CreateCustomerActivityDto } from './dto/create-customer-activity.dto';
 import { BulkCreateCustomerDto } from './dto/create-customer.dto';
-import { CustomerEarnDto } from './dto/customer-earn.dto';
 import { CustomerActivity } from './entities/customer-activity.entity';
 import { Customer } from './entities/customer.entity';
 
@@ -1797,88 +1796,5 @@ export class CustomerService {
           return false;
       }
     });
-  }
-
-  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
-  async unLockWalletPointsAndAddThemInAvailableBalance() {
-    console.log('Cron Unlock Wallet Points And AddThem In Available Balance');
-    // 1. Find all wallet transactions where unlock_date is today or earlier and status is 'pending'
-    // const today = new Date();
-
-    // Find all transactions that should be unlocked
-    // To handle date-only unlock_date (e.g., '2025-08-12') vs. JS Date (with time),
-    // we need to find all transactions where unlock_date is <= today (date part only).
-    // We'll use a raw query or Between/LessThanOrEqual with date string.
-    const today = new Date();
-    today.setHours(0, 0, 0, 0); // Set to start of today
-    const transactionsToUnlock = await this.txRepo.find({
-      where: {
-        unlock_date: LessThanOrEqual(today),
-        status: WalletTransactionStatus.PENDING,
-        type: WalletTransactionType.EARN,
-      },
-      relations: ['wallet'],
-    });
-
-    for (const tx of transactionsToUnlock) {
-      const wallet = await this.walletRepo.findOne({
-        where: { id: tx.wallet.id },
-      });
-      if (!wallet) continue;
-
-      // Move points from locked_balance to available_balance, so picking how much locked points are for this transaction
-      const amount = Number(tx.amount);
-      // Update wallet balances
-      wallet.locked_balance = Number(wallet.locked_balance) - amount;
-      wallet.available_balance = Number(wallet.available_balance) + amount;
-      // Update transaction status to 'active'
-      tx.status = WalletTransactionStatus.ACTIVE;
-
-      // Save changes
-      await this.walletService.updateWalletBalances(wallet.id, {
-        ...wallet,
-      });
-      await this.txRepo.save(tx);
-    }
-  }
-
-  @Cron(CronExpression.EVERY_10_SECONDS)
-  async walletPointsExpiryCron() {
-    console.log('Wallet expire points cron started');
-
-    // Get start of today (midnight) to compare expiry dates
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    // 1. Find all active EARN transactions whose points should expire today or earlier
-    const transactionsToExpire = await this.txRepo.find({
-      where: {
-        expiry_date: LessThanOrEqual(today),
-        status: WalletTransactionStatus.ACTIVE,
-        type: WalletTransactionType.EARN,
-      },
-      relations: ['wallet'],
-    });
-
-    // console.log('transactionsToExpire :::', transactionsToExpire);
-
-    // 2. Process each transaction
-    for (const tx of transactionsToExpire) {
-      const wallet = tx.wallet;
-      if (!wallet) continue; // Skip if wallet relation is missing
-
-      const amount = Number(tx.amount);
-
-      // Move expired points from available to locked balance
-      wallet.available_balance = Number(wallet.available_balance) - amount;
-      wallet.locked_balance = Number(wallet.locked_balance) + amount;
-
-      // Mark transaction as expired
-      tx.status = WalletTransactionStatus.EXPIRED;
-
-      // Save changes
-      await this.walletService.updateWalletBalances(wallet.id, { ...wallet });
-      await this.txRepo.save(tx);
-    }
   }
 }
