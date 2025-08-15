@@ -384,7 +384,6 @@ export class CustomerService {
           status: 1,
           // shoudl add tenant..
           tenant_id: Number(tenantId),
-          rule_type: 'earn',
           dynamic_conditions: Not(IsNull()),
         },
       });
