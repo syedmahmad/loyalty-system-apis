@@ -384,6 +384,7 @@ export class CustomerService {
           status: 1,
           // shoudl add tenant..
           tenant_id: Number(tenantId),
+          rule_type: 'earn',
           dynamic_conditions: Not(IsNull()),
         },
       });
@@ -404,9 +405,7 @@ export class CustomerService {
         this.validateRuleAgainstMetadata(rule, metadata),
       );
       if (!matchingRules.length) {
-        throw new NotFoundException(
-          `Earning rule not found for this metadata: ${JSON.stringify(metadata)}`,
-        );
+        throw new NotFoundException(`Earning rule not found for this station`);
       }
       if (matchingRules.length == 1) {
         rule = matchingRules[0];

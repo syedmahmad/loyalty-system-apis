@@ -10,8 +10,8 @@ export class BurnWithEvent {
   @IsOptional()
   @IsObject()
   metadata?: {
-    store_id?: string;
-    product_type?: string;
+    station_id?: string;
+    fuel_type?: string;
     quantity?: string | number;
     amount?: number;
     [key: string]: any;
