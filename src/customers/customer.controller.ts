@@ -84,8 +84,8 @@ export class CustomerController {
   }
 
   @Post('earn_with_event')
-  async earnWithEvent(@Body() body: EarnWithEvent) {
-    return this.customerService.earnWithEvent(body);
+  async earnWithEvent(@Req() req: Request, @Body() body: EarnWithEvent) {
+    return this.customerService.earnWithEvent(req, body);
   }
 
   @Post('burn_with_event')

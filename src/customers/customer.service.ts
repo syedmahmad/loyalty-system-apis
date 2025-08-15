@@ -358,7 +358,9 @@ export class CustomerService {
         });
   }
 
-  async earnWithEvent(bodyPayload: EarnWithEvent) {
+  async earnWithEvent(req: Request, bodyPayload: EarnWithEvent) {
+    const reqObj = req as any;
+
     const { customer_id, event, BUId, metadata } = bodyPayload;
     // 1. Find customer by uuid
     const customer = await this.customerRepo.findOne({
@@ -384,6 +386,7 @@ export class CustomerService {
         where: {
           status: 1,
           // shoudl add tenant..
+          tenant_id: Number(reqObj.body.tenantId),
           dynamic_conditions: Not(IsNull()),
         },
       });
@@ -405,13 +408,22 @@ export class CustomerService {
       );
       if (!matchingRules.length) {
         throw new NotFoundException(
-          `Earning rule not found for this metadata: ${metadata}`,
+          `Earning rule not found for this metadata: ${JSON.stringify(metadata)}`,
         );
       }
       if (matchingRules.length == 1) {
         rule = matchingRules[0];
       } else {
-        rule = matchingRules.find((singleRule) => singleRule.is_priority === 1); // should be latest crated_at
+        rule = matchingRules
+          .filter((singleRule) => singleRule.is_priority === 1)
+          .reduce(
+            (latest, current) =>
+              !latest ||
+              new Date(current.created_at) > new Date(latest.created_at)
+                ? current
+                : latest,
+            null,
+          );
         if (!rule) {
           // Find the one with the latest created_at
           rule = matchingRules.reduce((latest, current) => {
@@ -478,7 +490,7 @@ export class CustomerService {
     const Orderamount = metadata?.amount ? Number(metadata.amount) : undefined;
 
     // I think, we will add this || rule.rule_type === 'dynamic'
-    if (rule.rule_type === 'spend and earn') {
+    if (['spend and earn', 'dynamic rule'].includes(rule.rule_type)) {
       if (!Orderamount) {
         throw new BadRequestException(
           'Amount is required for spend and earn rule',
@@ -663,7 +675,16 @@ export class CustomerService {
       if (matchingRules.length == 1) {
         rule = matchingRules[0];
       } else {
-        rule = matchingRules.find((singleRule) => singleRule.is_priority === 2);
+        rule = matchingRules
+          .filter((singleRule) => singleRule.is_priority === 1)
+          .reduce(
+            (latest, current) =>
+              !latest ||
+              new Date(current.created_at) > new Date(latest.created_at)
+                ? current
+                : latest,
+            null,
+          );
         if (!rule) {
           // Find the one with the latest created_at
           rule = matchingRules.reduce((latest, current) => {

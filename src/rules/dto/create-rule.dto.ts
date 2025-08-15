@@ -12,7 +12,7 @@ import {
 
 class DynamicConditionDto {
   @IsNumber()
-  condition_type: number;
+  condition_type: string;
 
   @IsString()
   condition_operator: string;

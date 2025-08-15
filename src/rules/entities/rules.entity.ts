@@ -91,7 +91,7 @@ export class Rule {
 
   @Column({ type: 'simple-json', nullable: true })
   dynamic_conditions: {
-    condition_type: number;
+    condition_type: string;
     condition_operator: string;
     condition_value: string;
   }[];
