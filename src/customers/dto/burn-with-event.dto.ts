@@ -16,4 +16,10 @@ export class BurnWithEvent {
     amount?: number;
     [key: string]: any;
   };
+
+  @IsString()
+  tenantId: string;
+
+  @IsString()
+  BUId: string;
 }

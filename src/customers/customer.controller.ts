@@ -18,6 +18,7 @@ import { CreateCustomerActivityDto } from './dto/create-customer-activity.dto';
 import { BulkCreateCustomerDto } from './dto/create-customer.dto';
 import { CustomerEarnDto } from './dto/customer-earn.dto';
 import { EarnWithEvent } from 'src/customers/dto/earn-with-event.dto';
+import { BurnWithEvent } from 'src/customers/dto/burn-with-event.dto';
 
 @Controller('customers')
 export class CustomerController {
@@ -84,12 +85,12 @@ export class CustomerController {
   }
 
   @Post('earn_with_event')
-  async earnWithEvent(@Req() req: Request, @Body() body: EarnWithEvent) {
-    return this.customerService.earnWithEvent(req, body);
+  async earnWithEvent(@Body() body: EarnWithEvent) {
+    return this.customerService.earnWithEvent(body);
   }
 
   @Post('burn_with_event')
-  async BurnWithEvent(@Body() body: EarnWithEvent) {
+  async BurnWithEvent(@Body() body: BurnWithEvent) {
     return this.customerService.burnWithEvent(body);
   }
 }

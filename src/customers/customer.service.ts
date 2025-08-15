@@ -358,10 +358,8 @@ export class CustomerService {
         });
   }
 
-  async earnWithEvent(req: Request, bodyPayload: EarnWithEvent) {
-    const reqObj = req as any;
-
-    const { customer_id, event, BUId, metadata } = bodyPayload;
+  async earnWithEvent(bodyPayload: EarnWithEvent) {
+    const { customer_id, event, BUId, metadata, tenantId } = bodyPayload;
     // 1. Find customer by uuid
     const customer = await this.customerRepo.findOne({
       where: { uuid: customer_id, business_unit: { id: parseInt(BUId) } },
@@ -386,7 +384,7 @@ export class CustomerService {
         where: {
           status: 1,
           // shoudl add tenant..
-          tenant_id: Number(reqObj.body.tenantId),
+          tenant_id: Number(tenantId),
           dynamic_conditions: Not(IsNull()),
         },
       });
@@ -636,7 +634,7 @@ export class CustomerService {
   }
 
   async burnWithEvent(bodyPayload: BurnWithEvent) {
-    const { customer_id, metadata, event } = bodyPayload;
+    const { customer_id, metadata, event, tenantId } = bodyPayload;
 
     if (!metadata.amount) {
       throw new BadRequestException('Amount is required in metadata');
@@ -668,6 +666,7 @@ export class CustomerService {
       const rules = await this.ruleRepo.find({
         where: {
           status: 1,
+          tenant_id: Number(tenantId),
           dynamic_conditions: Not(IsNull()),
         },
       });
