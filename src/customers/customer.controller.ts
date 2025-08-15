@@ -93,4 +93,12 @@ export class CustomerController {
   async BurnWithEvent(@Body() body: BurnWithEvent) {
     return this.customerService.burnWithEvent(body);
   }
+
+  @Get('/validate-customer-tenant/:customerId/:tenantId')
+  async validateCustomerTenant(
+    @Param('customerId') customerId: string,
+    @Param('tenantId') tenantId: number,
+  ) {
+    return this.customerService.validateCustomerTenant(customerId, tenantId);
+  }
 }

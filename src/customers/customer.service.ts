@@ -1823,4 +1823,24 @@ export class CustomerService {
       }
     });
   }
+
+  async validateCustomerTenant(customerId, tenantId) {
+    const customer = await this.customerRepo.findOne({
+      where: { uuid: customerId },
+      relations: ['business_unit'],
+    });
+
+    if (!customer) {
+      throw new NotFoundException(`Customer not found`);
+    }
+
+    if (
+      customer.business_unit &&
+      customer.business_unit.tenant_id === Number(tenantId)
+    ) {
+      return true;
+    }
+
+    return false;
+  }
 }
