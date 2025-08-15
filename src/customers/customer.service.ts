@@ -385,6 +385,7 @@ export class CustomerService {
         where: {
           status: 1,
           // shoudl add tenant..
+          rule_type: Not('burn'),
           tenant_id: Number(tenantId),
           dynamic_conditions: Not(IsNull()),
         },
