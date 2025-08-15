@@ -36,7 +36,14 @@ import {
 } from 'src/wallet/entities/wallet-transaction.entity';
 import { Wallet } from 'src/wallet/entities/wallet.entity';
 import { WalletService } from 'src/wallet/wallet/wallet.service';
-import { In, LessThanOrEqual, MoreThanOrEqual, Not, Repository } from 'typeorm';
+import {
+  In,
+  IsNull,
+  LessThanOrEqual,
+  MoreThanOrEqual,
+  Not,
+  Repository,
+} from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 import { QrCode } from '../qr_codes/entities/qr_code.entity';
 import { QrcodesService } from '../qr_codes/qr_codes/qr_codes.service';
@@ -46,6 +53,8 @@ import { BulkCreateCustomerDto } from './dto/create-customer.dto';
 import { CustomerEarnDto } from './dto/customer-earn.dto';
 import { CustomerActivity } from './entities/customer-activity.entity';
 import { Customer } from './entities/customer.entity';
+import { WalletOrder } from 'src/wallet/entities/wallet-order.entity';
+import { Cron, CronExpression } from '@nestjs/schedule';
 
 @Injectable()
 export class CustomerService {
@@ -361,16 +370,45 @@ export class CustomerService {
     if (!customer) throw new NotFoundException('Customer not found');
 
     // 2. Find earning rule by event name (case-insensitive)
-    const rule = await this.ruleRepo.findOne({
-      where: {
-        status: 1,
-        name: event,
-        rule_type: Not('burn'),
-        // event_triggerer: 'event based earn',
-      },
-    });
-    if (!rule)
-      throw new NotFoundException('Earning rule not found for this event');
+    let rule;
+    if (event) {
+      rule = await this.ruleRepo.findOne({
+        where: {
+          status: 1,
+          name: event,
+          rule_type: Not('burn'),
+          // event_triggerer: 'event based earn',
+        },
+      });
+      if (!rule)
+        throw new NotFoundException('Earning rule not found for this event');
+    } else {
+      const rules = await this.ruleRepo.find({
+        where: {
+          status: 1,
+          dynamic_conditions: Not(IsNull()),
+        },
+      });
+      const matchingRules = rules.filter((rule) =>
+        this.validateRuleAgainstMetadata(rule, metadata),
+      );
+      if (!matchingRules.length) {
+        throw new NotFoundException('Earning rule not found for this metadata');
+      }
+      if (matchingRules.length == 1) {
+        rule = matchingRules[0];
+      } else {
+        rule = matchingRules.find((singleRule) => singleRule.is_priority === 2);
+        if (!rule) {
+          // Find the one with the latest created_at
+          rule = matchingRules.reduce((latest, current) => {
+            return new Date(current.created_at) > new Date(latest.created_at)
+              ? current
+              : latest;
+          }, matchingRules[0]);
+        }
+      }
+    }
 
     // // 3. Get customer wallet info
     const wallet = await this.walletService.getSingleCustomerWalletInfoById(
@@ -588,11 +626,40 @@ export class CustomerService {
     const customer = customerInfo[0];
     if (!customer) throw new NotFoundException('Customer not found');
 
-    const rule = await this.ruleRepo.findOne({
-      where: { name: event, status: 1, rule_type: 'burn' },
-    });
-    if (!rule)
-      throw new NotFoundException('Burn rule not found for this campaign');
+    let rule;
+    if (event) {
+      rule = await this.ruleRepo.findOne({
+        where: { name: event, status: 1, rule_type: 'burn' },
+      });
+      if (!rule)
+        throw new NotFoundException('Burn rule not found for this campaign');
+    } else {
+      const rules = await this.ruleRepo.find({
+        where: {
+          status: 1,
+          dynamic_conditions: Not(IsNull()),
+        },
+      });
+      const matchingRules = rules.filter((rule) =>
+        this.validateRuleAgainstMetadata(rule, metadata),
+      );
+      if (!matchingRules.length) {
+        throw new NotFoundException('Earning rule not found for this metadata');
+      }
+      if (matchingRules.length == 1) {
+        rule = matchingRules[0];
+      } else {
+        rule = matchingRules.find((singleRule) => singleRule.is_priority === 2);
+        if (!rule) {
+          // Find the one with the latest created_at
+          rule = matchingRules.reduce((latest, current) => {
+            return new Date(current.created_at) > new Date(latest.created_at)
+              ? current
+              : latest;
+          }, matchingRules[0]);
+        }
+      }
+    }
 
     // Step 5: Validate rule conditions
     if (total_amount < rule.min_amount_spent) {
@@ -1685,6 +1752,22 @@ export class CustomerService {
 
     // 5. Save and return
     return await this.txRepo.save(walletTransaction);
+  }
+
+  validateRuleAgainstMetadata(rule: any, metadata: Record<string, any>) {
+    return rule.dynamic_conditions.some((cond: any) => {
+      const metaValue = metadata[cond.condition_type];
+      switch (cond.condition_operator) {
+        case '==':
+          return String(metaValue) === String(cond.condition_value);
+        case '>':
+          return Number(metaValue) > Number(cond.condition_value);
+        case '<':
+          return Number(metaValue) < Number(cond.condition_value);
+        default:
+          return false;
+      }
+    });
   }
 
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
