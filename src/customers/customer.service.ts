@@ -390,14 +390,14 @@ export class CustomerService {
         },
       });
       /*
-        rule.dynamic_conditions: [{"condition_type":"store_id","condition_operator":"==","condition_value":"NCMC001"},
-        {"condition_type":"product_type","condition_operator":"==","condition_value":"gasoline"},
+        rule.dynamic_conditions: [{"condition_type":"station_id","condition_operator":"==","condition_value":"NCMC001"},
+        {"condition_type":"fuel_type","condition_operator":"==","condition_value":"gasoline"},
         {"condition_type":"quantity","condition_operator":"==","condition_value":"3.5 litter"},
         {"condition_type":"amount","condition_operator":"==","condition_value":"10"}]
 
         "metadata": {
-          "store_id": "NCMC_station_002"
-          "product_type": "High Octance",
+          "station_id": "NCMC_station_002"
+          "fuel_type": "High Octance",
           "quantity": "5 Litter",
           "amount": 10
         }
@@ -570,8 +570,8 @@ export class CustomerService {
           // wallet_order_id: walletOrderId,
           business_unit: wallet.business_unit, // pass the full BusinessUnit entity instance
           amount: metadata.amount,
-          store_id: metadata.store_id,
-          product_type: metadata.product_type,
+          station_id: metadata.station_id,
+          fuel_type: metadata.fuel_type,
           quantity: metadata.quantity as string,
           discount: 0,
           subtotal: metadata.amount,
@@ -775,8 +775,8 @@ export class CustomerService {
           // wallet_order_id: walletOrderId,
           business_unit: wallet.business_unit, // pass the full BusinessUnit entity instance
           amount: metadata.amount,
-          store_id: metadata.store_id,
-          product_type: metadata.product_type,
+          station_id: metadata.station_id,
+          fuel_type: metadata.fuel_type,
           quantity: metadata.quantity as string,
           discount: discountAmount,
           subtotal: metadata.amount - discountAmount,
@@ -1796,14 +1796,14 @@ export class CustomerService {
   }
 
   /*
-      rule.dynamic_conditions: [{"condition_type":"store_id","condition_operator":"==","condition_value":"NCMC001"},
-      {"condition_type":"product_type","condition_operator":"==","condition_value":"gasoline"},
+      rule.dynamic_conditions: [{"condition_type":"station_id","condition_operator":"==","condition_value":"NCMC001"},
+      {"condition_type":"fuel_type","condition_operator":"==","condition_value":"gasoline"},
       {"condition_type":"quantity","condition_operator":"==","condition_value":"3.5 litter"},
       {"condition_type":"amount","condition_operator":"==","condition_value":"10"}]
 
       "metadata": {
-        "store_id": "NCMC_station_002"
-        "product_type": "High Octance",
+        "station_id": "NCMC_station_002"
+        "fuel_type": "High Octance",
         "quantity": "5 Litter",
         "amount": 10
     }
