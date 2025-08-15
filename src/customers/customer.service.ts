@@ -7,7 +7,6 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import * as dayjs from 'dayjs';
 import { Request } from 'express';
-import { omit } from 'lodash';
 import { nanoid } from 'nanoid';
 import * as QRCode from 'qrcode';
 import { CampaignsService } from 'src/campaigns/campaigns/campaigns.service';
@@ -565,7 +564,6 @@ export class CustomerService {
       ) {
         // You can access metadata.amount here if needed
         // For example, you might want to log or process the amount
-        console.log('Amount in metadata:', metadata);
         // Add any additional logic here as required
 
         const walletOrder: Partial<WalletOrder> = {
@@ -577,7 +575,7 @@ export class CustomerService {
           product_type: metadata.product_type,
           quantity: metadata.quantity as string,
           discount: 0,
-          subtotal: 0,
+          subtotal: metadata.amount,
         };
 
         // Save order or metatDataInfo
@@ -724,6 +722,11 @@ export class CustomerService {
     if (rule.burn_type === 'FIXED') {
       pointsToBurn = rule.max_redeemption_points_limit;
       discountAmount = pointsToBurn * conversionRate;
+
+      if (discountAmount > total_amount) {
+        discountAmount = total_amount;
+        pointsToBurn = total_amount / conversionRate;
+      }
     } else if (rule.burn_type === 'PERCENTAGE') {
       discountAmount = (total_amount * rule.max_burn_percent_on_invoice) / 100;
       pointsToBurn = rule.max_redeemption_points_limit;
@@ -731,11 +734,11 @@ export class CustomerService {
       throw new BadRequestException('Invalid burn type in rule');
     }
 
-    if (discountAmount > total_amount) {
-      throw new BadRequestException(
-        'Cannot gave discount because invoice amount is smaller than the discount amount',
-      );
-    }
+    // if (discountAmount > total_amount) {
+    // throw new BadRequestException(
+    //   'Cannot gave discount because invoice amount is smaller than the discount amount',
+    // );
+    // }
     // Step 8: Create burn transaction
     // Import WalletTransactionType at the top if not already imported:
     // import { WalletTransactionType } from 'src/wallet/entities/wallet-transaction.entity';
@@ -765,7 +768,6 @@ export class CustomerService {
       ) {
         // You can access metadata.amount here if needed
         // For example, you might want to log or process the amount
-        console.log('Amount in metadata:', metadata);
         // Add any additional logic here as required
 
         const walletOrder: Partial<WalletOrder> = {
@@ -776,8 +778,8 @@ export class CustomerService {
           store_id: metadata.store_id,
           product_type: metadata.product_type,
           quantity: metadata.quantity as string,
-          discount: 0,
-          subtotal: 0,
+          discount: discountAmount,
+          subtotal: metadata.amount - discountAmount,
         };
 
         // Save order or metatDataInfo
@@ -787,7 +789,7 @@ export class CustomerService {
 
     // Step 9: Create burn transaction in wallet
 
-    await this.walletService.addTransaction(
+    const tx = await this.walletService.addTransaction(
       {
         ...burnPayload,
         wallet_order_id: walletOrderRes?.id,
@@ -803,16 +805,15 @@ export class CustomerService {
       relations: ['business_unit'],
     });
 
-    const updatedOrder = {
-      ...omit(walletOrderRes, ['wallet', 'business_unit']),
+    return {
+      message: 'Points burned successfully',
+      points: rule.max_redeemption_points_limit,
+      transaction_id: tx.id,
+      available_balance: walletInfo.available_balance,
+      locked_balance: walletInfo.locked_balance,
+      total_balance: walletInfo.total_balance,
       discount: discountAmount,
       payable_amount: total_amount - discountAmount,
-    };
-
-    return {
-      message: 'Burn successful',
-      wallet: omit(walletInfo, ['customer', 'id', 'business_unit.id']),
-      order: updatedOrder,
     };
   }
 
