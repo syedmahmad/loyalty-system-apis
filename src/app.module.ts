@@ -28,6 +28,7 @@ import { LoyaltyAnalyticsModule } from './analytics/analytics.module';
 import { GateWayLogModule } from './gateway-logs/log.module';
 import { decrypt } from './utils/decrypt';
 import { ScheduleModule } from '@nestjs/schedule';
+import { SchedulerModule } from './schedule/schedule.module';
 
 @Module({
   imports: [
@@ -75,6 +76,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     OciModule,
     CustomerSegmentsModule,
     QrCodesModule,
+    SchedulerModule,
   ],
   controllers: [AppController],
   providers: [AppService],

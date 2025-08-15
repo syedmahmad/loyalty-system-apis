@@ -15,7 +15,6 @@ import { CreateCampaignDto } from '../dto/create-campaign.dto';
 import { UpdateCampaignDto } from '../dto/update-campaign.dto';
 import { Rule } from 'src/rules/entities/rules.entity';
 import { Tier } from 'src/tiers/entities/tier.entity';
-import { Cron, CronExpression } from '@nestjs/schedule';
 import { Coupon } from 'src/coupons/entities/coupon.entity';
 import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
 import { User } from 'src/users/entities/user.entity';
@@ -1037,30 +1036,5 @@ export class CampaignsService {
       wallet: omit(walletInfo, ['customer', 'id', 'business_unit.id']),
       order: updatedOrder,
     };
-  }
-
-  /**
-   * Scheduled task that runs every day at midnight to check for expired campaigns.
-   *
-   * - Finds all campaigns that have an end_date equal to today and are still active.
-   * - Deactivates each expired campaign by setting its 'active' property to false.
-   * - Saves the updated campaign and logs the deactivation.
-   */
-  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
-  async handleCron() {
-    // Set 'today' to midnight (00:00:00) to match campaigns ending today
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    console.log('Running campaign expiry check...');
-
-    const expiredCampaigns = await this.campaignRepository.find({
-      where: { end_date: today, active: true },
-    });
-
-    for (const campaign of expiredCampaigns) {
-      campaign.active = false;
-      await this.campaignRepository.save(campaign);
-      console.log(`Deactivated campaign: ${campaign.name}`);
-    }
   }
 }

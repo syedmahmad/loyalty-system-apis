@@ -6,6 +6,7 @@ import {
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import axios from 'axios';
+<<<<<<< Updated upstream
 import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
 import { CouponTypeService } from 'src/coupon_type/coupon_type/coupon_type.service';
 import { CustomerSegment } from 'src/customer-segment/entities/customer-segment.entity';
@@ -28,10 +29,26 @@ import {
   Not,
   Repository,
 } from 'typeorm';
+=======
+import { DataSource, ILike, In, Not, Repository } from 'typeorm';
+>>>>>>> Stashed changes
 import { CreateCouponDto } from '../dto/create-coupon.dto';
 import { UpdateCouponDto } from '../dto/update-coupon.dto';
 import { CouponCustomerSegment } from '../entities/coupon-customer-segments.entity';
+<<<<<<< Updated upstream
 import { Coupon } from '../entities/coupon.entity';
+=======
+import { CouponTypeService } from 'src/coupon_type/coupon_type/coupon_type.service';
+import { Customer } from 'src/customers/entities/customer.entity';
+import { TiersService } from 'src/tiers/tiers/tiers.service';
+import { CustomerActivity } from 'src/customers/entities/customer-activity.entity';
+import { WalletService } from 'src/wallet/wallet/wallet.service';
+import { CustomerService } from 'src/customers/customer.service';
+import {
+  CouponStatus,
+  UserCoupon,
+} from 'src/wallet/entities/user-coupon.entity';
+>>>>>>> Stashed changes
 
 @Injectable()
 export class CouponsService {
@@ -767,6 +784,7 @@ export class CouponsService {
       message: 'This code already exists',
     };
   }
+<<<<<<< Updated upstream
 
   @Cron(CronExpression.EVERY_HOUR)
   async markExpiredCoupons() {
@@ -784,4 +802,6 @@ export class CouponsService {
       console.log(`Deactivated coupon: ${coupon.coupon_title}`);
     }
   }
+=======
+>>>>>>> Stashed changes
 }

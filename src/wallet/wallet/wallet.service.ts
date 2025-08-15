@@ -159,6 +159,7 @@ export class WalletService {
     const transactionPayload = {
       ...dto,
       business_unit: { id: dto.business_unit_id } as any,
+      point_balance: wallet.available_balance,
       wallet: { id: dto.wallet_id } as any,
       unlock_date: unlockDate,
       expiry_date: expiryDate,
@@ -183,6 +184,7 @@ export class WalletService {
           break;
         case 'expire':
           wallet.total_balance -= amount;
+          wallet.available_balance -= amount;
           break;
         case 'adjustment':
           wallet.total_balance += amount;
