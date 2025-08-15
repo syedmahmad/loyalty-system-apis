@@ -360,7 +360,6 @@ export class CustomerService {
   async earnWithEvent(bodyPayload: EarnWithEvent) {
     const { customer_id, event, BUId, metadata, tenantId } = bodyPayload;
 
-    console.log('started/////////////////', bodyPayload);
     // 1. Find customer by uuid
     const customer = await this.customerRepo.findOne({
       where: { uuid: customer_id, business_unit: { id: parseInt(BUId) } },
@@ -403,7 +402,6 @@ export class CustomerService {
           "amount": 10
         }
       */
-      console.log('///////////////rule', rules);
       const matchingRules = rules.filter((rule) =>
         this.validateRuleAgainstMetadata(rule, metadata),
       );
@@ -411,10 +409,8 @@ export class CustomerService {
         throw new NotFoundException(`Earning rule not found for this station`);
       }
       if (matchingRules.length == 1) {
-        console.log('matchingRules//////////if ', matchingRules);
         rule = matchingRules[0];
       } else {
-        console.log('matchingRules////////// else ', matchingRules);
         rule = matchingRules
           .filter((singleRule) => singleRule.is_priority === 1)
           .reduce(
@@ -425,7 +421,6 @@ export class CustomerService {
                 : latest,
             null,
           );
-        console.log('matchingRules//////////111111', matchingRules, rule);
         if (!rule) {
           // Find the one with the latest created_at
           rule = matchingRules.reduce((latest, current) => {
@@ -436,7 +431,6 @@ export class CustomerService {
         }
       }
     }
-    console.log('///////////////rule///////////////////', rule);
     // // 3. Get customer wallet info
     const wallet = await this.walletService.getSingleCustomerWalletInfoById(
       customer.id,
@@ -491,7 +485,6 @@ export class CustomerService {
     let rewardPoints = rule.reward_points;
     const Orderamount = metadata?.amount ? Number(metadata.amount) : undefined;
 
-    console.log('///////////////rewrdspoints', rewardPoints);
     // I think, we will add this || rule.rule_type === 'dynamic'
     if (['spend and earn', 'dynamic rule'].includes(rule.rule_type)) {
       if (!Orderamount) {
@@ -522,8 +515,6 @@ export class CustomerService {
         // rewardPoints = rule.reward_points;
       }
     }
-
-    console.log('///////////////rewrdspoints1111111', rewardPoints);
 
     if (!rewardPoints || rewardPoints <= 0) {
       throw new BadRequestException('No reward points to grant');
@@ -611,6 +602,8 @@ export class CustomerService {
       unlock_date:
         pendingDays > 0 ? dayjs().add(pendingDays, 'day').toDate() : null,
 
+      point_balance: wallet.available_balance,
+
       // Set the expiry_date for the wallet transaction.
       // If the rule has a validity_after_assignment value:
       //   - If there are pendingDays (i.e., points are locked for a period), expiry is after (pendingDays + validity_after_assignment) days.
@@ -626,7 +619,6 @@ export class CustomerService {
     };
     // Save transaction
     const savedTx = await this.txRepo.save(walletTransaction);
-    console.log('savedTx', savedTx);
 
     return {
       message: 'Points earned successfully',
