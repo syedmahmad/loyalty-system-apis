@@ -2,51 +2,50 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
-  InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
-import * as QRCode from 'qrcode';
-import { In, LessThanOrEqual, MoreThanOrEqual, Not, Repository } from 'typeorm';
-import { BulkCreateCustomerDto } from './dto/create-customer.dto';
-import { Request } from 'express';
 import * as dayjs from 'dayjs';
-import { Customer } from './entities/customer.entity';
-import { WalletService } from 'src/wallet/wallet/wallet.service';
-import { OciService } from 'src/oci/oci.service';
-import { v4 as uuidv4 } from 'uuid';
+import { Request } from 'express';
+import { omit } from 'lodash';
 import { nanoid } from 'nanoid';
-import { QrCode } from '../qr_codes/entities/qr_code.entity';
-import { QrcodesService } from '../qr_codes/qr_codes/qr_codes.service';
-import { CustomerActivity } from './entities/customer-activity.entity';
-import { TiersService } from 'src/tiers/tiers/tiers.service';
+import * as QRCode from 'qrcode';
+import { CampaignsService } from 'src/campaigns/campaigns/campaigns.service';
+import { CampaignCoupons } from 'src/campaigns/entities/campaign-coupon.entity';
+import { CampaignCustomerSegment } from 'src/campaigns/entities/campaign-customer-segments.entity';
+import { CampaignRule } from 'src/campaigns/entities/campaign-rule.entity';
+import { Campaign } from 'src/campaigns/entities/campaign.entity';
+import { CouponTypeService } from 'src/coupon_type/coupon_type/coupon_type.service';
+import { Coupon } from 'src/coupons/entities/coupon.entity';
+import { CustomerSegmentMember } from 'src/customer-segment/entities/customer-segment-member.entity';
+import { EarnWithEvent } from 'src/customers/dto/earn-with-event.dto';
+import { OciService } from 'src/oci/oci.service';
 import { Rule } from 'src/rules/entities/rules.entity';
+import { TiersService } from 'src/tiers/tiers/tiers.service';
+import {
+  CouponStatus,
+  UserCoupon,
+} from 'src/wallet/entities/user-coupon.entity';
+import { WalletOrder } from 'src/wallet/entities/wallet-order.entity';
+import { WalletSettings } from 'src/wallet/entities/wallet-settings.entity';
 import {
   WalletTransaction,
   WalletTransactionStatus,
   WalletTransactionType,
 } from 'src/wallet/entities/wallet-transaction.entity';
-import { CampaignsService } from 'src/campaigns/campaigns/campaigns.service';
-import { CampaignCustomerSegment } from 'src/campaigns/entities/campaign-customer-segments.entity';
-import { CampaignRule } from 'src/campaigns/entities/campaign-rule.entity';
-import { CreateCustomerActivityDto } from './dto/create-customer-activity.dto';
-import { CustomerEarnDto } from './dto/customer-earn.dto';
-import { CampaignCoupons } from 'src/campaigns/entities/campaign-coupon.entity';
-import { CouponTypeService } from 'src/coupon_type/coupon_type/coupon_type.service';
-import { CustomerSegmentMember } from 'src/customer-segment/entities/customer-segment-member.entity';
-import { Campaign } from 'src/campaigns/entities/campaign.entity';
-import { Coupon } from 'src/coupons/entities/coupon.entity';
-import {
-  CouponStatus,
-  UserCoupon,
-} from 'src/wallet/entities/user-coupon.entity';
-import { EarnWithEvent } from 'src/customers/dto/earn-with-event.dto';
-import { WalletSettings } from 'src/wallet/entities/wallet-settings.entity';
-import { WalletOrder } from 'src/wallet/entities/wallet-order.entity';
-import { Cron, CronExpression } from '@nestjs/schedule';
-import { BurnWithEvent } from './dto/burn-with-event.dto';
-import { omit } from 'lodash';
 import { Wallet } from 'src/wallet/entities/wallet.entity';
+import { WalletService } from 'src/wallet/wallet/wallet.service';
+import { In, LessThanOrEqual, MoreThanOrEqual, Not, Repository } from 'typeorm';
+import { v4 as uuidv4 } from 'uuid';
+import { QrCode } from '../qr_codes/entities/qr_code.entity';
+import { QrcodesService } from '../qr_codes/qr_codes/qr_codes.service';
+import { BurnWithEvent } from './dto/burn-with-event.dto';
+import { CreateCustomerActivityDto } from './dto/create-customer-activity.dto';
+import { BulkCreateCustomerDto } from './dto/create-customer.dto';
+import { CustomerEarnDto } from './dto/customer-earn.dto';
+import { CustomerActivity } from './entities/customer-activity.entity';
+import { Customer } from './entities/customer.entity';
 
 @Injectable()
 export class CustomerService {
@@ -282,6 +281,7 @@ export class CustomerService {
       pointPage,
       pageSize,
       pointQuery,
+      'points',
     );
 
     const couponTransactionInfo =
@@ -743,16 +743,31 @@ export class CustomerService {
           matchedRule,
         );
 
-        return this.processTransaction({
-          matchedRule,
+        const savedTx = await this.creditWallet({
           wallet,
-          order,
-          source_type:
+          amount: matchedRule.reward_points || 0,
+          sourceType:
             matchedRule.rule_type === 'dynamic rule'
               ? matchedRule.condition_type
               : matchedRule.event_triggerer,
-          campaignId: campaign_uuid,
+          description: `Earned ${matchedRule.reward_points} points (${matchedRule.name})`,
+          validityAfterAssignment: matchedRule.validity_after_assignment,
+          order,
         });
+
+        await this.createCustomerActivity({
+          customer_uuid: wallet.customer.uuid,
+          activity_type: 'rule',
+          campaign_uuid,
+          rule_id: matchedRule.id,
+          rule_name: matchedRule.name,
+          amount: matchedRule.reward_points || 0,
+        });
+
+        return {
+          success: true,
+          points: savedTx.amount,
+        };
       }
       case 'COUPONS': {
         return await this.handleCampaignCoupons({
@@ -786,15 +801,30 @@ export class CustomerService {
       matchedRule,
     );
 
-    return this.processTransaction({
-      matchedRule,
+    const savedTx = await this.creditWallet({
       wallet,
-      order,
-      source_type:
+      amount: matchedRule.reward_points || 0,
+      sourceType:
         matchedRule.rule_type === 'dynamic rule'
           ? matchedRule.condition_type
           : matchedRule.event_triggerer,
+      description: `Earned ${matchedRule.reward_points} points (${matchedRule.name})`,
+      validityAfterAssignment: matchedRule.validity_after_assignment,
+      order,
     });
+
+    await this.createCustomerActivity({
+      customer_uuid: wallet.customer.uuid,
+      activity_type: 'rule',
+      rule_id: matchedRule.id,
+      rule_name: matchedRule.name,
+      amount: matchedRule.reward_points || 0,
+    });
+
+    return {
+      success: true,
+      points: savedTx.amount,
+    };
   }
 
   async getRule(uuid, order) {
@@ -870,88 +900,6 @@ export class CustomerService {
     }
   }
 
-  private async processTransaction({
-    matchedRule,
-    wallet,
-    order,
-    source_type,
-    campaignId,
-  }: {
-    matchedRule: any;
-    wallet: any;
-    order?: any;
-    source_type: string;
-    campaignId?: string;
-  }) {
-    const earnPoints = matchedRule.reward_points || 0;
-    const currentDate = new Date();
-
-    const payload: any = {
-      customer_id: wallet.customer.id,
-      business_unit_id: wallet.business_unit.id,
-      wallet_id: wallet.id,
-      type: 'earn',
-      amount: earnPoints,
-      status: 'active',
-      source_type,
-      source_id: matchedRule.id,
-      description: `Earned ${earnPoints} points (${matchedRule.name})`,
-    };
-
-    if (matchedRule.validity_after_assignment) {
-      payload.expiry_date = dayjs(currentDate)
-        .add(Number(matchedRule.validity_after_assignment), 'day')
-        .format('YYYY-MM-DD');
-    }
-
-    try {
-      let wallet_order_id: number | null = null;
-      if (order) {
-        const orderRes = await this.walletService.addOrder({
-          ...order,
-          wallet_id: wallet.id,
-          business_unit_id: wallet.business_unit.id,
-        });
-        wallet_order_id = orderRes?.id || null;
-      }
-
-      const transactionRes = await this.walletService.addTransaction(
-        {
-          ...payload,
-          wallet_order_id,
-        },
-        null,
-        true,
-      );
-
-      const customerActivityPayload = {
-        customer_uuid: wallet.customer.uuid,
-        activity_type: 'rule',
-        campaign_uuid: campaignId ? campaignId : null,
-        rule_id: matchedRule.id,
-        rule_name: matchedRule.name,
-        amount: earnPoints,
-      };
-
-      await this.createCustomerActivity(customerActivityPayload);
-
-      return {
-        success: true,
-        point: Number(transactionRes.amount),
-      };
-    } catch (error: any) {
-      const message =
-        error?.response?.data?.message || 'Failed to create wallet transaction';
-      const status = error?.response?.status || 500;
-
-      if (status >= 400 && status < 500) {
-        throw new BadRequestException(message);
-      }
-
-      throw new InternalServerErrorException(message);
-    }
-  }
-
   async checkAlreadyRewaredPoints(business_unit_id, wallet_id, matchedRule) {
     const { frequency, event_triggerer, rule_type, condition_type } =
       matchedRule;
@@ -1002,6 +950,21 @@ export class CustomerService {
                 'Already rewarded today, try again tomorrow',
               );
             }
+            break;
+          }
+
+          case 'monthly': {
+            const today = dayjs();
+            const rewardedDate = dayjs(reward.created_at);
+            if (
+              rewardedDate.month() === today.month() &&
+              rewardedDate.year() === today.year()
+            ) {
+              throw new BadRequestException(
+                'Already rewarded this month, try again next month',
+              );
+            }
+            break;
           }
 
           case 'yearly': {
@@ -1427,79 +1390,41 @@ export class CustomerService {
           ? (coupon.discount_price ?? 0)
           : (amount * Number(coupon.discount_price)) / 100;
 
-      const customerWalletPayload: any = {
-        customer_id: wallet.customer.id,
-        business_unit_id: wallet.business_unit.id,
-        wallet_id: wallet.id,
-        type: 'earn',
+      const savedTx = await this.creditWallet({
+        wallet,
         amount: earnPoints,
-        status: 'active',
-        source_type: 'coupon',
-        source_id: coupon.id,
-        description: `Redeemed ${earnPoints} amount (${coupon?.coupon_title})`,
+        sourceType: 'coupon',
+        description: `Redeemed ${earnPoints} amount (${coupon.coupon_title})`,
+        validityAfterAssignment: coupon.validity_after_assignment,
+        order,
+      });
+
+      await this.createCustomerActivity({
+        customer_uuid: wallet.customer.uuid,
+        activity_type: 'coupon',
+        campaign_uuid: campaign.uuid,
+        coupon_uuid: coupon.uuid,
+        amount: earnPoints,
+      });
+
+      // Update coupon usage
+      await this.userCouponRepo.save({
+        coupon_code: coupon.code,
+        status: CouponStatus.USED,
+        redeemed_at: new Date(),
+        customer: { id: wallet.customer.id },
+        business_unit: { id: wallet.business_unit.id },
+        issued_from_type: 'coupon',
+        issued_from_id: coupon.id,
+      });
+
+      coupon.number_of_times_used = Number(coupon.number_of_times_used + 1);
+      await this.couponRepo.save(coupon);
+
+      return {
+        success: true,
+        amount: Number(savedTx.amount),
       };
-
-      try {
-        let orderResponse: any = null;
-        if (order) {
-          const orderRes = await this.walletService.addOrder({
-            ...order,
-            wallet_id: wallet.id,
-            business_unit_id: wallet.business_unit.id,
-          });
-          orderResponse = orderRes?.id || null;
-        }
-
-        const transactionRes = await this.walletService.addTransaction(
-          {
-            ...customerWalletPayload,
-            wallet_order_id: orderResponse,
-          },
-          null,
-          true,
-        );
-
-        const customerActivityPayload = {
-          customer_uuid: wallet.customer.uuid,
-          activity_type: 'coupon',
-          campaign_uuid: campaign.uuid,
-          coupon_uuid: coupon.uuid,
-          amount: earnPoints,
-        };
-
-        await this.createCustomerActivity(customerActivityPayload);
-
-        const userCouponPayload = {
-          coupon_code: coupon.code,
-          status: CouponStatus.USED,
-          redeemed_at: new Date(),
-          customer: { id: wallet.customer.id },
-          business_unit: { id: wallet.business_unit.id },
-          issued_from_type: 'coupon',
-          issued_from_id: coupon.id,
-        };
-
-        await this.userCouponRepo.save(userCouponPayload);
-
-        coupon.number_of_times_used = Number(coupon?.number_of_times_used + 1);
-        await this.couponRepo.save(coupon);
-
-        return {
-          success: true,
-          amount: Number(transactionRes.amount),
-        };
-      } catch (error: any) {
-        const message =
-          error?.response?.data?.message ||
-          'Failed to get customer wallet info';
-        const status = error?.response?.status || 500;
-
-        if (status >= 400 && status < 500) {
-          throw new BadRequestException(message);
-        }
-
-        throw new InternalServerErrorException(message);
-      }
     }
     throw new NotFoundException('Campaign not found or it may not started yet');
   }
@@ -1683,6 +1608,85 @@ export class CustomerService {
     });
   }
 
+  async creditWallet({
+    wallet,
+    amount,
+    sourceType,
+    description,
+    validityAfterAssignment,
+    order,
+  }: {
+    wallet: any;
+    amount: number;
+    sourceType: string;
+    description: string;
+    validityAfterAssignment?: number;
+    order?: Partial<WalletOrder>;
+  }) {
+    // 1. Get wallet settings for specific business unit
+    const walletSettings = await this.walletSettingsRepo.findOne({
+      where: { business_unit: { id: parseInt(wallet.business_unit.id) } },
+    });
+
+    const pendingMethod = walletSettings?.pending_method || 'none';
+    const pendingDays = walletSettings?.pending_days || 0;
+
+    // 2. Update wallet balances based on pending method
+    if (pendingMethod === 'none') {
+      wallet.available_balance += Number(amount);
+      wallet.total_balance += Number(amount);
+      await this.walletService.updateWalletBalances(wallet.id, {
+        available_balance: wallet.available_balance,
+        total_balance: wallet.total_balance,
+      });
+    } else if (pendingMethod === 'fixed_days') {
+      wallet.locked_balance += Number(amount);
+      wallet.total_balance += Number(amount);
+      await this.walletService.updateWalletBalances(wallet.id, {
+        locked_balance: wallet.locked_balance,
+        total_balance: wallet.total_balance,
+      });
+    }
+
+    // 3. Save wallet order if provided
+    let walletOrderResponse;
+    if (order) {
+      const walletOrder: Partial<WalletOrder> = {
+        ...order,
+        wallet: wallet,
+        business_unit: wallet.business_unit,
+      };
+      walletOrderResponse = await this.WalletOrderrepo.save(walletOrder);
+    }
+
+    // 4. Create wallet transaction
+    const walletTransaction: Partial<WalletTransaction> = {
+      wallet: wallet,
+      orders: walletOrderResponse,
+      business_unit: wallet.business_unit,
+      type: WalletTransactionType.EARN,
+      source_type: sourceType,
+      amount,
+      status:
+        pendingDays > 0
+          ? WalletTransactionStatus.PENDING
+          : WalletTransactionStatus.ACTIVE,
+      description,
+      unlock_date:
+        pendingDays > 0 ? dayjs().add(pendingDays, 'day').toDate() : null,
+      expiry_date: validityAfterAssignment
+        ? pendingDays > 0
+          ? dayjs()
+              .add(pendingDays + validityAfterAssignment, 'day')
+              .toDate()
+          : dayjs().add(validityAfterAssignment, 'day').toDate()
+        : null,
+    };
+
+    // 5. Save and return
+    return await this.txRepo.save(walletTransaction);
+  }
+
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
   async unLockWalletPointsAndAddThemInAvailableBalance() {
     console.log('Cron Unlock Wallet Points And AddThem In Available Balance');
@@ -1722,6 +1726,46 @@ export class CustomerService {
       await this.walletService.updateWalletBalances(wallet.id, {
         ...wallet,
       });
+      await this.txRepo.save(tx);
+    }
+  }
+
+  @Cron(CronExpression.EVERY_10_SECONDS)
+  async walletPointsExpiryCron() {
+    console.log('Wallet expire points cron started');
+
+    // Get start of today (midnight) to compare expiry dates
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // 1. Find all active EARN transactions whose points should expire today or earlier
+    const transactionsToExpire = await this.txRepo.find({
+      where: {
+        expiry_date: LessThanOrEqual(today),
+        status: WalletTransactionStatus.ACTIVE,
+        type: WalletTransactionType.EARN,
+      },
+      relations: ['wallet'],
+    });
+
+    // console.log('transactionsToExpire :::', transactionsToExpire);
+
+    // 2. Process each transaction
+    for (const tx of transactionsToExpire) {
+      const wallet = tx.wallet;
+      if (!wallet) continue; // Skip if wallet relation is missing
+
+      const amount = Number(tx.amount);
+
+      // Move expired points from available to locked balance
+      wallet.available_balance = Number(wallet.available_balance) - amount;
+      wallet.locked_balance = Number(wallet.locked_balance) + amount;
+
+      // Mark transaction as expired
+      tx.status = WalletTransactionStatus.EXPIRED;
+
+      // Save changes
+      await this.walletService.updateWalletBalances(wallet.id, { ...wallet });
       await this.txRepo.save(tx);
     }
   }

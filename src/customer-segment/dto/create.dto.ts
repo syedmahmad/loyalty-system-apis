@@ -1,4 +1,10 @@
-import { IsNotEmpty, IsNumber, IsString } from 'class-validator';
+import {
+  IsArray,
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsString,
+} from 'class-validator';
 
 export class CreateCustomerSegmentDto {
   @IsNotEmpty()
@@ -11,6 +17,10 @@ export class CreateCustomerSegmentDto {
 
   @IsNotEmpty()
   file: any; // you can later use `@IsObject()` or a custom validation pipe if needed
+
+  @IsOptional()
+  @IsArray()
+  selected_customer_ids?: number[];
 }
 
 export class AddCustomerToSegmentDto {

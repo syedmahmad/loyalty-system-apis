@@ -505,65 +505,93 @@ export class CampaignsService {
       // === RULES Sync ===
       const incomingRuleIds = dto.rules.map((r) => r.rule_id);
       const existingRuleIds = campaign.rules.map((cr) => cr.rule.id);
-      const ruleIdsToRemove = existingRuleIds.filter(
-        (id) => !incomingRuleIds.includes(id),
-      );
-      const ruleIdsToAdd = incomingRuleIds.filter(
-        (id) => !existingRuleIds.includes(id),
-      );
-      if (ruleIdsToRemove.length) {
-        const rulesToRemove = await manager.find(CampaignRule, {
-          where: {
-            campaign: { id },
-            rule: In(ruleIdsToRemove),
-          },
-          relations: ['rule', 'campaign'],
-        });
-        await manager.remove(CampaignRule, rulesToRemove);
-      }
-      if (ruleIdsToAdd.length) {
-        const rulesToAdd = await this.ruleRepository.findBy({
-          id: In(ruleIdsToAdd),
-        });
-        const newRules = rulesToAdd.map((rule) =>
-          this.campaignRuleRepository.create({
-            campaign: updatedCampaign,
-            rule,
-          }),
+
+      if (dto.campaign_type === 'COUPONS') {
+        if (existingRuleIds.length) {
+          const rulesToRemove = await manager.find(CampaignRule, {
+            where: {
+              campaign: { id },
+              rule: In(existingRuleIds),
+            },
+            relations: ['rule', 'campaign'],
+          });
+          await manager.remove(CampaignRule, rulesToRemove);
+        }
+      } else {
+        const ruleIdsToRemove = existingRuleIds.filter(
+          (id) => !incomingRuleIds.includes(id),
         );
-        await manager.save(CampaignRule, newRules);
+        const ruleIdsToAdd = incomingRuleIds.filter(
+          (id) => !existingRuleIds.includes(id),
+        );
+        if (ruleIdsToRemove.length) {
+          const rulesToRemove = await manager.find(CampaignRule, {
+            where: {
+              campaign: { id },
+              rule: In(ruleIdsToRemove),
+            },
+            relations: ['rule', 'campaign'],
+          });
+          await manager.remove(CampaignRule, rulesToRemove);
+        }
+        if (ruleIdsToAdd.length) {
+          const rulesToAdd = await this.ruleRepository.findBy({
+            id: In(ruleIdsToAdd),
+          });
+          const newRules = rulesToAdd.map((rule) =>
+            this.campaignRuleRepository.create({
+              campaign: updatedCampaign,
+              rule,
+            }),
+          );
+          await manager.save(CampaignRule, newRules);
+        }
       }
 
       // === COUPONS Sync ===
       const incomingCouponIds = dto.coupons.map((c) => c.coupon_id);
       const existingCouponIds = campaign.coupons.map((cc) => cc.coupon.id);
-      const couponIdsToRemove = existingCouponIds.filter(
-        (id) => !incomingCouponIds.includes(id),
-      );
-      const couponIdsToAdd = incomingCouponIds.filter(
-        (id) => !existingCouponIds.includes(id),
-      );
-      if (couponIdsToRemove.length) {
-        const couponsToRemove = await manager.find(CampaignCoupons, {
-          where: {
-            campaign: { id },
-            coupon: In(couponIdsToRemove),
-          },
-          relations: ['coupon', 'campaign'],
-        });
-        await manager.remove(CampaignCoupons, couponsToRemove);
-      }
-      if (couponIdsToAdd.length) {
-        const couponsToAdd = await this.couponRepository.findBy({
-          id: In(couponIdsToAdd),
-        });
-        const newCoupons = couponsToAdd.map((coupon) =>
-          this.campaignCouponsRepository.create({
-            campaign: updatedCampaign,
-            coupon,
-          }),
+
+      if (dto.campaign_type === 'POINTS') {
+        if (existingCouponIds.length) {
+          const couponsToRemove = await manager.find(CampaignCoupons, {
+            where: {
+              campaign: { id },
+              coupon: In(existingCouponIds),
+            },
+            relations: ['coupon', 'campaign'],
+          });
+          await manager.remove(CampaignCoupons, couponsToRemove);
+        }
+      } else {
+        const couponIdsToRemove = existingCouponIds.filter(
+          (id) => !incomingCouponIds.includes(id),
         );
-        await manager.save(CampaignCoupons, newCoupons);
+        const couponIdsToAdd = incomingCouponIds.filter(
+          (id) => !existingCouponIds.includes(id),
+        );
+        if (couponIdsToRemove.length) {
+          const couponsToRemove = await manager.find(CampaignCoupons, {
+            where: {
+              campaign: { id },
+              coupon: In(couponIdsToRemove),
+            },
+            relations: ['coupon', 'campaign'],
+          });
+          await manager.remove(CampaignCoupons, couponsToRemove);
+        }
+        if (couponIdsToAdd.length) {
+          const couponsToAdd = await this.couponRepository.findBy({
+            id: In(couponIdsToAdd),
+          });
+          const newCoupons = couponsToAdd.map((coupon) =>
+            this.campaignCouponsRepository.create({
+              campaign: updatedCampaign,
+              coupon,
+            }),
+          );
+          await manager.save(CampaignCoupons, newCoupons);
+        }
       }
 
       // === TIERS Sync ===

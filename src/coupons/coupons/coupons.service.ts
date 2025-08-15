@@ -1,11 +1,25 @@
 import {
   BadRequestException,
   Injectable,
-  InternalServerErrorException,
-  NotFoundException,
+  NotFoundException
 } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import axios from 'axios';
+import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
+import { CouponTypeService } from 'src/coupon_type/coupon_type/coupon_type.service';
+import { CustomerSegment } from 'src/customer-segment/entities/customer-segment.entity';
+import { CustomerService } from 'src/customers/customer.service';
+import { CustomerActivity } from 'src/customers/entities/customer-activity.entity';
+import { Customer } from 'src/customers/entities/customer.entity';
+import { Tenant } from 'src/tenants/entities/tenant.entity';
+import { TiersService } from 'src/tiers/tiers/tiers.service';
+import { User } from 'src/users/entities/user.entity';
+import {
+  CouponStatus,
+  UserCoupon,
+} from 'src/wallet/entities/user-coupon.entity';
+import { WalletService } from 'src/wallet/wallet/wallet.service';
 import {
   DataSource,
   ILike,
@@ -16,23 +30,8 @@ import {
 } from 'typeorm';
 import { CreateCouponDto } from '../dto/create-coupon.dto';
 import { UpdateCouponDto } from '../dto/update-coupon.dto';
-import { Coupon } from '../entities/coupon.entity';
-import { CustomerSegment } from 'src/customer-segment/entities/customer-segment.entity';
-import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
-import { User } from 'src/users/entities/user.entity';
-import { Tenant } from 'src/tenants/entities/tenant.entity';
 import { CouponCustomerSegment } from '../entities/coupon-customer-segments.entity';
-import { CouponTypeService } from 'src/coupon_type/coupon_type/coupon_type.service';
-import { Customer } from 'src/customers/entities/customer.entity';
-import { TiersService } from 'src/tiers/tiers/tiers.service';
-import { CustomerActivity } from 'src/customers/entities/customer-activity.entity';
-import { WalletService } from 'src/wallet/wallet/wallet.service';
-import { CustomerService } from 'src/customers/customer.service';
-import {
-  CouponStatus,
-  UserCoupon,
-} from 'src/wallet/entities/user-coupon.entity';
-import { Cron, CronExpression } from '@nestjs/schedule';
+import { Coupon } from '../entities/coupon.entity';
 
 @Injectable()
 export class CouponsService {
@@ -554,81 +553,42 @@ export class CouponsService {
         ? (couponInfo.discount_price ?? 0)
         : (amount * Number(couponInfo.discount_price)) / 100;
 
-    const customerWalletPayload: any = {
-      customer_id: wallet.customer.id,
-      business_unit_id: wallet.business_unit.id,
-      wallet_id: wallet.id,
-      type: 'earn',
+    const savedTx = await this.customerService.creditWallet({
+      wallet,
       amount: earnPoints,
-      status: 'active',
-      source_type: 'coupon',
-      source_id: couponInfo.id,
-      description: `Redeem ${earnPoints} amount (${couponInfo?.coupon_title})`,
+      sourceType: 'coupon',
+      description: `Redeemed ${earnPoints} amount (${couponInfo.coupon_title})`,
+      validityAfterAssignment: couponInfo.validity_after_assignment,
+      order,
+    });
+
+    await this.customerService.createCustomerActivity({
+      customer_uuid: wallet.customer.uuid,
+      activity_type: 'coupon',
+      coupon_uuid: couponInfo.uuid,
+      amount: earnPoints,
+    });
+
+    // Update coupon usage
+    await this.userCouponRepo.save({
+      coupon_code: couponInfo.code,
+      status: CouponStatus.USED,
+      redeemed_at: new Date(),
+      customer: { id: wallet.customer.id },
+      business_unit: { id: wallet.business_unit.id },
+      issued_from_type: 'coupon',
+      issued_from_id: couponInfo.id,
+    });
+
+    couponInfo.number_of_times_used = Number(
+      couponInfo.number_of_times_used + 1,
+    );
+    await this.couponRepo.save(couponInfo);
+
+    return {
+      success: true,
+      amount: Number(savedTx.amount),
     };
-
-    try {
-      let orderResponse: any = null;
-      if (order) {
-        const orderRes = await this.walletService.addOrder({
-          ...order,
-          wallet_id: wallet.id,
-          business_unit_id: wallet.business_unit.id,
-        });
-        orderResponse = orderRes?.id || null;
-      }
-
-      const transactionRes = await this.walletService.addTransaction(
-        {
-          ...customerWalletPayload,
-          wallet_order_id: orderResponse,
-        },
-        null,
-        true,
-      );
-
-      const customerActivityPayload = {
-        customer_uuid: wallet.customer.uuid,
-        activity_type: 'coupon',
-        coupon_uuid: couponInfo.uuid,
-        amount: earnPoints,
-      };
-
-      await this.customerService.createCustomerActivity(
-        customerActivityPayload,
-      );
-
-      const userCouponPayload = {
-        coupon_code: couponInfo.code,
-        status: CouponStatus.USED,
-        redeemed_at: new Date(),
-        customer: { id: wallet.customer.id },
-        business_unit: { id: wallet.business_unit.id },
-        issued_from_type: 'coupon',
-        issued_from_id: couponInfo.id,
-      };
-
-      await this.userCouponRepo.save(userCouponPayload);
-
-      couponInfo.number_of_times_used = Number(
-        couponInfo?.number_of_times_used + 1,
-      );
-      await this.couponRepo.save(couponInfo);
-
-      return {
-        success: true,
-        amount: transactionRes.amount,
-      };
-    } catch (error: any) {
-      const message =
-        error?.response?.data?.message || 'Failed to get customer wallet info';
-      const status = error?.response?.status || 500;
-
-      if (status >= 400 && status < 500) {
-        throw new BadRequestException(message);
-      }
-
-      throw new InternalServerErrorException(message);
-    }
   }
 
   async validateComplexCouponConditions(
