@@ -498,6 +498,11 @@ export class CustomerService {
       }
       // in this case give rewards in the multple of what user spends.
       if (rule.reward_condition === 'perAmount') {
+        if (Orderamount < rule.min_amount_spent) {
+          throw new BadRequestException(
+            `Minimum amount to earn points is ${rule.min_amount_spent}`,
+          );
+        }
         // Points per amount spent
         const multiplier = Math.floor(Orderamount / rule.min_amount_spent);
         rewardPoints = multiplier * rewardPoints;
