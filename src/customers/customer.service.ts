@@ -384,19 +384,35 @@ export class CustomerService {
       const rules = await this.ruleRepo.find({
         where: {
           status: 1,
+          // shoudl add tenant..
           dynamic_conditions: Not(IsNull()),
         },
       });
+      /*
+        rule.dynamic_conditions: [{"condition_type":"store_id","condition_operator":"==","condition_value":"NCMC001"},
+        {"condition_type":"product_type","condition_operator":"==","condition_value":"gasoline"},
+        {"condition_type":"quantity","condition_operator":"==","condition_value":"3.5 litter"},
+        {"condition_type":"amount","condition_operator":"==","condition_value":"10"}]
+
+        "metadata": {
+          "store_id": "NCMC_station_002"
+          "product_type": "High Octance",
+          "quantity": "5 Litter",
+          "amount": 10
+        }
+      */
       const matchingRules = rules.filter((rule) =>
         this.validateRuleAgainstMetadata(rule, metadata),
       );
       if (!matchingRules.length) {
-        throw new NotFoundException('Earning rule not found for this metadata');
+        throw new NotFoundException(
+          `Earning rule not found for this metadata: ${metadata}`,
+        );
       }
       if (matchingRules.length == 1) {
         rule = matchingRules[0];
       } else {
-        rule = matchingRules.find((singleRule) => singleRule.is_priority === 2);
+        rule = matchingRules.find((singleRule) => singleRule.is_priority === 1); // should be latest crated_at
         if (!rule) {
           // Find the one with the latest created_at
           rule = matchingRules.reduce((latest, current) => {
@@ -462,6 +478,7 @@ export class CustomerService {
     let rewardPoints = rule.reward_points;
     const Orderamount = metadata?.amount ? Number(metadata.amount) : undefined;
 
+    // I think, we will add this || rule.rule_type === 'dynamic'
     if (rule.rule_type === 'spend and earn') {
       if (!Orderamount) {
         throw new BadRequestException(
@@ -1752,7 +1769,21 @@ export class CustomerService {
     return await this.txRepo.save(walletTransaction);
   }
 
+  /*
+      rule.dynamic_conditions: [{"condition_type":"store_id","condition_operator":"==","condition_value":"NCMC001"},
+      {"condition_type":"product_type","condition_operator":"==","condition_value":"gasoline"},
+      {"condition_type":"quantity","condition_operator":"==","condition_value":"3.5 litter"},
+      {"condition_type":"amount","condition_operator":"==","condition_value":"10"}]
+
+      "metadata": {
+        "store_id": "NCMC_station_002"
+        "product_type": "High Octance",
+        "quantity": "5 Litter",
+        "amount": 10
+    }
+      */
   validateRuleAgainstMetadata(rule: any, metadata: Record<string, any>) {
+    // case sensitive should also be check here
     return rule.dynamic_conditions.some((cond: any) => {
       const metaValue = metadata[cond.condition_type];
       switch (cond.condition_operator) {
