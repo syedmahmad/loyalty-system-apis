@@ -667,6 +667,7 @@ export class CustomerService {
         where: {
           status: 1,
           tenant_id: Number(tenantId),
+          rule_type: 'burn',
           dynamic_conditions: Not(IsNull()),
         },
       });
