@@ -1683,9 +1683,9 @@ export class CustomerService {
     });
   }
 
-  @Cron(CronExpression.EVERY_10_SECONDS)
+  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
   async unLockWalletPointsAndAddThemInAvailableBalance() {
-    console.log('unLockWalletPointsAndAddThemInAvailableBalance');
+    console.log('Cron Unlock Wallet Points And AddThem In Available Balance');
     // 1. Find all wallet transactions where unlock_date is today or earlier and status is 'pending'
     // const today = new Date();
 
@@ -1704,10 +1704,10 @@ export class CustomerService {
       relations: ['wallet'],
     });
 
-    // console.log('transactionsToUnlock', transactionsToUnlock, today);
-
     for (const tx of transactionsToUnlock) {
-      const wallet = tx.wallet;
+      const wallet = await this.walletRepo.findOne({
+        where: { id: tx.wallet.id },
+      });
       if (!wallet) continue;
 
       // Move points from locked_balance to available_balance, so picking how much locked points are for this transaction
@@ -1715,8 +1715,6 @@ export class CustomerService {
       // Update wallet balances
       wallet.locked_balance = Number(wallet.locked_balance) - amount;
       wallet.available_balance = Number(wallet.available_balance) + amount;
-
-      console.log('/////////////////////////////', wallet);
       // Update transaction status to 'active'
       tx.status = WalletTransactionStatus.ACTIVE;
 

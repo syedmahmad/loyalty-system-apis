@@ -90,6 +90,6 @@ export class CustomerController {
 
   @Post('burn_with_event')
   async BurnWithEvent(@Body() body: EarnWithEvent) {
-    return this.customerService.earnWithEvent(body);
+    return this.customerService.burnWithEvent(body);
   }
 }
