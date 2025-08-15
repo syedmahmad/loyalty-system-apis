@@ -359,6 +359,8 @@ export class CustomerService {
 
   async earnWithEvent(bodyPayload: EarnWithEvent) {
     const { customer_id, event, BUId, metadata, tenantId } = bodyPayload;
+
+    console.log('started/////////////////', bodyPayload);
     // 1. Find customer by uuid
     const customer = await this.customerRepo.findOne({
       where: { uuid: customer_id, business_unit: { id: parseInt(BUId) } },
@@ -400,6 +402,7 @@ export class CustomerService {
           "amount": 10
         }
       */
+      console.log('///////////////rule', rules);
       const matchingRules = rules.filter((rule) =>
         this.validateRuleAgainstMetadata(rule, metadata),
       );
@@ -429,7 +432,7 @@ export class CustomerService {
         }
       }
     }
-
+    console.log('///////////////rule///////////////////', rule);
     // // 3. Get customer wallet info
     const wallet = await this.walletService.getSingleCustomerWalletInfoById(
       customer.id,
@@ -484,6 +487,7 @@ export class CustomerService {
     let rewardPoints = rule.reward_points;
     const Orderamount = metadata?.amount ? Number(metadata.amount) : undefined;
 
+    console.log('///////////////rewrdspoints', rewardPoints);
     // I think, we will add this || rule.rule_type === 'dynamic'
     if (['spend and earn', 'dynamic rule'].includes(rule.rule_type)) {
       if (!Orderamount) {
@@ -514,6 +518,8 @@ export class CustomerService {
         // rewardPoints = rule.reward_points;
       }
     }
+
+    console.log('///////////////rewrdspoints1111111', rewardPoints);
 
     if (!rewardPoints || rewardPoints <= 0) {
       throw new BadRequestException('No reward points to grant');
