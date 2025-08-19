@@ -57,6 +57,7 @@ export class TiersController {
     @Param('client_id') client_id: number,
     @Headers('user-secret') userSecret: string,
     @Query('name') name?: string, // optional query param
+    @Query('bu') bu?: number, // optional query param
   ) {
     if (!userSecret) {
       throw new BadRequestException('user-secret not found in headers');
@@ -74,7 +75,7 @@ export class TiersController {
       throw new BadRequestException('user not found against provided token');
     }
 
-    return await this.service.findAll(client_id, name, user.id);
+    return await this.service.findAll(client_id, name, user.id, bu);
   }
 
   @Get('/single/:id')

@@ -32,6 +32,9 @@ export class Coupon {
   @Column()
   coupon_title: string;
 
+  @Column({ nullable: true })
+  coupon_title_ar: string;
+
   @Column()
   code: string;
 
@@ -123,6 +126,18 @@ export class Coupon {
 
   @Column({ nullable: true })
   discount_type: string;
+
+  @Column({ nullable: true })
+  description_en: string;
+
+  @Column({ nullable: true })
+  description_ar: string;
+
+  @Column({ nullable: true, type: 'text' })
+  terms_and_conditions_en: string;
+
+  @Column({ nullable: true, type: 'text' })
+  terms_and_conditions_ar: string;
 
   @OneToMany(() => CouponCustomerSegment, (cs) => cs.coupon)
   customerSegments: CouponCustomerSegment[];

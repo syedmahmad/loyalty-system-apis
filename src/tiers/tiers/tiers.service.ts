@@ -81,7 +81,7 @@ export class TiersService {
     }
   }
 
-  async findAll(client_id: number, name: string, userId: number) {
+  async findAll(client_id: number, name: string, userId: number, bu: number) {
     // const ruleTargets = await this.ruleTargetRepository.find({
     //   where: { target_type: 'tier' },
     //   relations: { rule: true },
@@ -124,7 +124,12 @@ export class TiersService {
 
     if (hasGlobalBusinessUnitAccess || isSuperAdmin) {
       const tiers = await this.tiersRepository.find({
-        where: { tenant_id: client_id, status: 1, ...optionalWhereClause },
+        where: {
+          tenant_id: client_id,
+          status: 1,
+          ...(bu ? { business_unit_id: bu } : {}),
+          ...optionalWhereClause,
+        },
         relations: { business_unit: true },
         order: { created_at: 'DESC' },
       });
@@ -172,7 +177,10 @@ export class TiersService {
 
     const specificTiers = await this.tiersRepository.find({
       where: {
-        business_unit_id: In(availableBusinessUnitIds),
+        // business_unit_id: In(availableBusinessUnitIds),
+        ...(bu
+          ? { business_unit_id: bu }
+          : { business_unit_id: In(availableBusinessUnitIds) }), // 👈 handle bu filter
         status: 1,
         tenant_id: client_id,
         ...optionalWhereClause,
