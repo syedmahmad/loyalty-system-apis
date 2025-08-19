@@ -269,7 +269,8 @@ export class CouponsService {
 
     if (!coupon) throw new NotFoundException('Coupon not found');
 
-    return coupon;
+    const benefits = coupon.benefits;
+    return { ...coupon, benefits };
   }
 
   async update(id: number, dto: UpdateCouponDto, user: string) {
@@ -284,6 +285,7 @@ export class CouponsService {
 
       if (!coupon) throw new Error(`Coupon with id ${id} not found`);
 
+      coupon.benefits = dto.benefits;
       repo.merge(coupon, dto);
       await repo.save(coupon); // ✅ This triggers audit events and updates
 

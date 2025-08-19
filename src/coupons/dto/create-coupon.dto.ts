@@ -25,7 +25,7 @@ export class CreateCouponDto {
 
   @IsString()
   @IsOptional()
-  benefits?: string;
+  benefits?: string[];
 
   @IsString()
   @IsOptional()

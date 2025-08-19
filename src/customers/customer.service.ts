@@ -405,6 +405,7 @@ export class CustomerService {
       const matchingRules = rules.filter((rule) =>
         this.validateRuleAgainstMetadata(rule, metadata),
       );
+
       if (!matchingRules.length) {
         throw new NotFoundException(`Earning rule not found for this station`);
       }
@@ -570,8 +571,12 @@ export class CustomerService {
           // wallet_order_id: walletOrderId,
           business_unit: wallet.business_unit, // pass the full BusinessUnit entity instance
           amount: metadata.amount,
-          station_id: metadata.station_id,
-          fuel_type: metadata.fuel_type,
+
+          // station_id: metadata.station_id,
+          // fuel_type: metadata.fuel_type,
+          store_id: metadata.store_id,
+          product_type: metadata.product_type,
+
           quantity: metadata.quantity as string,
           discount: 0,
           subtotal: metadata.amount,
@@ -775,8 +780,10 @@ export class CustomerService {
           // wallet_order_id: walletOrderId,
           business_unit: wallet.business_unit, // pass the full BusinessUnit entity instance
           amount: metadata.amount,
-          station_id: metadata.station_id,
-          fuel_type: metadata.fuel_type,
+          // station_id: metadata.station_id,
+          // fuel_type: metadata.fuel_type,
+          store_id: metadata.store_id,
+          product_type: metadata.product_type,
           quantity: metadata.quantity as string,
           discount: discountAmount,
           subtotal: metadata.amount - discountAmount,

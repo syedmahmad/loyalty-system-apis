@@ -118,8 +118,29 @@ export class Coupon {
   @Column({ type: 'simple-json', nullable: true })
   complex_coupon: any;
 
+  // @Column({ nullable: true, type: 'text' })
+  // benefits: string;
+
   @Column({ nullable: true, type: 'text' })
-  benefits: string;
+  private _benefits: string;
+
+  get benefits(): string[] {
+    if (!this._benefits) return [''];
+    try {
+      const parsed = JSON.parse(this._benefits);
+      return Array.isArray(parsed) ? parsed : [parsed];
+    } catch {
+      return [this._benefits];
+    }
+  }
+
+  set benefits(value: string[] | string) {
+    if (Array.isArray(value)) {
+      this._benefits = JSON.stringify(value);
+    } else {
+      this._benefits = JSON.stringify([value]);
+    }
+  }
 
   @Column({ type: 'tinyint', default: ActiveStatus.ACTIVE })
   status: number; // 0 = inactive, 1 = active, 2 = deleted
