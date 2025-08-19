@@ -57,8 +57,9 @@ export class RulesController {
   async findAll(
     @Param('client_id') client_id: number,
     @Query('name') name?: string, // optional query param
+    @Query('bu') bu?: number, // optional query param
   ) {
-    return await this.rulesService.findAll(client_id, name);
+    return await this.rulesService.findAll(client_id, name, bu);
   }
 
   @Get(':tenant_id/third-party')

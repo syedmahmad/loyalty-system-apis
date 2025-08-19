@@ -109,5 +109,9 @@ export class CreateRuleDto {
   is_priority: number;
 
   @IsNumber()
+  @IsOptional()
+  business_unit_id?: number;
+
+  @IsNumber()
   created_by: number;
 }

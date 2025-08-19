@@ -53,6 +53,7 @@ export class RulesService {
         reward_condition: dto?.reward_condition || null,
         dynamic_conditions: dto?.dynamic_conditions || null,
         is_priority: dto?.is_priority,
+        business_unit_id: dto?.business_unit_id,
       });
 
       const savedRule = await queryRunner.manager.save(rule);
@@ -66,7 +67,7 @@ export class RulesService {
     }
   }
 
-  findAll(client_id: number, name: string) {
+  findAll(client_id: number, name: string, bu: number) {
     let optionalWhereClause: Record<string, any> = {};
 
     if (name) {
@@ -100,16 +101,19 @@ export class RulesService {
         'reward_condition',
         'dynamic_conditions',
         'is_priority',
+        'business_unit_id',
       ],
       where: name
         ? optionalWhereClause.map((condition) => ({
             tenant_id: client_id,
             status: 1,
+            ...(bu ? { business_unit_id: bu } : {}),
             ...condition,
           }))
         : {
             tenant_id: client_id,
             status: 1,
+            ...(bu ? { business_unit_id: bu } : {}),
           },
     });
   }
@@ -156,6 +160,7 @@ export class RulesService {
         'reward_condition',
         'dynamic_conditions',
         'is_priority',
+        'business_unit_id',
       ],
       where: {
         tenant_id: tenant.id,
@@ -188,6 +193,7 @@ export class RulesService {
         'reward_condition',
         'dynamic_conditions',
         'is_priority',
+        'business_unit_id',
       ],
       where: { uuid },
     });
@@ -224,10 +230,11 @@ export class RulesService {
       rule.condition_value = dto.condition_value ?? rule.condition_value;
       rule.updated_by = dto.updated_by ?? rule.updated_by;
       rule.frequency = dto.frequency ?? rule.frequency;
-      rule.burn_type = dto.burn_type ? rule.burn_type : null;
+      rule.burn_type = dto.burn_type ?? null;
       rule.reward_condition = dto.reward_condition ?? rule.reward_condition;
       rule.dynamic_conditions = dto.dynamic_conditions || null;
       rule.is_priority = dto.is_priority;
+      rule.business_unit_id = dto.business_unit_id;
 
       await manager.save(rule);
       await queryRunner.commitTransaction();

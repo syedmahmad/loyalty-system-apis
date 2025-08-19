@@ -12,6 +12,7 @@ import {
 import { RuleTarget } from './rule-target.entity';
 import { Tenant } from 'src/tenants/entities/tenant.entity';
 import { v4 as uuidv4 } from 'uuid';
+import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
 
 @Entity({ name: 'rules' })
 export class Rule {
@@ -24,6 +25,13 @@ export class Rule {
 
   @Column({ type: 'int', nullable: false })
   tenant_id: number;
+
+  @ManyToOne(() => BusinessUnit, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'business_unit_id' })
+  business_unit: BusinessUnit;
+
+  @Column({ nullable: true })
+  business_unit_id?: number;
 
   @Column({ type: 'varchar' })
   name: string;
