@@ -359,6 +359,7 @@ export class CustomerService {
 
   async earnWithEvent(bodyPayload: EarnWithEvent) {
     const { customer_id, event, BUId, metadata, tenantId } = bodyPayload;
+
     // 1. Find customer by uuid
     const customer = await this.customerRepo.findOne({
       where: { uuid: customer_id, business_unit: { id: parseInt(BUId) } },
@@ -383,20 +384,20 @@ export class CustomerService {
         where: {
           status: 1,
           // shoudl add tenant..
+          rule_type: Not('burn'),
           tenant_id: Number(tenantId),
-          rule_type: 'earn',
           dynamic_conditions: Not(IsNull()),
         },
       });
       /*
-        rule.dynamic_conditions: [{"condition_type":"store_id","condition_operator":"==","condition_value":"NCMC001"},
-        {"condition_type":"product_type","condition_operator":"==","condition_value":"gasoline"},
+        rule.dynamic_conditions: [{"condition_type":"station_id","condition_operator":"==","condition_value":"NCMC001"},
+        {"condition_type":"fuel_type","condition_operator":"==","condition_value":"gasoline"},
         {"condition_type":"quantity","condition_operator":"==","condition_value":"3.5 litter"},
         {"condition_type":"amount","condition_operator":"==","condition_value":"10"}]
 
         "metadata": {
-          "store_id": "NCMC_station_002"
-          "product_type": "High Octance",
+          "station_id": "NCMC_station_002"
+          "fuel_type": "High Octance",
           "quantity": "5 Litter",
           "amount": 10
         }
@@ -430,7 +431,6 @@ export class CustomerService {
         }
       }
     }
-
     // // 3. Get customer wallet info
     const wallet = await this.walletService.getSingleCustomerWalletInfoById(
       customer.id,
@@ -570,8 +570,8 @@ export class CustomerService {
           // wallet_order_id: walletOrderId,
           business_unit: wallet.business_unit, // pass the full BusinessUnit entity instance
           amount: metadata.amount,
-          store_id: metadata.store_id,
-          product_type: metadata.product_type,
+          station_id: metadata.station_id,
+          fuel_type: metadata.fuel_type,
           quantity: metadata.quantity as string,
           discount: 0,
           subtotal: metadata.amount,
@@ -602,6 +602,8 @@ export class CustomerService {
       unlock_date:
         pendingDays > 0 ? dayjs().add(pendingDays, 'day').toDate() : null,
 
+      point_balance: wallet.available_balance,
+
       // Set the expiry_date for the wallet transaction.
       // If the rule has a validity_after_assignment value:
       //   - If there are pendingDays (i.e., points are locked for a period), expiry is after (pendingDays + validity_after_assignment) days.
@@ -617,7 +619,6 @@ export class CustomerService {
     };
     // Save transaction
     const savedTx = await this.txRepo.save(walletTransaction);
-    console.log('savedTx', savedTx);
 
     return {
       message: 'Points earned successfully',
@@ -774,8 +775,8 @@ export class CustomerService {
           // wallet_order_id: walletOrderId,
           business_unit: wallet.business_unit, // pass the full BusinessUnit entity instance
           amount: metadata.amount,
-          store_id: metadata.store_id,
-          product_type: metadata.product_type,
+          station_id: metadata.station_id,
+          fuel_type: metadata.fuel_type,
           quantity: metadata.quantity as string,
           discount: discountAmount,
           subtotal: metadata.amount - discountAmount,
@@ -1795,14 +1796,14 @@ export class CustomerService {
   }
 
   /*
-      rule.dynamic_conditions: [{"condition_type":"store_id","condition_operator":"==","condition_value":"NCMC001"},
-      {"condition_type":"product_type","condition_operator":"==","condition_value":"gasoline"},
+      rule.dynamic_conditions: [{"condition_type":"station_id","condition_operator":"==","condition_value":"NCMC001"},
+      {"condition_type":"fuel_type","condition_operator":"==","condition_value":"gasoline"},
       {"condition_type":"quantity","condition_operator":"==","condition_value":"3.5 litter"},
       {"condition_type":"amount","condition_operator":"==","condition_value":"10"}]
 
       "metadata": {
-        "store_id": "NCMC_station_002"
-        "product_type": "High Octance",
+        "station_id": "NCMC_station_002"
+        "fuel_type": "High Octance",
         "quantity": "5 Litter",
         "amount": 10
     }

@@ -58,10 +58,10 @@ export class WalletOrder {
   order_date: Date;
 
   @Column({ nullable: true })
-  store_id?: string;
+  station_id?: string;
 
   @Column({ nullable: true })
-  product_type?: string;
+  fuel_type?: string;
 
   @Column({ nullable: true })
   qualtiy?: string;

@@ -49,11 +49,11 @@ export class CreateWalletOrderDto {
 
   @IsOptional()
   @IsString()
-  store_id?: string;
+  station_id?: string;
 
   @IsOptional()
   @IsString()
-  product_type?: string;
+  fuel_type?: string;
 
   @IsOptional()
   @IsString()
