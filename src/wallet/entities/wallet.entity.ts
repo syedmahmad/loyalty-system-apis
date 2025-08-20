@@ -9,6 +9,7 @@ import {
   UpdateDateColumn,
   JoinColumn,
 } from 'typeorm';
+import { Tenant } from 'src/tenants/entities/tenant.entity';
 
 @Entity()
 export class Wallet {
@@ -18,6 +19,10 @@ export class Wallet {
   @ManyToOne(() => Customer, { eager: true })
   @JoinColumn({ name: 'customer_id' })
   customer: Customer;
+
+  @ManyToOne(() => Tenant, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'tenant_id' })
+  tenant: Tenant;
 
   @ManyToOne(() => BusinessUnit, { eager: true })
   @JoinColumn({ name: 'business_unit_id' })

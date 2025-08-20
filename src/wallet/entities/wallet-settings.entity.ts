@@ -1,4 +1,5 @@
 import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
+import { Tenant } from 'src/tenants/entities/tenant.entity';
 import { User } from 'src/users/entities/user.entity';
 import {
   Entity,
@@ -29,6 +30,10 @@ export enum ExpirationMethod {
 export class WalletSettings {
   @PrimaryGeneratedColumn()
   id: number;
+
+  @ManyToOne(() => Tenant, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'tenant_id' })
+  tenant: Tenant;
 
   @ManyToOne(() => BusinessUnit, { nullable: true })
   @JoinColumn({ name: 'business_unit_id' })

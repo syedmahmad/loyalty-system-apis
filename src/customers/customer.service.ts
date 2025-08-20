@@ -41,6 +41,7 @@ import {
   In,
   IsNull,
   LessThanOrEqual,
+  Like,
   MoreThanOrEqual,
   Not,
   Repository,
@@ -96,6 +97,7 @@ export class CustomerService {
 
   async createCustomer(req: Request, dto: BulkCreateCustomerDto) {
     const businessUnit = (req as any).businessUnit;
+    const tenant = (req as any).tenant;
 
     if (!businessUnit) {
       throw new BadRequestException('Invalid Business Unit Key');
@@ -121,8 +123,9 @@ export class CustomerService {
       });
 
       if (existing) {
-        if (!existing.uuid) {
-          existing.uuid = customerUuid;
+        if (!existing.uuid || !existing.tenant) {
+          existing.uuid ??= customerUuid;
+          existing.tenant ??= tenant;
           await this.customerRepo.save(existing);
         }
 
@@ -155,6 +158,7 @@ export class CustomerService {
         phone: encryptedPhone,
         DOB: new Date(customerDto.DOB),
         business_unit: businessUnit,
+        tenant: tenant,
         uuid: customerUuid,
       });
       const saved = await this.customerRepo.save(customer);
@@ -170,6 +174,7 @@ export class CustomerService {
       await this.walletService.createWallet({
         customer_id: saved.id,
         business_unit_id: businessUnit.id,
+        tenant_id: tenant.id,
       });
 
       results.push({
@@ -194,17 +199,15 @@ export class CustomerService {
     return customer;
   }
 
-  async getAllCustomers(search?: string) {
-    const query = this.customerRepo
-      .createQueryBuilder('customer')
-      .leftJoinAndSelect('customer.business_unit', 'business_unit')
-      .leftJoinAndSelect('business_unit.tenant', 'tenant');
-
-    if (search) {
-      query.where('customer.name LIKE :search', { search: `%${search}%` });
-    }
-
-    return await query.orderBy('customer.created_at', 'DESC').getMany();
+  async getAllCustomers(client_id: number, search?: string) {
+    return this.customerRepo.find({
+      relations: ['business_unit', 'tenant'],
+      where: {
+        tenant: { id: client_id },
+        ...(search ? { name: Like(`%${search}%`) } : {}),
+      },
+      order: { created_at: 'DESC' },
+    });
   }
 
   async updateStatus(id: number, status: 0 | 1) {

@@ -33,9 +33,12 @@ export class CustomerController {
     return this.customerService.createCustomer(req, dto);
   }
 
-  @Get()
-  async getAllCustomers(@Query('search') search?: string) {
-    return this.customerService.getAllCustomers(search);
+  @Get(':client_id')
+  async getAllCustomers(
+    @Param('client_id') client_id: number,
+    @Query('search') search?: string,
+  ) {
+    return this.customerService.getAllCustomers(client_id, search);
   }
 
   @Get(':id')

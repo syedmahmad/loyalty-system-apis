@@ -39,6 +39,7 @@ export class WalletService {
       ...dto,
       customer: { id: dto.customer_id } as any,
       business_unit: { id: dto.business_unit_id } as any,
+      tenant: { id: dto.tenant_id } as any,
     });
 
     return this.walletRepo.save(wallet);
@@ -250,17 +251,14 @@ export class WalletService {
     };
   }
 
-  async listWallets(buId?: number) {
-    if (buId) {
-      const where = buId ? { business_unit: { id: buId } } : {};
-      return this.walletRepo.find({
-        where,
-        relations: ['business_unit', 'customer'],
-        order: { created_at: 'DESC' },
-      });
-    }
+  async listWallets(client_id: number, buId?: number) {
+    const where: any = {
+      tenant: { id: client_id },
+      ...(buId ? { business_unit: { id: buId } } : {}),
+    };
 
     return this.walletRepo.find({
+      where,
       relations: ['business_unit', 'customer'],
       order: { created_at: 'DESC' },
     });
@@ -273,13 +271,16 @@ export class WalletService {
     });
   }
 
-  async getAllWalltetSettings() {
+  async getAllWalltetSettings(client_id: number) {
     return this.settingsRepo.find({
+      where: {
+        tenant: { id: client_id },
+      },
       relations: ['business_unit', 'created_by'],
     });
   }
 
-  async saveOrUpdateSettings(dto: CreateWalletSettingsDto) {
+  async saveOrUpdateSettings(client_id: number, dto: CreateWalletSettingsDto) {
     let setting = await this.settingsRepo.findOne({
       where: { business_unit: { id: dto.business_unit_id } },
     });
@@ -288,12 +289,14 @@ export class WalletService {
       setting = this.settingsRepo.create({
         ...dto,
         business_unit: { id: dto.business_unit_id },
+        tenant: { id: client_id },
         created_by: { id: dto.created_by },
       });
     } else {
       this.settingsRepo.merge(setting, {
         ...dto,
         business_unit: { id: dto.business_unit_id },
+        tenant: { id: client_id },
         created_by: { id: dto.created_by },
       });
     }

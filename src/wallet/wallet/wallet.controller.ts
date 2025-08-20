@@ -70,9 +70,12 @@ export class WalletController {
     );
   }
 
-  @Get()
-  async listWallets(@Query('business_unit') buId?: number) {
-    return this.walletService.listWallets(buId);
+  @Get(':client_id')
+  async listWallets(
+    @Param('client_id') client_id: number,
+    @Query('business_unit') buId?: number,
+  ) {
+    return this.walletService.listWallets(client_id, buId);
   }
 
   @Get('settings/:businessUnitId')
@@ -80,14 +83,17 @@ export class WalletController {
     return this.walletService.getSettingsByBusinessUnit(id);
   }
 
-  @Get('all-settings')
-  async getAllWalltetSettings() {
-    return this.walletService.getAllWalltetSettings();
+  @Get('all-settings/:client_id')
+  async getAllWalltetSettings(@Param('client_id') client_id: number) {
+    return this.walletService.getAllWalltetSettings(client_id);
   }
 
-  @Post('settings')
-  async saveSettings(@Body() dto: CreateWalletSettingsDto) {
-    return this.walletService.saveOrUpdateSettings(dto);
+  @Post('settings/:client_id')
+  async saveSettings(
+    @Param('client_id') client_id: number,
+    @Body() dto: CreateWalletSettingsDto,
+  ) {
+    return this.walletService.saveOrUpdateSettings(client_id, dto);
   }
 
   @Post('create-transaction')

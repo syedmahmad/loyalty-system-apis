@@ -11,6 +11,7 @@ import {
 } from 'typeorm';
 import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
 import { CustomerSegmentMember } from 'src/customer-segment/entities/customer-segment-member.entity';
+import { Tenant } from 'src/tenants/entities/tenant.entity';
 
 @Entity()
 export class Customer {
@@ -19,6 +20,10 @@ export class Customer {
 
   @Column()
   external_customer_id: string;
+
+  @ManyToOne(() => Tenant, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'tenant_id' })
+  tenant: Tenant;
 
   @ManyToOne(() => BusinessUnit)
   @JoinColumn({ name: 'business_unit_id' })
