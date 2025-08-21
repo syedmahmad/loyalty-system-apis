@@ -342,6 +342,10 @@ export class CustomerService {
     });
     if (!customer) throw new NotFoundException('Customer not found');
 
+    if (customer && customer.status === 0) {
+      throw new NotFoundException('Customer is inactive');
+    }
+
     const wallet = await this.walletService.getSingleCustomerWalletInfoById(
       customer.id,
     );

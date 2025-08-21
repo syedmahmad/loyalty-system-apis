@@ -37,6 +37,7 @@ import { CustomerSegmentMember } from 'src/customer-segment/entities/customer-se
 import { UserCoupon } from 'src/wallet/entities/user-coupon.entity';
 import { WalletSettings } from 'src/wallet/entities/wallet-settings.entity';
 import { WalletOrder } from 'src/wallet/entities/wallet-order.entity';
+import { CustomerBootstrapService } from './startup/customer-bootstrap.service';
 
 @Module({
   imports: [
@@ -76,6 +77,7 @@ import { WalletOrder } from 'src/wallet/entities/wallet-order.entity';
     TiersService,
     CampaignsService,
     CouponTypeService,
+    CustomerBootstrapService,
   ],
 })
 export class CustomerModule implements NestModule {
