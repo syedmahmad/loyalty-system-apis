@@ -180,11 +180,9 @@ export class WalletService {
           wallet.available_balance += amount;
           break;
         case 'burn':
-          wallet.total_balance -= amount;
           wallet.available_balance -= amount;
           break;
         case 'expire':
-          wallet.total_balance -= amount;
           wallet.available_balance -= amount;
           break;
         case 'adjustment':
