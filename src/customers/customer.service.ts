@@ -356,12 +356,7 @@ export class CustomerService {
     }
 
     // Step 2: handling CampaignRuleEarning, SimpleRuleEarning and CampaignCouponEarning
-    return campaign_type
-      ? this.handleCampaignEarning({ ...bodyPayload, wallet })
-      : this.handleRuleEarning({
-          ...bodyPayload,
-          wallet,
-        });
+    return this.handleCampaignEarning({ ...bodyPayload, wallet });
   }
 
   async earnWithEvent(bodyPayload: EarnWithEvent) {
@@ -829,6 +824,7 @@ export class CustomerService {
       campaign_type,
       campaign_id,
       coupon_info,
+      metadata,
     } = payload;
     const { amount } = order ?? {};
 
@@ -857,7 +853,7 @@ export class CustomerService {
 
         const savedTx = await this.creditWallet({
           wallet,
-          amount: matchedRule.reward_points || 0,
+          amount: matchedRule.reward_points,
           sourceType:
             matchedRule.rule_type === 'dynamic rule'
               ? matchedRule.condition_type
@@ -877,8 +873,13 @@ export class CustomerService {
         });
 
         return {
-          success: true,
+          message: 'Points earned successfully',
           points: savedTx.amount,
+          status: savedTx.status,
+          transaction_id: savedTx.id,
+          available_balance: wallet.available_balance,
+          locked_balance: wallet.locked_balance,
+          total_balance: wallet.total_balance,
         };
       }
       case 'COUPONS': {
@@ -888,6 +889,7 @@ export class CustomerService {
           coupon_info,
           amount,
           order,
+          metadata,
         });
       }
       default:
@@ -1264,14 +1266,10 @@ export class CustomerService {
         'You have reached the maximum usage limit for this coupon',
       );
     }
-
-    // if (previousRewards.length) {
-    //   throw new BadRequestException('Already rewarded Coupon');
-    // }
   }
 
   async handleCampaignCoupons(bodyPayload) {
-    const { campaign_id, wallet, coupon_info, amount, order } = bodyPayload;
+    const { campaign_id, wallet, amount, order, metadata } = bodyPayload;
     const today = new Date();
     const campaign = await this.campaignRepository.findOne({
       where: {
@@ -1349,8 +1347,7 @@ export class CustomerService {
         where: {
           campaign: { id: campaignId },
           coupon: {
-            // status: 1,
-            uuid: coupon_info.uuid,
+            uuid: metadata.uuid,
           },
         },
         relations: ['coupon'],
@@ -1411,13 +1408,10 @@ export class CustomerService {
         throw new BadRequestException(`${errMsgEn} / ${errMsgAr}`);
       }
 
-      if (
-        // coupon?.complex_coupon && coupon?.complex_coupon.length >= 1
-        coupon?.coupon_type_id === null
-      ) {
+      if (coupon?.coupon_type_id === null) {
         const conditions = coupon?.complex_coupon;
         const result = await this.validateComplexCouponConditions(
-          coupon_info.complex_coupon,
+          metadata.complex_coupon,
           conditions,
           wallet,
           coupon,
@@ -1425,9 +1419,7 @@ export class CustomerService {
         if (!result.valid) {
           throw new BadRequestException(result.message);
         }
-      }
-      // else if (coupon?.conditions) {
-      else {
+      } else {
         const couponType = await this.couponTypeService.findOne(
           coupon?.coupon_type_id,
         );
@@ -1448,7 +1440,7 @@ export class CustomerService {
           const customerTierInfo =
             await this.tiersService.getCurrentCustomerTier(wallet.customer.id);
 
-          const cutomerFallInTier = coupon_info.conditions.find(
+          const cutomerFallInTier = metadata.conditions.find(
             (singleTier) => singleTier.tier === customerTierInfo.tier.id,
           );
           coupon.discount_type = 'percentage_discount';
@@ -1461,7 +1453,7 @@ export class CustomerService {
             wallet.customer.phone,
           );
           const isApplicableForUser = await this.matchConditions(
-            coupon_info.conditions,
+            metadata.conditions,
             {
               email: decryptedEmail,
               phone_number: decryptedPhone,
@@ -1472,9 +1464,14 @@ export class CustomerService {
               "you're not eligible for this coupon",
             );
           }
+        } else if (
+          couponType.coupon_type === 'DISCOUNT' &&
+          coupon.conditions == null
+        ) {
+          // Do nothing it means directly want to give coupon without condtions
         } else {
           const result = this.validateSimpleCouponConditions(
-            coupon_info,
+            metadata,
             coupon.conditions,
             couponType,
           );
@@ -1534,8 +1531,13 @@ export class CustomerService {
       await this.couponRepo.save(coupon);
 
       return {
-        success: true,
+        message: 'Coupon redeemed successfully',
         amount: Number(savedTx.amount),
+        status: savedTx?.status,
+        transaction_id: savedTx.id,
+        available_balance: savedTx?.wallet?.available_balance,
+        locked_balance: savedTx?.wallet?.locked_balance,
+        total_balance: savedTx?.wallet?.total_balance,
       };
     }
     throw new NotFoundException('Campaign not found or it may not started yet');
@@ -1610,8 +1612,6 @@ export class CustomerService {
               userRow.operator === dbRow.operator &&
               userRow.value === dbRow.value
             )
-            // JSON.stringify(userRow.models) === JSON.stringify(dbRow.models) &&
-            // JSON.stringify(userRow.variants) === JSON.stringify(dbRow.variants)
           ) {
             failedConditions.push(
               `No matching condition '${userCoupon.selectedCouponType}'`,

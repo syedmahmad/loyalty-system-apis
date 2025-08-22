@@ -1,10 +1,12 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import axios from 'axios';
+import * as dayjs from 'dayjs';
 import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
 import { CouponTypeService } from 'src/coupon_type/coupon_type/coupon_type.service';
 import { CustomerSegment } from 'src/customer-segment/entities/customer-segment.entity';
@@ -19,11 +21,31 @@ import {
   UserCoupon,
 } from 'src/wallet/entities/user-coupon.entity';
 import { WalletService } from 'src/wallet/wallet/wallet.service';
-import { DataSource, ILike, In, Not, Repository } from 'typeorm';
+import {
+  DataSource,
+  ILike,
+  In,
+  LessThanOrEqual,
+  MoreThanOrEqual,
+  Not,
+  Repository,
+} from 'typeorm';
 import { CreateCouponDto } from '../dto/create-coupon.dto';
 import { UpdateCouponDto } from '../dto/update-coupon.dto';
 import { CouponCustomerSegment } from '../entities/coupon-customer-segments.entity';
 import { Coupon } from '../entities/coupon.entity';
+import { Campaign } from 'src/campaigns/entities/campaign.entity';
+import { CampaignCustomerSegment } from 'src/campaigns/entities/campaign-customer-segments.entity';
+import { CustomerSegmentMember } from 'src/customer-segment/entities/customer-segment-member.entity';
+import { CampaignCoupons } from 'src/campaigns/entities/campaign-coupon.entity';
+import { WalletOrder } from 'src/wallet/entities/wallet-order.entity';
+import { WalletSettings } from 'src/wallet/entities/wallet-settings.entity';
+import {
+  WalletTransaction,
+  WalletTransactionStatus,
+  WalletTransactionType,
+} from 'src/wallet/entities/wallet-transaction.entity';
+import { OciService } from 'src/oci/oci.service';
 
 @Injectable()
 export class CouponsService {
@@ -61,10 +83,32 @@ export class CouponsService {
     @InjectRepository(Coupon)
     private readonly couponRepo: Repository<Coupon>,
 
+    @InjectRepository(Campaign)
+    private readonly campaignRepository: Repository<Campaign>,
+
+    @InjectRepository(CampaignCustomerSegment)
+    private readonly campaignCustomerSegmentRepo: Repository<CampaignCustomerSegment>,
+
+    @InjectRepository(CustomerSegmentMember)
+    private readonly customerSegmentMemberRepository: Repository<CustomerSegmentMember>,
+
+    @InjectRepository(CampaignCoupons)
+    private readonly campaignCouponRepo: Repository<CampaignCoupons>,
+
+    @InjectRepository(WalletSettings)
+    private walletSettingsRepo: Repository<WalletSettings>,
+
+    @InjectRepository(WalletOrder)
+    private WalletOrderrepo: Repository<WalletOrder>,
+
+    @InjectRepository(WalletTransaction)
+    private txRepo: Repository<WalletTransaction>,
+
     private readonly couponTypeService: CouponTypeService,
     private readonly tiersService: TiersService,
     private readonly walletService: WalletService,
     private readonly customerService: CustomerService,
+    private readonly ociService: OciService,
   ) {}
 
   async create(dto: CreateCouponDto, user: string) {
@@ -404,102 +448,172 @@ export class CouponsService {
     }
   }
 
-  async redeemCoupon(bodyPayload) {
-    const { customer_id, coupon_info, order } = bodyPayload;
+  async checkExistingCode(code: string) {
+    const coupon = await this.couponsRepository.findOne({
+      where: { code },
+    });
+
+    if (!coupon) {
+      return {
+        success: false,
+        message: 'code does not exists',
+      };
+    }
+
+    return {
+      success: true,
+      message: 'This code already exists',
+    };
+  }
+
+  async redeem(bodyPayload) {
+    const { customer_id, campaign_id, metadata, order } = bodyPayload;
     const { amount } = order ?? {};
+    const today = new Date();
 
     // Step 1: Get Customer & Wallet Info
     const customer = await this.customerRepo.findOne({
       where: { uuid: customer_id },
     });
-    if (!customer) throw new NotFoundException('Customer not found');
+    if (!customer) throw new NotFoundException('Customer not found 777');
+
+    if (customer && customer.status === 0) {
+      throw new NotFoundException('Customer is inactive');
+    }
 
     const wallet = await this.walletService.getSingleCustomerWalletInfoById(
       customer.id,
     );
-    if (!wallet) throw new NotFoundException('Customer Wallet not found');
+    if (!wallet) throw new NotFoundException('Wallet not found');
+    const customerId = wallet.customer.id;
 
-    const couponInfo = await this.couponsRepository.findOne({
-      where: { uuid: coupon_info.uuid },
-    });
+    let coupon;
+    let campaign;
 
-    if (!couponInfo) throw new NotFoundException('Coupon not found');
-    const now = new Date();
+    // Step 2:
+    // If campaign_id present it means coupon will be redeemed through campaign
+    //other wise, it means user want to redeem coupon direclty
+    if (campaign_id) {
+      campaign = await this.campaignRepository.findOne({
+        where: {
+          uuid: campaign_id,
+          status: 1,
+          start_date: LessThanOrEqual(today),
+          end_date: MoreThanOrEqual(today),
+        },
+        relations: [
+          'rules',
+          'rules.rule',
+          'tiers',
+          'tiers.tier',
+          'business_unit',
+          'coupons',
+          'customerSegments',
+          'customerSegments.segment',
+        ],
+      });
 
-    // Check From Date
-    if (couponInfo.date_from && now < couponInfo.date_from) {
-      throw new BadRequestException('Coupon is not yet valid');
-    }
+      if (campaign) {
+        const campaignId = campaign.id;
 
-    // Coupon is expried
-    if (
-      couponInfo.date_to &&
-      couponInfo.date_to < now &&
-      couponInfo?.status === 0
-    ) {
-      throw new BadRequestException('This coupon has been expired!');
-    }
+        // Segment validation
+        const hasSegments = await this.campaignCustomerSegmentRepo.find({
+          where: { campaign: { id: campaign.id } },
+          relations: ['segment'],
+        });
 
-    // Coupon is inactive
-    if (couponInfo.status === 0)
-      throw new BadRequestException('Coupon is not active');
+        if (hasSegments.length > 0) {
+          // Extract segment IDs
+          const segmentIds = hasSegments.map((cs) => cs.segment.id);
 
-    // Check reuse interval for this user
-    const lastUsage = await this.userCouponRepo.findOne({
-      where: {
-        customer: { id: wallet.customer.id },
-        coupon_code: couponInfo.code,
-      },
-      order: { redeemed_at: 'DESC' },
-    });
+          if (segmentIds.length === 0) {
+            return false;
+          }
 
-    if (lastUsage && couponInfo.reuse_interval > 0) {
-      const nextAvailable = new Date(lastUsage.redeemed_at);
-      nextAvailable.setDate(
-        nextAvailable.getDate() + couponInfo.reuse_interval,
-      );
+          const match = await this.customerSegmentMemberRepository.findOne({
+            where: {
+              segment: { id: In(segmentIds) },
+              customer: { id: customerId },
+            },
+          });
 
-      if (now < nextAvailable) {
-        throw new BadRequestException(
-          `You can reuse this coupon after ${nextAvailable.toDateString()}`,
+          if (!match) {
+            throw new ForbiddenException(
+              'Customer is not eligible for this campaign',
+            );
+          }
+        }
+
+        // customer eligible tier checking
+        const campaignTiers = campaign.tiers || [];
+        if (campaignTiers.length > 0) {
+          const currentCustomerTier =
+            await this.tiersService.getCurrentCustomerTier(customerId);
+          const matchedTier = campaignTiers.find((ct) => {
+            return (
+              ct.tier &&
+              currentCustomerTier?.tier &&
+              ct.tier.name === currentCustomerTier.tier.name &&
+              ct.tier.level === currentCustomerTier.tier.level
+            );
+          });
+
+          if (!matchedTier) {
+            throw new ForbiddenException(
+              'Customer tier is not eligible for this campaign',
+            );
+          }
+        }
+
+        const campaignCoupon = await this.campaignCouponRepo.findOne({
+          where: {
+            campaign: { id: campaignId },
+            coupon: {
+              uuid: metadata.uuid,
+            },
+          },
+          relations: ['coupon'],
+        });
+
+        // Coupon Not Found
+        if (!campaignCoupon) {
+          throw new BadRequestException('Coupon not found');
+        }
+        coupon = campaignCoupon.coupon;
+      } else {
+        throw new NotFoundException(
+          'Campaign not found or it may not started yet',
         );
       }
+    } else {
+      coupon = await this.couponsRepository.findOne({
+        where: { uuid: metadata.uuid },
+      });
+      if (!coupon) throw new NotFoundException('Coupon not found');
     }
 
-    // Check total usage limit
-    if (
-      couponInfo.usage_limit &&
-      couponInfo.number_of_times_used >= couponInfo.usage_limit
-    ) {
-      const errMsgEn =
-        couponInfo.errors?.general_error_message_en ||
-        'Coupon usage limit reached';
-      const errMsgAr =
-        couponInfo.errors?.general_error_message_ar ||
-        'تم الوصول إلى الحد الأقصى لاستخدام القسيمة';
+    // Step 3:
+    // checking coupon validation like (usage limit, expiry, max usage per user .....)
+    await this.couponValidations(coupon, today, customerId);
 
-      throw new BadRequestException(`${errMsgEn} / ${errMsgAr}`);
-    }
-
-    if (
-      // couponInfo?.complex_coupon && couponInfo?.complex_coupon.length >= 1
-      couponInfo?.coupon_type_id === null
-    ) {
-      const result = await this.validateComplexCouponConditions(
-        coupon_info.complex_coupon,
-        couponInfo?.complex_coupon,
-        customer,
-        couponInfo,
+    // Step 4:
+    // checking conditions of Complex Coupon & Normal Coupon
+    if (coupon?.coupon_type_id === null) {
+      const conditions = coupon?.complex_coupon;
+      const result = await this.checkComplexCouponConditions(
+        metadata.complex_coupon,
+        conditions,
+        wallet,
+        coupon,
       );
       if (!result.valid) {
         throw new BadRequestException(result.message);
       }
-    }
-    // else if (couponInfo?.conditions) {
-    else {
+    } else {
       const couponType = await this.couponTypeService.findOne(
-        couponInfo?.coupon_type_id,
+        coupon?.coupon_type_id,
       );
+
       if (couponType.coupon_type === 'BIRTHDAY') {
         const today = new Date();
         const dob = new Date(wallet.customer.DOB);
@@ -516,15 +630,38 @@ export class CouponsService {
         const customerTierInfo = await this.tiersService.getCurrentCustomerTier(
           wallet.customer.id,
         );
-        const cutomerFallInTier = coupon_info.conditions.find(
+
+        const cutomerFallInTier = metadata.conditions.find(
           (singleTier) => singleTier.tier === customerTierInfo.tier.id,
         );
-        couponInfo.discount_type = 'percentage_discount';
-        couponInfo.discount_price = cutomerFallInTier.value;
+        coupon.discount_type = 'percentage_discount';
+        coupon.discount_price = cutomerFallInTier.value;
+      } else if (couponType.coupon_type === 'USER_SPECIFIC') {
+        const decryptedEmail = await this.ociService.decryptData(
+          wallet.customer.email,
+        );
+        const decryptedPhone = await this.ociService.decryptData(
+          wallet.customer.phone,
+        );
+        const isApplicableForUser = await this.matchConditions(
+          metadata.conditions,
+          {
+            email: decryptedEmail,
+            phone_number: decryptedPhone,
+          },
+        );
+        if (!isApplicableForUser) {
+          throw new BadRequestException("you're not eligible for this coupon");
+        }
+      } else if (
+        couponType.coupon_type === 'DISCOUNT' &&
+        coupon.conditions == null
+      ) {
+        // Do nothing it means directly want to give coupon without condtions
       } else {
-        const result = this.validateSimpleCouponConditions(
-          coupon_info,
-          couponInfo.conditions,
+        const result = this.checkSimpleCouponConditions(
+          metadata,
+          coupon.conditions,
           couponType,
         );
         if (!result.valid) {
@@ -533,62 +670,72 @@ export class CouponsService {
       }
     }
 
-    await this.checkAlreadyRedeemCoupon(wallet.customer.uuid, coupon_info.uuid);
+    // Step 5:
+    // Checking if coupon already rewarded or not
+    await this.checkAlreadyRewaredCoupons(
+      wallet.customer.uuid,
+      coupon.uuid,
+      coupon,
+    );
 
     if (
-      couponInfo.discount_type === 'percentage_discount' &&
+      coupon.discount_type === 'percentage_discount' &&
       (amount === undefined || amount === null || amount === '')
     ) {
       throw new BadRequestException(`Amount is required`);
     }
 
     const earnPoints =
-      couponInfo.discount_type === 'fixed_discount'
-        ? (couponInfo.discount_price ?? 0)
-        : (amount * Number(couponInfo.discount_price)) / 100;
+      coupon.discount_type === 'fixed_discount'
+        ? (coupon.discount_price ?? 0)
+        : (amount * Number(coupon.discount_price)) / 100;
 
-    const savedTx = await this.customerService.creditWallet({
+    const savedTx = await this.creditWallet({
       wallet,
       amount: earnPoints,
       sourceType: 'coupon',
-      description: `Redeemed ${earnPoints} amount (${couponInfo.coupon_title})`,
-      validityAfterAssignment: couponInfo.validity_after_assignment,
+      description: `Redeemed ${earnPoints} amount (${coupon.coupon_title})`,
+      validityAfterAssignment: coupon.validity_after_assignment,
       order,
     });
 
     await this.customerService.createCustomerActivity({
       customer_uuid: wallet.customer.uuid,
       activity_type: 'coupon',
-      coupon_uuid: couponInfo.uuid,
+      campaign_uuid: campaign?.uuid ? campaign?.uuid : null,
+      coupon_uuid: coupon.uuid,
       amount: earnPoints,
     });
 
     // Update coupon usage
     await this.userCouponRepo.save({
-      coupon_code: couponInfo.code,
+      coupon_code: coupon.code,
       status: CouponStatus.USED,
       redeemed_at: new Date(),
       customer: { id: wallet.customer.id },
       business_unit: { id: wallet.business_unit.id },
       issued_from_type: 'coupon',
-      issued_from_id: couponInfo.id,
+      issued_from_id: coupon.id,
     });
 
-    couponInfo.number_of_times_used = Number(
-      couponInfo.number_of_times_used + 1,
-    );
-    await this.couponRepo.save(couponInfo);
+    coupon.number_of_times_used = Number(coupon.number_of_times_used + 1);
+    await this.couponRepo.save(coupon);
 
     return {
-      success: true,
+      message: 'Coupon redeemed successfully',
       amount: Number(savedTx.amount),
+      status: savedTx?.status,
+      transaction_id: savedTx.id,
+      available_balance: savedTx?.wallet?.available_balance,
+      locked_balance: savedTx?.wallet?.locked_balance,
+      total_balance: savedTx?.wallet?.total_balance,
     };
   }
 
-  async validateComplexCouponConditions(
+  async checkComplexCouponConditions(
     userCouponInfo,
     dbCouponInfo,
-    customer,
+    wallet,
     coupon,
   ) {
     const failedConditions: any = [];
@@ -608,7 +755,7 @@ export class CouponsService {
 
       if (match.selectedCouponType === 'BIRTHDAY') {
         const today = new Date();
-        const dob = new Date(customer.DOB);
+        const dob = new Date(wallet.customer.DOB);
         const isBirthday =
           today.getDate() === dob.getDate() &&
           today.getMonth() === dob.getMonth();
@@ -621,7 +768,7 @@ export class CouponsService {
         }
       } else if (match.selectedCouponType === 'TIER_BASED') {
         const customerTierInfo = await this.tiersService.getCurrentCustomerTier(
-          customer.id,
+          wallet.customer.id,
         );
 
         const cutomerFallInTier = match.dynamicRows.find(
@@ -674,8 +821,9 @@ export class CouponsService {
     return { valid: true, message: 'Coupon is applicable.' };
   }
 
-  validateSimpleCouponConditions(userCouponInfo, dbCouponInfo, couponType) {
+  checkSimpleCouponConditions(userCouponInfo, dbCouponInfo, couponType) {
     const failedConditions: any = [];
+
     for (const userCoupon of userCouponInfo.conditions) {
       const matched = dbCouponInfo.find((cond: any) => {
         const baseMatch =
@@ -731,7 +879,77 @@ export class CouponsService {
     return { valid: true, message: 'Coupon is applicable.' };
   }
 
-  async checkAlreadyRedeemCoupon(customer_uuid, coupon_uuid) {
+  matchConditions(couponConditions, customer) {
+    return couponConditions.every((condition) => {
+      const valuesArray = condition.value.split(',').map((v) => v.trim());
+
+      switch (condition.type) {
+        case 'EMAIL': {
+          return condition.operator === '=='
+            ? valuesArray.includes(customer.email)
+            : !valuesArray.includes(customer.email);
+        }
+
+        case 'PHONE_NUMBER': {
+          return condition.operator === '=='
+            ? valuesArray.includes(customer.phone_number)
+            : !valuesArray.includes(customer.phone_number);
+        }
+
+        default:
+          return false;
+      }
+    });
+  }
+
+  async couponValidations(coupon, today, customerId) {
+    // Check From Date
+    if (coupon.date_from && today < coupon.date_from) {
+      throw new BadRequestException('Coupon is not yet valid');
+    }
+
+    // Coupon is expried
+    if (coupon.date_to && coupon.date_to < today && coupon?.status === 0) {
+      throw new BadRequestException('This coupon has been expired!');
+    }
+
+    // Coupon is inactive
+    if (coupon.status === 0)
+      throw new BadRequestException('Coupon is not active');
+
+    // Check reuse interval for this user
+    const lastUsage = await this.userCouponRepo.findOne({
+      where: { customer: { id: customerId }, coupon_code: coupon.code },
+      order: { redeemed_at: 'DESC' },
+    });
+
+    if (lastUsage && coupon.reuse_interval > 0) {
+      const nextAvailable = new Date(lastUsage.redeemed_at);
+      nextAvailable.setDate(nextAvailable.getDate() + coupon.reuse_interval);
+
+      if (today < nextAvailable) {
+        throw new BadRequestException(
+          `You can reuse this coupon after ${nextAvailable.toDateString()}`,
+        );
+      }
+    }
+
+    // Check total usage limit
+    if (
+      coupon.usage_limit &&
+      coupon.number_of_times_used >= coupon.usage_limit
+    ) {
+      const errMsgEn =
+        coupon.errors?.general_error_message_en || 'Coupon usage limit reached';
+      const errMsgAr =
+        coupon.errors?.general_error_message_ar ||
+        'تم الوصول إلى الحد الأقصى لاستخدام القسيمة';
+
+      throw new BadRequestException(`${errMsgEn} / ${errMsgAr}`);
+    }
+  }
+
+  async checkAlreadyRewaredCoupons(customer_uuid, coupon_uuid, coupon) {
     const previousRewards = await this.customeractivityRepo.find({
       where: {
         customer_uuid: customer_uuid,
@@ -739,26 +957,93 @@ export class CouponsService {
       },
     });
 
-    if (previousRewards.length) {
-      throw new BadRequestException('Already redeemed this coupon');
+    // Check per-user limit
+    if (
+      coupon.max_usage_per_user &&
+      previousRewards.length >= coupon.max_usage_per_user
+    ) {
+      throw new BadRequestException(
+        'You have reached the maximum usage limit for this coupon',
+      );
     }
   }
 
-  async checkExistingCode(code: string) {
-    const coupon = await this.couponsRepository.findOne({
-      where: { code },
+  async creditWallet({
+    wallet,
+    amount,
+    sourceType,
+    description,
+    validityAfterAssignment,
+    order,
+  }: {
+    wallet: any;
+    amount: number;
+    sourceType: string;
+    description: string;
+    validityAfterAssignment?: number;
+    order?: Partial<WalletOrder>;
+  }) {
+    // 1. Get wallet settings for specific business unit
+    const walletSettings = await this.walletSettingsRepo.findOne({
+      where: { business_unit: { id: parseInt(wallet.business_unit.id) } },
     });
 
-    if (!coupon) {
-      return {
-        success: false,
-        message: 'code does not exists',
-      };
+    const pendingMethod = walletSettings?.pending_method || 'none';
+    const pendingDays = walletSettings?.pending_days || 0;
+
+    // 2. Update wallet balances based on pending method
+    if (pendingMethod === 'none') {
+      wallet.available_balance += Number(amount);
+      wallet.total_balance += Number(amount);
+      await this.walletService.updateWalletBalances(wallet.id, {
+        available_balance: wallet.available_balance,
+        total_balance: wallet.total_balance,
+      });
+    } else if (pendingMethod === 'fixed_days') {
+      wallet.locked_balance += Number(amount);
+      wallet.total_balance += Number(amount);
+      await this.walletService.updateWalletBalances(wallet.id, {
+        locked_balance: wallet.locked_balance,
+        total_balance: wallet.total_balance,
+      });
     }
 
-    return {
-      success: true,
-      message: 'This code already exists',
+    // 3. Save wallet order if provided
+    let walletOrderResponse;
+    if (order) {
+      const walletOrder: Partial<WalletOrder> = {
+        ...order,
+        wallet: wallet,
+        business_unit: wallet.business_unit,
+      };
+      walletOrderResponse = await this.WalletOrderrepo.save(walletOrder);
+    }
+
+    // 4. Create wallet transaction
+    const walletTransaction: Partial<WalletTransaction> = {
+      wallet: wallet,
+      orders: walletOrderResponse,
+      business_unit: wallet.business_unit,
+      type: WalletTransactionType.EARN,
+      source_type: sourceType,
+      amount,
+      status:
+        pendingDays > 0
+          ? WalletTransactionStatus.PENDING
+          : WalletTransactionStatus.ACTIVE,
+      description,
+      unlock_date:
+        pendingDays > 0 ? dayjs().add(pendingDays, 'day').toDate() : null,
+      expiry_date: validityAfterAssignment
+        ? pendingDays > 0
+          ? dayjs()
+              .add(pendingDays + validityAfterAssignment, 'day')
+              .toDate()
+          : dayjs().add(validityAfterAssignment, 'day').toDate()
+        : null,
     };
+
+    // 5. Save and return
+    return await this.txRepo.save(walletTransaction);
   }
 }

@@ -163,8 +163,8 @@ export class CouponsController {
     return await this.service.findVariants(modelId);
   }
 
-  @Post('redeemCoupon')
+  @Post('redeem')
   async redeemCoupon(@Body() bodyPayload: any) {
-    return await this.service.redeemCoupon(bodyPayload);
+    return await this.service.redeem(bodyPayload);
   }
 }
