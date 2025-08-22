@@ -104,4 +104,9 @@ export class CustomerController {
   ) {
     return this.customerService.validateCustomerTenant(customerId, tenantId);
   }
+
+  @Post('gvr_earn_with_event')
+  async gvrEarnWithEvent(@Body() body: EarnWithEvent) {
+    return this.customerService.gvrEarnWithEvent(body);
+  }
 }

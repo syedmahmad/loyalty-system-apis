@@ -411,6 +411,7 @@ export class CustomerService {
       if (!matchingRules.length) {
         throw new NotFoundException(`Earning rule not found for this station`);
       }
+
       if (matchingRules.length == 1) {
         rule = matchingRules[0];
       } else {
@@ -1847,5 +1848,302 @@ export class CustomerService {
     }
 
     return false;
+  }
+
+  async gvrEarnWithEvent(bodyPayload: EarnWithEvent) {
+    const { customer_id, event, BUId, metadata, tenantId } = bodyPayload;
+
+    // 1. Find customer by uuid
+    const customer = await this.customerRepo.findOne({
+      where: { uuid: customer_id, business_unit: { id: parseInt(BUId) } },
+    });
+    if (!customer) throw new NotFoundException('Customer not found');
+
+    let rule;
+    const matchedRules = [];
+    const orderAmount = {};
+    let totalRewardPoints = 0;
+
+    // 2. Find earning rule by event name (case-insensitive)
+    if (event) {
+      rule = await this.ruleRepo.findOne({
+        where: {
+          status: 1,
+          name: event,
+          rule_type: Not('burn'),
+        },
+      });
+      if (!rule)
+        throw new NotFoundException('Earning rule not found for this event');
+
+      for (const product of metadata.Productitems.products) {
+        let allMatch = true;
+        for (const condition of rule.dynamic_conditions) {
+          const isMatch = this.checkMetadataAndDynamicCondition(
+            product,
+            condition,
+          );
+          if (!isMatch) {
+            allMatch = false;
+            break;
+          }
+        }
+
+        if (allMatch) {
+          matchedRules.push(rule);
+          orderAmount[rule.uuid] = product.amount || 0;
+        }
+      }
+    } else {
+      const rules = await this.ruleRepo.find({
+        where: {
+          status: 1,
+          // shoudl add tenant..
+          rule_type: Not('burn'),
+          tenant_id: Number(tenantId),
+          dynamic_conditions: Not(IsNull()),
+        },
+      });
+      for (let index = 0; index < rules.length; index++) {
+        const eachRule = rules[index];
+        for (const product of metadata.Productitems.products) {
+          let allMatch = true;
+          for (const condition of eachRule.dynamic_conditions) {
+            const isMatch = this.checkMetadataAndDynamicCondition(
+              product,
+              condition,
+            );
+            if (!isMatch) {
+              allMatch = false;
+              break;
+            }
+          }
+
+          if (allMatch) {
+            matchedRules.push(eachRule);
+            orderAmount[eachRule.uuid] = product.amount || 0;
+          }
+        }
+      }
+    }
+
+    for (let index = 0; index <= matchedRules.length - 1; index++) {
+      rule = matchedRules[index];
+
+      // 3. Get customer wallet info
+      const wallet = await this.walletService.getSingleCustomerWalletInfoById(
+        customer.id,
+      );
+      if (!wallet) throw new NotFoundException('Wallet not found');
+
+      // 4. Check frequency and if user already got this reward
+      // const alreadyRewarded = false;
+      // Find previous wallet transaction for this event, customer, and business_unit
+      const txWhere: any = {
+        wallet: { id: wallet.id },
+        business_unit: { id: parseInt(BUId) },
+        type: 'earn',
+        source_type: event,
+      };
+
+      const previousTx = await this.txRepo.findOne({
+        where: txWhere,
+        order: { created_at: 'DESC' },
+      });
+
+      // Frequency logic
+      if (rule.frequency === 'once' && previousTx) {
+        throw new BadRequestException(
+          'Reward for this event already granted (once per customer)',
+        );
+      }
+      if (rule.frequency === 'daily' && previousTx) {
+        // Check if already rewarded today
+        const today = dayjs().startOf('day');
+        const txDate = dayjs(previousTx.created_at).startOf('day');
+        if (txDate.isSame(today)) {
+          throw new BadRequestException(
+            'Reward for this event already granted today',
+          );
+        }
+      }
+      if (rule.frequency === 'yearly' && previousTx) {
+        // Check if already rewarded this year
+        const thisYear = dayjs().year();
+        const txYear = dayjs(previousTx.created_at).year();
+        if (txYear === thisYear) {
+          throw new BadRequestException(
+            'Reward for this event already granted this year',
+          );
+        }
+      }
+
+      // 5. Calculate reward points
+      let rewardPoints = rule.reward_points;
+      const Orderamount = orderAmount[rule.uuid]
+        ? Number(orderAmount[rule.uuid])
+        : undefined;
+
+      if (['spend and earn', 'dynamic rule'].includes(rule.rule_type)) {
+        if (!Orderamount) {
+          throw new BadRequestException(
+            'Amount is required for spend and earn rule',
+          );
+        }
+        // in this case give rewards in the multple of what user spends.
+        if (rule.reward_condition === 'perAmount') {
+          if (Orderamount < rule.min_amount_spent) {
+            throw new BadRequestException(
+              `Minimum amount to earn points is ${rule.min_amount_spent}`,
+            );
+          }
+          // Points per amount spent
+          const multiplier = Math.floor(Orderamount / rule.min_amount_spent);
+          rewardPoints = multiplier * rewardPoints;
+        } else if (
+          rule.reward_condition === 'minimum' ||
+          rule.reward_condition === null
+        ) {
+          if (Orderamount < rule.min_amount_spent) {
+            throw new BadRequestException(
+              `Minimum amount to earn points is ${rule.min_amount_spent}`,
+            );
+          }
+          // Give fixed reward points, I think, don't need to assign it again.
+          // rewardPoints = rule.reward_points;
+        }
+      }
+
+      if (!rewardPoints || rewardPoints <= 0) {
+        throw new BadRequestException('No reward points to grant');
+      }
+
+      const walletSettings = await this.walletSettingsRepo.findOne({
+        where: { business_unit: { id: parseInt(BUId) } },
+      });
+
+      // 6. Check business unit's pending_method
+      const pendingMethod = walletSettings?.pending_method || 'none';
+      const pendingDays = walletSettings?.pending_days || 0;
+      // Via the cron job to unlcok these locked balance on each midnight.
+
+      // 7. Update wallet balances because it is priority
+      if (pendingMethod === 'none') {
+        // Immediately add to available_balance and total_balance
+        wallet.available_balance += rewardPoints;
+        wallet.total_balance += rewardPoints;
+        await this.walletService.updateWalletBalances(wallet.id, {
+          available_balance: wallet.available_balance,
+          total_balance: wallet.total_balance,
+        });
+      } else if (pendingMethod === 'fixed_days') {
+        // Add to locked_balance and total_balance, available_balance unchanged
+        wallet.locked_balance += rewardPoints;
+        wallet.total_balance += rewardPoints;
+        await this.walletService.updateWalletBalances(wallet.id, {
+          locked_balance: wallet.locked_balance,
+          total_balance: wallet.total_balance,
+        });
+        // Cron job will unlock after pending_days
+      }
+
+      // 8. Now, we need to generate wallet_order if any
+      // const walletOrderId: number | null = null;
+      // Try to map metadata to wallet_order if possible (optional, depends on event)
+      // For event-based, wallet_order may not exist, so we keep it null
+      let walletOrderRes;
+      if (metadata) {
+        // Check if metadata is present, is an object, and contains 'amount'
+        if (
+          metadata &&
+          typeof metadata === 'object' &&
+          Orderamount !== undefined
+        ) {
+          // You can access metadata.amount here if needed
+          // For example, you might want to log or process the amount
+          // Add any additional logic here as required
+
+          const walletOrder: Partial<WalletOrder> = {
+            wallet: wallet, // pass the full Wallet entity instance
+            // wallet_order_id: walletOrderId,
+            business_unit: wallet.business_unit, // pass the full BusinessUnit entity instance
+            amount: Orderamount,
+            metadata,
+            discount: 0,
+            subtotal: Orderamount,
+          };
+
+          // Save order or metatDataInfo
+          walletOrderRes = await this.WalletOrderrepo.save(walletOrder);
+        }
+      }
+
+      // 9. Create wallet_transaction
+      const walletTransaction: Partial<WalletTransaction> = {
+        wallet: wallet, // pass the full Wallet entity instance
+        orders: walletOrderRes,
+        // wallet_order_id: walletOrderId,
+        business_unit: wallet.business_unit, // pass the full BusinessUnit entity instance
+        type: WalletTransactionType.EARN,
+        source_type: event,
+        amount: rewardPoints,
+        status:
+          pendingDays > 0
+            ? WalletTransactionStatus.PENDING
+            : WalletTransactionStatus.ACTIVE,
+        description: `Earned ${rewardPoints} points ${event}`,
+        // Set the unlock_date for the wallet transaction.
+        // If there are pendingDays (i.e., points are locked for a period), set unlock_date to the date after pendingDays.
+        // Otherwise, set unlock_date to null (no unlock needed).
+        unlock_date:
+          pendingDays > 0 ? dayjs().add(pendingDays, 'day').toDate() : null,
+
+        point_balance: wallet.available_balance,
+
+        // Set the expiry_date for the wallet transaction.
+        // If the rule has a validity_after_assignment value:
+        //   - If there are pendingDays (i.e., points are locked for a period), expiry is after (pendingDays + validity_after_assignment) days.
+        //   - If there are no pendingDays, expiry is after validity_after_assignment days.
+        // If the rule does not have validity_after_assignment, expiry_date is null (no expiry).
+        expiry_date: rule.validity_after_assignment
+          ? pendingDays > 0
+            ? dayjs()
+                .add(pendingDays + rule.validity_after_assignment, 'day')
+                .toDate()
+            : dayjs().add(rule.validity_after_assignment, 'day').toDate()
+          : null,
+      };
+
+      // Save transaction
+      await this.txRepo.save(walletTransaction);
+      totalRewardPoints += rewardPoints;
+    }
+
+    return {
+      message: 'Points earned successfully',
+      points: totalRewardPoints,
+    };
+  }
+
+  checkMetadataAndDynamicCondition(product, condition) {
+    const { condition_type, condition_operator, condition_value } = condition;
+    const productValue = product[condition_type];
+
+    switch (condition_operator) {
+      case '==':
+        return productValue == condition_value;
+      case '!=':
+        return productValue != condition_value;
+      case '>':
+        return Number(productValue) > Number(condition_value);
+      case '<':
+        return Number(productValue) < Number(condition_value);
+      case '>=':
+        return Number(productValue) >= Number(condition_value);
+      case '<=':
+        return Number(productValue) <= Number(condition_value);
+      default:
+        return false;
+    }
   }
 }
