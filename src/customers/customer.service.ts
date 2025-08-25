@@ -2146,4 +2146,247 @@ export class CustomerService {
         return false;
     }
   }
+
+  async gvrBurnWithEvent(bodyPayload: BurnWithEvent) {
+    const { customer_id, metadata, event, tenantId, BUId } = bodyPayload;
+
+    const customerInfo = await this.customerRepo.find({
+      where: { uuid: customer_id },
+      relations: ['business_unit'],
+    });
+
+    const customer = customerInfo[0];
+    if (!customer) throw new NotFoundException('Customer not found');
+
+    const wallet = await this.walletRepo.findOne({
+      where: { customer: { uuid: customer_id } },
+      relations: ['business_unit'],
+    });
+
+    if (!wallet) throw new NotFoundException('Wallet not found');
+
+    const txWhere: any = {
+      wallet: { id: wallet.id },
+      business_unit: { id: parseInt(BUId) },
+      type: 'burn',
+      source_type: event,
+    };
+
+    const previousTx = await this.txRepo.findOne({
+      where: txWhere,
+      order: { created_at: 'DESC' },
+    });
+
+    let rule;
+    const matchedRules = [];
+    const orderAmount = {};
+    let totalDiscountAmount = 0;
+    let totalPoints = 0;
+
+    if (event) {
+      rule = await this.ruleRepo.findOne({
+        where: { name: event, status: 1, rule_type: 'burn' },
+      });
+      if (!rule)
+        throw new NotFoundException('Burn rule not found for this campaign');
+
+      for (const product of metadata.Productitems.products) {
+        let allMatch = true;
+        for (const condition of rule.dynamic_conditions) {
+          const isMatch = this.checkMetadataAndDynamicCondition(
+            product,
+            condition,
+          );
+          if (!isMatch) {
+            allMatch = false;
+            break;
+          }
+        }
+
+        if (allMatch) {
+          matchedRules.push(rule);
+          orderAmount[rule.uuid] = product.amount || 0;
+        }
+      }
+    } else {
+      const rules = await this.ruleRepo.find({
+        where: {
+          status: 1,
+          tenant_id: Number(tenantId),
+          rule_type: 'burn',
+          dynamic_conditions: Not(IsNull()),
+        },
+      });
+
+      for (let index = 0; index < rules.length; index++) {
+        const eachRule = rules[index];
+        for (const product of metadata.Productitems.products) {
+          let allMatch = true;
+          for (const condition of eachRule.dynamic_conditions) {
+            const isMatch = this.checkMetadataAndDynamicCondition(
+              product,
+              condition,
+            );
+            if (!isMatch) {
+              allMatch = false;
+              break;
+            }
+          }
+
+          if (allMatch) {
+            matchedRules.push(eachRule);
+            orderAmount[eachRule.uuid] = product.amount || 0;
+          }
+        }
+      }
+    }
+
+    if (matchedRules.length) {
+      for (let index = 0; index <= matchedRules.length - 1; index++) {
+        rule = matchedRules[index];
+
+        // Frequency logic
+        if (rule.frequency === 'once' && previousTx) {
+          throw new BadRequestException(
+            'Burn for this event already granted (once per customer)',
+          );
+        }
+
+        if (rule.frequency === 'daily' && previousTx) {
+          // Check if already rewarded today
+          const today = dayjs().startOf('day');
+          const txDate = dayjs(previousTx.created_at).startOf('day');
+          if (txDate.isSame(today)) {
+            throw new BadRequestException(
+              'Burn for this event already granted today',
+            );
+          }
+        }
+
+        if (rule.frequency === 'yearly' && previousTx) {
+          // Check if already rewarded this year
+          const thisYear = dayjs().year();
+          const txYear = dayjs(previousTx.created_at).year();
+          if (txYear === thisYear) {
+            throw new BadRequestException(
+              'Burn for this event already granted this year',
+            );
+          }
+        }
+
+        const total_amount = orderAmount[rule.uuid]
+          ? Number(orderAmount[rule.uuid])
+          : undefined;
+
+        if (!total_amount || total_amount === undefined) {
+          throw new BadRequestException('Amount is required');
+        }
+
+        // Step 5: Validate rule conditions
+        if (total_amount < rule.min_amount_spent) {
+          throw new BadRequestException(
+            `Minimum amount to burn is ${rule.min_amount_spent}`,
+          );
+        }
+
+        if (wallet.available_balance < rule.max_redeemption_points_limit) {
+          throw new BadRequestException(
+            `You don't have enough loyalty points, ${rule.max_redeemption_points_limit} loyalty point are required and you've ${wallet.available_balance} loyalty points`,
+          );
+        }
+
+        // Step 6: Determine applicable conversion rate
+        const conversionRate = rule.points_conversion_factor;
+
+        // Step 7: Calculate points and discount
+        let discountAmount = 0;
+        let pointsToBurn = 0;
+
+        if (rule.burn_type === 'FIXED') {
+          pointsToBurn = rule.max_redeemption_points_limit;
+          discountAmount = pointsToBurn * conversionRate;
+
+          if (discountAmount > total_amount) {
+            discountAmount = total_amount;
+            pointsToBurn = total_amount / conversionRate;
+          }
+        } else if (rule.burn_type === 'PERCENTAGE') {
+          discountAmount =
+            (total_amount * rule.max_burn_percent_on_invoice) / 100;
+          pointsToBurn = rule.max_redeemption_points_limit;
+        } else {
+          throw new BadRequestException('Invalid burn type in rule');
+        }
+
+        const burnPayload = {
+          customer_id: customer.id,
+          business_unit_id: customer.business_unit.id,
+          wallet_id: wallet.id,
+          type: WalletTransactionType.BURN,
+          amount: pointsToBurn,
+          status: WalletTransactionStatus.ACTIVE,
+          source_type: rule.name,
+          source_id: rule.id,
+          description: `Burned ${pointsToBurn} points for discount of ${discountAmount} on amount ${total_amount}`,
+        };
+
+        // 8. Now, we need to generate wallet_order if any
+        // const walletOrderId: number | null = null;
+        // Try to map metadata to wallet_order if possible (optional, depends on event)
+        // For event-based, wallet_order may not exist, so we keep it null
+        let walletOrderRes;
+        if (metadata) {
+          // Check if metadata is present, is an object, and contains 'amount'
+          if (
+            metadata &&
+            typeof metadata === 'object' &&
+            total_amount !== undefined
+          ) {
+            // You can access metadata.amount here if needed
+            // For example, you might want to log or process the amount
+            // Add any additional logic here as required
+
+            const walletOrder: Partial<WalletOrder> = {
+              wallet: wallet, // pass the full Wallet entity instance
+              business_unit: wallet.business_unit, // pass the full BusinessUnit entity instance
+              amount: total_amount,
+              metadata,
+              discount: discountAmount,
+              subtotal: total_amount - discountAmount,
+            };
+
+            // Save order or metatDataInfo
+            walletOrderRes = await this.WalletOrderrepo.save(walletOrder);
+          }
+        }
+
+        // Step 9: Create burn transaction in wallet
+        await this.walletService.addTransaction(
+          {
+            ...burnPayload,
+            wallet_order_id: walletOrderRes?.id,
+            wallet_id: wallet?.id,
+            business_unit_id: customer?.business_unit?.id,
+          },
+          customer?.id,
+          true,
+        );
+
+        await this.walletRepo.findOne({
+          where: { id: wallet.id },
+          relations: ['business_unit'],
+        });
+
+        totalDiscountAmount += discountAmount;
+        totalPoints += rule.max_redeemption_points_limit;
+      }
+      return {
+        message: 'Points burned successfully',
+        points: totalPoints,
+        discount: totalDiscountAmount,
+      };
+    } else {
+      throw new BadRequestException('Burn rule not found.');
+    }
+  }
 }

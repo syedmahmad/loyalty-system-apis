@@ -109,4 +109,9 @@ export class CustomerController {
   async gvrEarnWithEvent(@Body() body: EarnWithEvent) {
     return this.customerService.gvrEarnWithEvent(body);
   }
+
+  @Post('gvr_burn_with_event')
+  async gvrBurnWithEvent(@Body() body: BurnWithEvent) {
+    return this.customerService.gvrBurnWithEvent(body);
+  }
 }
