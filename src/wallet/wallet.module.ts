@@ -8,12 +8,14 @@ import { WalletService } from './wallet/wallet.service';
 import { UserCoupon } from './entities/user-coupon.entity';
 import { WalletSettings } from './entities/wallet-settings.entity';
 import { User } from 'src/users/entities/user.entity';
+import { Referral } from './entities/referrals.entity';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([
       Wallet,
       WalletTransaction,
+      Referral,
       UserCoupon,
       WalletSettings,
       User,
