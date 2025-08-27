@@ -46,6 +46,7 @@ import {
   WalletTransactionType,
 } from 'src/wallet/entities/wallet-transaction.entity';
 import { OciService } from 'src/oci/oci.service';
+import { CustomerCoupon } from 'src/customers/entities/customer-coupon.entity';
 
 @Injectable()
 export class CouponsService {
@@ -109,6 +110,9 @@ export class CouponsService {
     private readonly walletService: WalletService,
     private readonly customerService: CustomerService,
     private readonly ociService: OciService,
+
+    @InjectRepository(CustomerCoupon)
+    private customerCouponRepo: Repository<CustomerCoupon>,
   ) {}
 
   async create(dto: CreateCouponDto, user: string) {
@@ -475,7 +479,7 @@ export class CouponsService {
     const customer = await this.customerRepo.findOne({
       where: { uuid: customer_id },
     });
-    if (!customer) throw new NotFoundException('Customer not found 777');
+    if (!customer) throw new NotFoundException('Customer not found');
 
     if (customer && customer.status === 0) {
       throw new NotFoundException('Customer is inactive');
@@ -489,6 +493,7 @@ export class CouponsService {
 
     let coupon;
     let campaign;
+    let hasSegments = [];
 
     // Step 2:
     // If campaign_id present it means coupon will be redeemed through campaign
@@ -517,7 +522,7 @@ export class CouponsService {
         const campaignId = campaign.id;
 
         // Segment validation
-        const hasSegments = await this.campaignCustomerSegmentRepo.find({
+        hasSegments = await this.campaignCustomerSegmentRepo.find({
           where: { campaign: { id: campaign.id } },
           relations: ['segment'],
         });
@@ -569,7 +574,7 @@ export class CouponsService {
           where: {
             campaign: { id: campaignId },
             coupon: {
-              uuid: metadata.uuid,
+              code: metadata.coupon_code,
             },
           },
           relations: ['coupon'],
@@ -587,9 +592,52 @@ export class CouponsService {
       }
     } else {
       coupon = await this.couponsRepository.findOne({
-        where: { uuid: metadata.uuid },
+        where: { code: metadata.coupon_code },
       });
       if (!coupon) throw new NotFoundException('Coupon not found');
+
+      // Segment validation
+      hasSegments = await this.couponSegmentRepository.find({
+        where: { coupon: { id: coupon.id } },
+        relations: ['segment'],
+      });
+
+      if (hasSegments.length > 0) {
+        // Extract segment IDs
+        const segmentIds = hasSegments.map((cs) => cs.segment.id);
+
+        if (segmentIds.length === 0) {
+          return false;
+        }
+
+        const match = await this.customerSegmentMemberRepository.findOne({
+          where: {
+            segment: { id: In(segmentIds) },
+            customer: { id: customerId },
+          },
+        });
+
+        if (!match) {
+          throw new ForbiddenException(
+            'Customer is not eligible for this coupon',
+          );
+        }
+      }
+    }
+
+    // Checking customer is assigned to this coupon or not
+    if (hasSegments.length === 0) {
+      const isCustomerAssignedTothisCoupon =
+        await this.customerCouponRepo.findOne({
+          where: {
+            customer: { id: customer.id },
+            coupon: { id: coupon.id },
+          },
+        });
+
+      if (!isCustomerAssignedTothisCoupon) {
+        throw new NotFoundException('Customer is not eligible for this coupon');
+      }
     }
 
     // Step 3:
@@ -601,13 +649,15 @@ export class CouponsService {
     if (coupon?.coupon_type_id === null) {
       const conditions = coupon?.complex_coupon;
       const result = await this.checkComplexCouponConditions(
-        metadata.complex_coupon,
+        metadata,
         conditions,
         wallet,
+        customerId,
         coupon,
+        order,
       );
-      if (!result.valid) {
-        throw new BadRequestException(result.message);
+      if (!result) {
+        throw new BadRequestException('Coupon is not applicable');
       }
     } else {
       const couponType = await this.couponTypeService.findOne(
@@ -630,42 +680,23 @@ export class CouponsService {
         const customerTierInfo = await this.tiersService.getCurrentCustomerTier(
           wallet.customer.id,
         );
-
-        const cutomerFallInTier = metadata.conditions.find(
+        const cutomerFallInTier = coupon.conditions.find(
           (singleTier) => singleTier.tier === customerTierInfo.tier.id,
         );
         coupon.discount_type = 'percentage_discount';
         coupon.discount_price = cutomerFallInTier.value;
-      } else if (couponType.coupon_type === 'USER_SPECIFIC') {
-        const decryptedEmail = await this.ociService.decryptData(
-          wallet.customer.email,
-        );
-        const decryptedPhone = await this.ociService.decryptData(
-          wallet.customer.phone,
-        );
-        const isApplicableForUser = await this.matchConditions(
-          metadata.conditions,
-          {
-            email: decryptedEmail,
-            phone_number: decryptedPhone,
-          },
-        );
-        if (!isApplicableForUser) {
-          throw new BadRequestException("you're not eligible for this coupon");
-        }
-      } else if (
-        couponType.coupon_type === 'DISCOUNT' &&
-        coupon.conditions == null
-      ) {
-        // Do nothing it means directly want to give coupon without condtions
       } else {
-        const result = this.checkSimpleCouponConditions(
+        const result = await this.checkSimpleCouponConditions(
           metadata,
           coupon.conditions,
+          customerId,
           couponType,
+          order,
+          wallet,
         );
-        if (!result.valid) {
-          throw new BadRequestException(result.message);
+
+        if (!result) {
+          throw new BadRequestException('Coupon is not applicable');
         }
       }
     }
@@ -732,7 +763,7 @@ export class CouponsService {
     };
   }
 
-  async checkComplexCouponConditions(
+  async checkComplexCouponConditions1(
     userCouponInfo,
     dbCouponInfo,
     wallet,
@@ -821,7 +852,7 @@ export class CouponsService {
     return { valid: true, message: 'Coupon is applicable.' };
   }
 
-  checkSimpleCouponConditions(userCouponInfo, dbCouponInfo, couponType) {
+  checkSimpleCouponConditions1(userCouponInfo, dbCouponInfo, couponType) {
     const failedConditions: any = [];
 
     for (const userCoupon of userCouponInfo.conditions) {
@@ -981,7 +1012,7 @@ export class CouponsService {
     sourceType: string;
     description: string;
     validityAfterAssignment?: number;
-    order?: Partial<WalletOrder>;
+    order;
   }) {
     // 1. Get wallet settings for specific business unit
     const walletSettings = await this.walletSettingsRepo.findOne({
@@ -1045,5 +1076,437 @@ export class CouponsService {
 
     // 5. Save and return
     return await this.txRepo.save(walletTransaction);
+  }
+
+  async checkSimpleCouponConditions(
+    metadata,
+    conditions,
+    customerId,
+    couponType,
+    order,
+    wallet,
+  ) {
+    for (const condition of conditions) {
+      const history = await this.txRepo.find({
+        where: {
+          wallet: { customer: { id: customerId } },
+          source_type: condition.type,
+        },
+        relations: ['wallet', 'wallet.customer'],
+      });
+      let pastHistoryCount = history.length;
+      const requiredValue = Number(condition.value);
+
+      if (couponType.coupon_type === 'DISCOUNT') {
+        if (!condition.type && !condition.value) {
+          return true;
+        }
+      } else if (couponType.coupon_type === 'GEO_TARGETED') {
+        const city = wallet.customer.city?.toLowerCase() || '';
+        const address = wallet.customer.address?.toLowerCase() || '';
+        const inputValue = condition.type?.toLowerCase() || '';
+
+        let isMatch = false;
+        const values = inputValue.split(',').map((v) => v.trim());
+        const includes = values.filter((v) => !v.startsWith('!='));
+        const excludes = values
+          .filter((v) => v.startsWith('!='))
+          .map((v) => v.replace('!=', '').trim());
+
+        // Check if user city/address matches any of the "includes"
+        if (includes.length > 0) {
+          isMatch = includes.some((v) => city === v || address.includes(v));
+        }
+
+        // Check if user city/address matches any of the "excludes"
+        if (excludes.length > 0) {
+          const excluded = excludes.some(
+            (v) => city === v || address.includes(v),
+          );
+          if (excluded) {
+            isMatch = false; // override match if excluded
+          }
+        }
+
+        if (!isMatch) {
+          return false;
+        }
+      } else if (
+        couponType.coupon_type === 'CASHBACK' ||
+        couponType.coupon_type === 'REFERRAL'
+      ) {
+        pastHistoryCount = order.amount;
+      } else if (couponType.coupon_type === 'USER_SPECIFIC') {
+        const decryptedEmail = await this.ociService.decryptData(
+          wallet.customer.email,
+        );
+        const decryptedPhone = await this.ociService.decryptData(
+          wallet.customer.phone,
+        );
+
+        const isApplicableForUser = await this.matchConditions(conditions, {
+          email: decryptedEmail,
+          phone_number: decryptedPhone,
+        });
+
+        if (!isApplicableForUser) {
+          return false;
+        }
+        return true;
+      } else if (couponType.coupon_type === 'VEHICLE_SPECIFIC') {
+        const isEligible = metadata.products.some((product) => {
+          // check model name
+          const modelMatch =
+            condition.models?.some(
+              (m) => m.Model.toLowerCase() === product.model?.toLowerCase(),
+            ) || false;
+
+          // check fuel type
+          const fuelMatch =
+            condition.type === 'fuel_type' &&
+            condition.operator === '==' &&
+            product.fule_type?.toLowerCase() === condition.value.toLowerCase();
+
+          // check year
+          const yearMatch = product.year === condition.year;
+
+          return modelMatch || (fuelMatch && yearMatch);
+        });
+
+        if (isEligible) {
+          return true;
+        }
+
+        return false;
+      } else {
+        // check user has used required service
+        const productUsed = metadata.products.some(
+          (p) => p.name.toLowerCase() === condition.type.toLowerCase(),
+        );
+        if (!productUsed) {
+          return false;
+        }
+
+        if (isNaN(requiredValue) && productUsed) {
+          return true;
+        }
+      }
+
+      switch (condition.operator) {
+        case '>':
+          if (!(pastHistoryCount > requiredValue)) return false;
+          break;
+        case '>=':
+          if (!(pastHistoryCount >= requiredValue)) return false;
+          break;
+        case '<':
+          if (!(pastHistoryCount < requiredValue)) return false;
+          break;
+        case '<=':
+          if (!(pastHistoryCount <= requiredValue)) return false;
+          break;
+        case '==':
+          if (!(pastHistoryCount == requiredValue)) return false;
+          break;
+      }
+    }
+
+    return true;
+  }
+
+  async checkComplexCouponConditions(
+    metadata,
+    conditions,
+    wallet,
+    customerId,
+    coupon,
+    order,
+  ) {
+    const failedConditions = [];
+    for (const condition of conditions) {
+      const couponType = condition.selectedCouponType;
+
+      if (couponType == 'BIRTHDAY') {
+        const today = new Date();
+        const dob = new Date(wallet.customer.DOB);
+        const isBirthday =
+          today.getDate() === dob.getDate() &&
+          today.getMonth() === dob.getMonth();
+
+        if (!isBirthday) {
+          failedConditions.push(
+            "Today is not your birthday, so you're not eligible.",
+          );
+          continue;
+        }
+      }
+
+      if (couponType == 'SERVICE_BASED') {
+        const hasFree = condition.dynamicRows.some(
+          (row) => row.value?.toLowerCase() === 'free',
+        );
+        if (hasFree) {
+          return true;
+        }
+      }
+
+      for (let index = 0; index < condition.dynamicRows.length; index++) {
+        const eachRow = condition.dynamicRows[index];
+        const history = await this.txRepo.find({
+          where: {
+            wallet: { customer: { id: customerId } },
+            source_type: eachRow.type,
+          },
+          relations: ['wallet', 'wallet.customer'],
+        });
+        let historyCount = history.length;
+
+        if (couponType === 'CASHBACK' || couponType === 'REFERRAL') {
+          if (!order.amount) {
+            throw new BadRequestException(`Order amount is required`);
+          }
+          historyCount = order.amount;
+        } else if (couponType === 'TIER_BASED') {
+          const customerTierInfo =
+            await this.tiersService.getCurrentCustomerTier(wallet.customer.id);
+
+          if (customerTierInfo?.tier?.id != eachRow.tier) {
+            failedConditions.push(`Customer doesn't fall in any tier`);
+            continue;
+          }
+
+          coupon['discount_type'] = 'percentage_discount';
+          coupon['discount_price'] = eachRow.value;
+          return true;
+        } else if (couponType === 'GEO_TARGETED') {
+          const city = wallet.customer.city?.toLowerCase() || '';
+          const address = wallet.customer.address?.toLowerCase() || '';
+          const inputValue = eachRow.type?.toLowerCase() || '';
+
+          let isMatch = false;
+          const values = inputValue.split(',').map((v) => v.trim());
+          const includes = values.filter((v) => !v.startsWith('!='));
+          const excludes = values
+            .filter((v) => v.startsWith('!='))
+            .map((v) => v.replace('!=', '').trim());
+
+          // Check if user city/address matches any of the "includes"
+          if (includes.length > 0) {
+            isMatch = includes
+              .filter((v) => v && v.trim() !== '')
+              .some((v) => city === v || address.includes(v));
+          }
+
+          // Check if user city/address matches any of the "excludes"
+          if (excludes.length > 0) {
+            const excluded = excludes.some(
+              (v) => city === v || address.includes(v),
+            );
+            if (excluded) {
+              isMatch = false;
+            }
+          }
+
+          if (!isMatch) {
+            return false;
+          }
+        } else if (couponType === 'USER_SPECIFIC') {
+          const decryptedEmail = await this.ociService.decryptData(
+            wallet.customer.email,
+          );
+          const decryptedPhone = await this.ociService.decryptData(
+            wallet.customer.phone,
+          );
+
+          const isApplicableForUser = await this.matchConditions([eachRow], {
+            email: decryptedEmail,
+            phone_number: decryptedPhone,
+          });
+
+          if (!isApplicableForUser) {
+            return false;
+          }
+          return true;
+        } else if (couponType === 'VEHICLE_SPECIFIC') {
+          const isEligible = metadata.products.some((product) => {
+            // check model name
+            const modelMatch =
+              eachRow.models?.some(
+                (m) => m.Model.toLowerCase() === product.model?.toLowerCase(),
+              ) || false;
+
+            // check fuel type
+            const fuelMatch =
+              eachRow.type === 'fuel_type' &&
+              eachRow.operator === '==' &&
+              product.fule_type?.toLowerCase() === eachRow.value.toLowerCase();
+
+            // check year
+            const yearMatch = product.year === eachRow.year;
+
+            return modelMatch && fuelMatch && yearMatch;
+          });
+
+          if (isEligible) {
+            return true;
+          }
+
+          return false;
+        } else {
+          // check user has used required service
+          const productUsed = metadata.products.some(
+            (p) => p.name.toLowerCase() === eachRow.type.toLowerCase(),
+          );
+
+
+          if (!productUsed) {
+            return false;
+          }
+        }
+
+        // ✅ If operator/value exist, check count conditions
+        if (eachRow.operator && eachRow.value !== undefined) {
+          const requiredValue = Number(eachRow.value);
+          switch (eachRow.operator) {
+            case '>':
+              if (!(historyCount > requiredValue)) return false;
+              break;
+            case '>=':
+              if (!(historyCount >= requiredValue)) return false;
+              break;
+            case '==':
+              if (!(historyCount === requiredValue)) return false;
+              break;
+            case '<':
+              if (!(historyCount < requiredValue)) return false;
+              break;
+            default:
+              return false;
+          }
+        }
+      }
+    }
+
+    if (failedConditions.length > 0) {
+      return { success: false, message: `${failedConditions.join('\n')}` };
+    }
+
+    return true;
+  }
+
+  async earnCoupon(bodyPayload: any) {
+    const { customer_id, order, BUId, metadata, tenantId } = bodyPayload;
+
+    // 1. Find customer by uuid
+    const customer = await this.customerRepo.findOne({
+      where: {
+        uuid: customer_id,
+        business_unit: { id: parseInt(BUId) },
+        tenant: { id: tenantId },
+      },
+    });
+    if (!customer) throw new NotFoundException('Customer not found');
+
+    // 2. Get customer wallet info
+    const wallet = await this.walletService.getSingleCustomerWalletInfoById(
+      customer.id,
+    );
+    if (!wallet) throw new NotFoundException('Wallet not found');
+
+    let walletOrderRes;
+    if (order) {
+      if (order && typeof order === 'object' && order.amount !== undefined) {
+        const walletOrder: Partial<WalletOrder> = {
+          wallet: wallet,
+          business_unit: wallet.business_unit,
+          amount: order.amount,
+          metadata: order,
+          discount: 0,
+          subtotal: order.amount,
+        };
+
+        walletOrderRes = await this.WalletOrderrepo.save(walletOrder);
+      }
+    }
+
+    if (metadata?.productitems.products?.length) {
+      let totalAmount = 0;
+      for (
+        let index = 0;
+        index <= metadata?.productitems?.products.length - 1;
+        index++
+      ) {
+        const eachProduct = metadata?.productitems?.products[index];
+        if (eachProduct.amount) {
+          const walletTransaction: Partial<WalletTransaction> = {
+            wallet: wallet,
+            orders: walletOrderRes,
+            business_unit: wallet.business_unit,
+            type: WalletTransactionType.ORDER,
+            source_type: eachProduct.name,
+            amount: eachProduct.amount,
+            status: WalletTransactionStatus.ACTIVE,
+            description: `Customer placed a new order.`,
+          };
+
+          const transaction = await this.txRepo.save(walletTransaction);
+          totalAmount += transaction.amount;
+
+          const coupons = await this.couponRepo.find({
+            where: { status: 1, tenant_id: tenantId, business_unit_id: BUId },
+          });
+
+          if (coupons.length) {
+            const matchedCoupons = coupons.filter(async (coupon) => {
+              const couponType = await this.couponTypeService.findOne(
+                coupon?.coupon_type_id,
+              );
+
+              if (
+                couponType.coupon_type === 'GEO_TARGETED' ||
+                couponType.coupon_type === 'USER_SPECIFIC'
+              ) {
+                return coupon;
+              }
+
+              const inConditions = coupon.conditions?.some(
+                (c: any) =>
+                  (!c.type && !c.value) ||
+                  c.tier !== '' ||
+                  c.type === eachProduct.name,
+              );
+
+              const inComplex = coupon.complex_coupon?.some((cc: any) =>
+                cc.dynamicRows?.some((dr: any) => dr.type === eachProduct.name),
+              );
+
+              return inConditions || inComplex;
+            });
+
+            for (let index = 0; index <= matchedCoupons.length - 1; index++) {
+              const eachMatchedCoupon = matchedCoupons[index];
+
+              const isAlreadyAssigned = await this.customerCouponRepo.findOne({
+                where: {
+                  customer: { id: customer.id },
+                  coupon: { id: eachMatchedCoupon.id },
+                },
+              });
+
+              if (!isAlreadyAssigned) {
+                await this.customerCouponRepo.save({
+                  customer: { id: customer.id },
+                  coupon: { id: eachMatchedCoupon.id },
+                });
+              }
+            }
+          }
+        }
+      }
+      return {
+        message: 'Coupon earned successfully',
+        amount: totalAmount,
+      };
+    }
   }
 }

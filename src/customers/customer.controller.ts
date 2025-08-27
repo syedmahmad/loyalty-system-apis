@@ -114,4 +114,6 @@ export class CustomerController {
   async gvrBurnWithEvent(@Body() body: BurnWithEvent) {
     return this.customerService.gvrBurnWithEvent(body);
   }
+
+ 
 }

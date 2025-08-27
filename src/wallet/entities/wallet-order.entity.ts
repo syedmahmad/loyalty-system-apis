@@ -30,8 +30,8 @@ export class WalletOrder {
   @Column({ type: 'decimal' })
   subtotal: number;
 
-  @Column({ type: 'decimal' })
-  discount: number;
+  @Column({ type: 'decimal', default: 0 })
+  discount?: number;
 
   @Column({ nullable: true })
   items_count: number;

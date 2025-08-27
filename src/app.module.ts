@@ -29,6 +29,8 @@ import { GateWayLogModule } from './gateway-logs/log.module';
 import { decrypt } from './utils/decrypt';
 import { ScheduleModule } from '@nestjs/schedule';
 import { SchedulerModule } from './schedule/schedule.module';
+import { CustomerCoupon } from './customers/entities/customer-coupon.entity';
+import { OpenaiModule } from './openai/openai.module';
 
 @Module({
   imports: [
@@ -77,6 +79,8 @@ import { SchedulerModule } from './schedule/schedule.module';
     CustomerSegmentsModule,
     QrCodesModule,
     SchedulerModule,
+    CustomerCoupon,
+    OpenaiModule,
   ],
   controllers: [AppController],
   providers: [AppService],

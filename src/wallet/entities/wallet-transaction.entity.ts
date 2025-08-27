@@ -15,6 +15,7 @@ export enum WalletTransactionType {
   BURN = 'burn',
   EXPIRE = 'expire',
   ADJUSTMENT = 'adjustment',
+  ORDER = 'order',
 }
 
 export enum WalletTransactionStatus {

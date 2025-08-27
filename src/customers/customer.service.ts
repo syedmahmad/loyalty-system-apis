@@ -52,6 +52,7 @@ import { QrcodesService } from '../qr_codes/qr_codes/qr_codes.service';
 import { BulkCreateCustomerDto } from './dto/create-customer.dto';
 import { CustomerActivity } from './entities/customer-activity.entity';
 import { Customer } from './entities/customer.entity';
+import { CustomerCoupon } from './entities/customer-coupon.entity';
 
 @Injectable()
 export class CustomerService {
@@ -93,6 +94,9 @@ export class CustomerService {
 
     @InjectRepository(UserCoupon)
     private userCouponRepo: Repository<UserCoupon>,
+
+    @InjectRepository(CustomerCoupon)
+    private customerCouponRepo: Repository<CustomerCoupon>,
   ) {}
 
   async createCustomer(req: Request, dto: BulkCreateCustomerDto) {
@@ -435,7 +439,7 @@ export class CustomerService {
         }
       }
     }
-    // // 3. Get customer wallet info
+    // 3. Get customer wallet info
     const wallet = await this.walletService.getSingleCustomerWalletInfoById(
       customer.id,
     );
@@ -2389,4 +2393,6 @@ export class CustomerService {
       throw new BadRequestException('Burn rule not found.');
     }
   }
+
+
 }

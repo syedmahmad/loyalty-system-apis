@@ -353,4 +353,5 @@ export class WalletService {
     const data = await this.walletRepo.save(wallet);
     return data;
   }
+
 }

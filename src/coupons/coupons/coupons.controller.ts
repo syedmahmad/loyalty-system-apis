@@ -167,4 +167,9 @@ export class CouponsController {
   async redeemCoupon(@Body() bodyPayload: any) {
     return await this.service.redeem(bodyPayload);
   }
+
+  @Post('earn')
+  async earnCoupon(@Body() body: any) {
+    return this.service.earnCoupon(body);
+  }
 }

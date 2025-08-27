@@ -33,6 +33,7 @@ import { CampaignCoupons } from 'src/campaigns/entities/campaign-coupon.entity';
 import { CustomerSegmentMember } from 'src/customer-segment/entities/customer-segment-member.entity';
 import { Campaign } from 'src/campaigns/entities/campaign.entity';
 import { CampaignTier } from 'src/campaigns/entities/campaign-tier.entity';
+import { CustomerCoupon } from 'src/customers/entities/customer-coupon.entity';
 
 @Module({
   imports: [
@@ -61,6 +62,7 @@ import { CampaignTier } from 'src/campaigns/entities/campaign-tier.entity';
       CustomerSegmentMember,
       Campaign,
       CampaignTier,
+      CustomerCoupon,
     ]),
   ],
   controllers: [CouponsController],
