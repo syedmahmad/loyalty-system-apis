@@ -53,6 +53,7 @@ import { BulkCreateCustomerDto } from './dto/create-customer.dto';
 import { CustomerActivity } from './entities/customer-activity.entity';
 import { Customer } from './entities/customer.entity';
 import { CustomerCoupon } from './entities/customer-coupon.entity';
+import { GvrEarnBurnWithEventsDto } from 'src/customers/dto/gvr_earn_burn_with_event.dto';
 
 @Injectable()
 export class CustomerService {
@@ -1854,8 +1855,8 @@ export class CustomerService {
     return false;
   }
 
-  async gvrEarnWithEvent(bodyPayload: EarnWithEvent) {
-    const { customer_id, event, BUId, metadata, tenantId } = bodyPayload;
+  async gvrEarnWithEvent(bodyPayload: GvrEarnBurnWithEventsDto) {
+    const { customer_id, BUId, metadata, tenantId } = bodyPayload;
 
     // 1. Find customer by uuid
     const customer = await this.customerRepo.findOne({
@@ -1863,80 +1864,100 @@ export class CustomerService {
     });
     if (!customer) throw new NotFoundException('Customer not found');
 
-    let rule;
-    const matchedRules = [];
-    const orderAmount = {};
-    let totalRewardPoints = 0;
-
     // 2. Find earning rule by event name (case-insensitive)
-    if (event) {
-      rule = await this.ruleRepo.findOne({
-        where: {
-          status: 1,
-          name: event,
-          rule_type: Not('burn'),
-        },
-      });
-      if (!rule)
-        throw new NotFoundException('Earning rule not found for this event');
+    // if (event) {
+    //   rule = await this.ruleRepo.findOne({
+    //     where: {
+    //       status: 1,
+    //       name: event,
+    //       rule_type: Not('burn'),
+    //     },
+    //   });
+    //   if (!rule)
+    //     throw new NotFoundException('Earning rule not found for this event');
 
-      if (metadata && metadata?.productitems?.products.length) {
-        for (const product of metadata.productitems.products) {
-          let allMatch = true;
-          for (const condition of rule.dynamic_conditions) {
-            const isMatch = this.checkMetadataAndDynamicCondition(
-              product,
-              condition,
-            );
-            if (!isMatch) {
-              allMatch = false;
-              break;
-            }
-          }
-          if (allMatch) {
-            matchedRules.push(rule);
-            orderAmount[rule.uuid] = product.amount || 0;
+    //   if (metadata && metadata?.productitems?.products.length) {
+    //     for (const product of metadata.productitems.products) {
+    //       let allMatch = true;
+    //       for (const condition of rule.dynamic_conditions) {
+    //         const isMatch = this.checkMetadataAndDynamicCondition(
+    //           product,
+    //           condition,
+    //         );
+    //         if (!isMatch) {
+    //           allMatch = false;
+    //           break;
+    //         }
+    //       }
+    //       if (allMatch) {
+    //         matchedRules.push(rule);
+    //         orderAmount[rule.uuid] = product.amount || 0;
+    //       }
+    //     }
+    //   }
+    // } else {
+    // to find all rules where dynamic conditions not null for this specific tenant.
+    // one tenant user can earn points with differnet BU inside that's why.
+    const rules = await this.ruleRepo.find({
+      where: {
+        status: 1,
+        // shoudl add tenant..
+        rule_type: Not('burn'),
+        tenant_id: Number(tenantId),
+        dynamic_conditions: Not(IsNull()),
+      },
+    });
+
+    // matchedRules holds all earning rules (from the rules array) whose
+    // dynamic conditions are satisfied by at least one product in the
+    // metadata.productitems.products array.
+    const matchedRules = [];
+    // orderAmount is an object that maps each matched rule's uuid to the corresponding product's amount.
+    // It is used to keep track of the amount associated with each rule that matches the dynamic conditions for a product.
+    const orderAmount = {};
+
+    // Loop through all earning rules to find which rules match the products in the metadata
+    // Yes, with the current logic, if multiple rules match a single product, all those rules will be pushed into matchedRules.
+    // Each rule is checked independently against each product, so if a product satisfies the dynamic conditions of multiple rules,
+    // all those rules will be included in matchedRules (potentially with duplicate rules if multiple products match the same rule).
+    // If you want to avoid duplicates, you can use a Set or check before pushing.
+
+    for (let index = 0; index < rules.length; index++) {
+      const eachRule = rules[index];
+      for (const product of metadata?.productitems?.products) {
+        let allMatch = true;
+        // Check if the product satisfies all dynamic conditions of the rule
+        for (const condition of eachRule?.dynamic_conditions) {
+          // Check if the current product satisfies the current dynamic condition of the rule.
+          // This function compares the product's property (specified by condition_type) with the expected value (condition_value)
+          // using the specified operator (condition_operator). Returns true if the condition is met, false otherwise.
+          const isMatch = this.checkMetadataAndDynamicCondition(
+            product,
+            condition,
+          );
+          if (!isMatch) {
+            allMatch = false;
+            break;
           }
         }
-      }
-    } else {
-      const rules = await this.ruleRepo.find({
-        where: {
-          status: 1,
-          // shoudl add tenant..
-          rule_type: Not('burn'),
-          tenant_id: Number(tenantId),
-          dynamic_conditions: Not(IsNull()),
-        },
-      });
 
-      for (let index = 0; index < rules.length; index++) {
-        const eachRule = rules[index];
-        for (const product of metadata.productitems.products) {
-          let allMatch = true;
-          for (const condition of eachRule.dynamic_conditions) {
-            const isMatch = this.checkMetadataAndDynamicCondition(
-              product,
-              condition,
-            );
-            if (!isMatch) {
-              allMatch = false;
-              break;
-            }
-          }
-
-          if (allMatch) {
-            matchedRules.push(eachRule);
-            orderAmount[eachRule.uuid] = product.amount || 0;
-          }
+        // If all conditions are matched for this product and rule
+        if (allMatch) {
+          // Add the rule to matchedRules array
+          matchedRules.push(eachRule);
+          // Store the product's amount for this rule's uuid
+          orderAmount[eachRule.uuid] = product.amount || 0;
         }
       }
     }
+    // }
 
     if (!matchedRules.length) {
       throw new NotFoundException('Earning rule not found');
     }
 
+    let rule;
+    let totalRewardPoints = 0;
     for (let index = 0; index <= matchedRules.length - 1; index++) {
       rule = matchedRules[index];
 
@@ -2173,8 +2194,8 @@ export class CustomerService {
     }
   }
 
-  async gvrBurnWithEvent(bodyPayload: BurnWithEvent) {
-    const { customer_id, metadata, event, tenantId, BUId } = bodyPayload;
+  async gvrBurnWithEvent(bodyPayload: GvrEarnBurnWithEventsDto) {
+    const { customer_id, metadata, tenantId, BUId } = bodyPayload;
 
     const customerInfo = await this.customerRepo.find({
       where: { uuid: customer_id },
@@ -2209,65 +2230,65 @@ export class CustomerService {
     let totalDiscountAmount = 0;
     let totalPoints = 0;
 
-    if (event) {
-      rule = await this.ruleRepo.findOne({
-        where: { name: event, status: 1, rule_type: 'burn' },
-      });
-      if (!rule)
-        throw new NotFoundException('Burn rule not found for this campaign');
+    // if (event) {
+    //   rule = await this.ruleRepo.findOne({
+    //     where: { name: event, status: 1, rule_type: 'burn' },
+    //   });
+    //   if (!rule)
+    //     throw new NotFoundException('Burn rule not found for this campaign');
 
-      if (metadata && metadata?.productitems?.products.length) {
-        for (const product of metadata?.productitems?.products) {
-          let allMatch = true;
-          for (const condition of rule.dynamic_conditions) {
-            const isMatch = this.checkMetadataAndDynamicCondition(
-              product,
-              condition,
-            );
-            if (!isMatch) {
-              allMatch = false;
-              break;
-            }
-          }
+    //   if (metadata && metadata?.productitems?.products.length) {
+    //     for (const product of metadata?.productitems?.products) {
+    //       let allMatch = true;
+    //       for (const condition of rule.dynamic_conditions) {
+    //         const isMatch = this.checkMetadataAndDynamicCondition(
+    //           product,
+    //           condition,
+    //         );
+    //         if (!isMatch) {
+    //           allMatch = false;
+    //           break;
+    //         }
+    //       }
 
-          if (allMatch) {
-            matchedRules.push(rule);
-            orderAmount[rule.uuid] = product.amount || 0;
+    //       if (allMatch) {
+    //         matchedRules.push(rule);
+    //         orderAmount[rule.uuid] = product.amount || 0;
+    //       }
+    //     }
+    //   }
+    // } else {
+    const rules = await this.ruleRepo.find({
+      where: {
+        status: 1,
+        tenant_id: Number(tenantId),
+        rule_type: 'burn',
+        dynamic_conditions: Not(IsNull()),
+      },
+    });
+
+    for (let index = 0; index < rules.length; index++) {
+      const eachRule = rules[index];
+      for (const product of metadata.productitems.products) {
+        let allMatch = true;
+        for (const condition of eachRule.dynamic_conditions) {
+          const isMatch = this.checkMetadataAndDynamicCondition(
+            product,
+            condition,
+          );
+          if (!isMatch) {
+            allMatch = false;
+            break;
           }
         }
-      }
-    } else {
-      const rules = await this.ruleRepo.find({
-        where: {
-          status: 1,
-          tenant_id: Number(tenantId),
-          rule_type: 'burn',
-          dynamic_conditions: Not(IsNull()),
-        },
-      });
 
-      for (let index = 0; index < rules.length; index++) {
-        const eachRule = rules[index];
-        for (const product of metadata.productitems.products) {
-          let allMatch = true;
-          for (const condition of eachRule.dynamic_conditions) {
-            const isMatch = this.checkMetadataAndDynamicCondition(
-              product,
-              condition,
-            );
-            if (!isMatch) {
-              allMatch = false;
-              break;
-            }
-          }
-
-          if (allMatch) {
-            matchedRules.push(eachRule);
-            orderAmount[eachRule.uuid] = product.amount || 0;
-          }
+        if (allMatch) {
+          matchedRules.push(eachRule);
+          orderAmount[eachRule.uuid] = product.amount || 0;
         }
       }
     }
+    // }
 
     if (matchedRules.length) {
       for (let index = 0; index <= matchedRules.length - 1; index++) {

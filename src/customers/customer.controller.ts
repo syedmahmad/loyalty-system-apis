@@ -19,6 +19,7 @@ import { BulkCreateCustomerDto } from './dto/create-customer.dto';
 import { CustomerEarnDto } from './dto/customer-earn.dto';
 import { EarnWithEvent } from 'src/customers/dto/earn-with-event.dto';
 import { BurnWithEvent } from 'src/customers/dto/burn-with-event.dto';
+import { GvrEarnBurnWithEventsDto } from 'src/customers/dto/gvr_earn_burn_with_event.dto';
 
 @Controller('customers')
 export class CustomerController {
@@ -106,14 +107,12 @@ export class CustomerController {
   }
 
   @Post('gvr_earn_with_event')
-  async gvrEarnWithEvent(@Body() body: EarnWithEvent) {
+  async gvrEarnWithEvent(@Body() body: GvrEarnBurnWithEventsDto) {
     return this.customerService.gvrEarnWithEvent(body);
   }
 
   @Post('gvr_burn_with_event')
-  async gvrBurnWithEvent(@Body() body: BurnWithEvent) {
+  async gvrBurnWithEvent(@Body() body: GvrEarnBurnWithEventsDto) {
     return this.customerService.gvrBurnWithEvent(body);
   }
-
- 
 }
