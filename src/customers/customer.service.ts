@@ -1880,22 +1880,23 @@ export class CustomerService {
       if (!rule)
         throw new NotFoundException('Earning rule not found for this event');
 
-      for (const product of metadata.Productitems.products) {
-        let allMatch = true;
-        for (const condition of rule.dynamic_conditions) {
-          const isMatch = this.checkMetadataAndDynamicCondition(
-            product,
-            condition,
-          );
-          if (!isMatch) {
-            allMatch = false;
-            break;
+      if (metadata && metadata?.productitems?.products.length) {
+        for (const product of metadata.productitems.products) {
+          let allMatch = true;
+          for (const condition of rule.dynamic_conditions) {
+            const isMatch = this.checkMetadataAndDynamicCondition(
+              product,
+              condition,
+            );
+            if (!isMatch) {
+              allMatch = false;
+              break;
+            }
           }
-        }
-
-        if (allMatch) {
-          matchedRules.push(rule);
-          orderAmount[rule.uuid] = product.amount || 0;
+          if (allMatch) {
+            matchedRules.push(rule);
+            orderAmount[rule.uuid] = product.amount || 0;
+          }
         }
       }
     } else {
@@ -1908,9 +1909,10 @@ export class CustomerService {
           dynamic_conditions: Not(IsNull()),
         },
       });
+
       for (let index = 0; index < rules.length; index++) {
         const eachRule = rules[index];
-        for (const product of metadata.Productitems.products) {
+        for (const product of metadata.productitems.products) {
           let allMatch = true;
           for (const condition of eachRule.dynamic_conditions) {
             const isMatch = this.checkMetadataAndDynamicCondition(
@@ -1929,6 +1931,10 @@ export class CustomerService {
           }
         }
       }
+    }
+
+    if (!matchedRules.length) {
+      throw new NotFoundException('Earning rule not found');
     }
 
     for (let index = 0; index <= matchedRules.length - 1; index++) {
@@ -1957,6 +1963,9 @@ export class CustomerService {
 
       // Frequency logic
       if (rule.frequency === 'once' && previousTx) {
+        if (matchedRules.length > 1) {
+          continue;
+        }
         throw new BadRequestException(
           'Reward for this event already granted (once per customer)',
         );
@@ -1966,6 +1975,9 @@ export class CustomerService {
         const today = dayjs().startOf('day');
         const txDate = dayjs(previousTx.created_at).startOf('day');
         if (txDate.isSame(today)) {
+          if (matchedRules.length > 1) {
+            continue;
+          }
           throw new BadRequestException(
             'Reward for this event already granted today',
           );
@@ -1976,6 +1988,9 @@ export class CustomerService {
         const thisYear = dayjs().year();
         const txYear = dayjs(previousTx.created_at).year();
         if (txYear === thisYear) {
+          if (matchedRules.length > 1) {
+            continue;
+          }
           throw new BadRequestException(
             'Reward for this event already granted this year',
           );
@@ -1997,6 +2012,9 @@ export class CustomerService {
         // in this case give rewards in the multple of what user spends.
         if (rule.reward_condition === 'perAmount') {
           if (Orderamount < rule.min_amount_spent) {
+            if (matchedRules.length > 1) {
+              continue;
+            }
             throw new BadRequestException(
               `Minimum amount to earn points is ${rule.min_amount_spent}`,
             );
@@ -2009,6 +2027,10 @@ export class CustomerService {
           rule.reward_condition === null
         ) {
           if (Orderamount < rule.min_amount_spent) {
+            if (matchedRules.length > 1) {
+              continue;
+            }
+
             throw new BadRequestException(
               `Minimum amount to earn points is ${rule.min_amount_spent}`,
             );
@@ -2089,13 +2111,13 @@ export class CustomerService {
         // wallet_order_id: walletOrderId,
         business_unit: wallet.business_unit, // pass the full BusinessUnit entity instance
         type: WalletTransactionType.EARN,
-        source_type: event,
+        source_type: rule.name,
         amount: rewardPoints,
         status:
           pendingDays > 0
             ? WalletTransactionStatus.PENDING
             : WalletTransactionStatus.ACTIVE,
-        description: `Earned ${rewardPoints} points ${event}`,
+        description: `Earned ${rewardPoints} points (${rule.name})`,
         // Set the unlock_date for the wallet transaction.
         // If there are pendingDays (i.e., points are locked for a period), set unlock_date to the date after pendingDays.
         // Otherwise, set unlock_date to null (no unlock needed).
@@ -2194,22 +2216,24 @@ export class CustomerService {
       if (!rule)
         throw new NotFoundException('Burn rule not found for this campaign');
 
-      for (const product of metadata.Productitems.products) {
-        let allMatch = true;
-        for (const condition of rule.dynamic_conditions) {
-          const isMatch = this.checkMetadataAndDynamicCondition(
-            product,
-            condition,
-          );
-          if (!isMatch) {
-            allMatch = false;
-            break;
+      if (metadata && metadata?.productitems?.products.length) {
+        for (const product of metadata?.productitems?.products) {
+          let allMatch = true;
+          for (const condition of rule.dynamic_conditions) {
+            const isMatch = this.checkMetadataAndDynamicCondition(
+              product,
+              condition,
+            );
+            if (!isMatch) {
+              allMatch = false;
+              break;
+            }
           }
-        }
 
-        if (allMatch) {
-          matchedRules.push(rule);
-          orderAmount[rule.uuid] = product.amount || 0;
+          if (allMatch) {
+            matchedRules.push(rule);
+            orderAmount[rule.uuid] = product.amount || 0;
+          }
         }
       }
     } else {
@@ -2224,7 +2248,7 @@ export class CustomerService {
 
       for (let index = 0; index < rules.length; index++) {
         const eachRule = rules[index];
-        for (const product of metadata.Productitems.products) {
+        for (const product of metadata.productitems.products) {
           let allMatch = true;
           for (const condition of eachRule.dynamic_conditions) {
             const isMatch = this.checkMetadataAndDynamicCondition(
@@ -2251,6 +2275,9 @@ export class CustomerService {
 
         // Frequency logic
         if (rule.frequency === 'once' && previousTx) {
+          if (matchedRules.length > 1) {
+            continue;
+          }
           throw new BadRequestException(
             'Burn for this event already granted (once per customer)',
           );
@@ -2261,6 +2288,9 @@ export class CustomerService {
           const today = dayjs().startOf('day');
           const txDate = dayjs(previousTx.created_at).startOf('day');
           if (txDate.isSame(today)) {
+            if (matchedRules.length > 1) {
+              continue;
+            }
             throw new BadRequestException(
               'Burn for this event already granted today',
             );
@@ -2272,6 +2302,9 @@ export class CustomerService {
           const thisYear = dayjs().year();
           const txYear = dayjs(previousTx.created_at).year();
           if (txYear === thisYear) {
+            if (matchedRules.length > 1) {
+              continue;
+            }
             throw new BadRequestException(
               'Burn for this event already granted this year',
             );
@@ -2288,12 +2321,18 @@ export class CustomerService {
 
         // Step 5: Validate rule conditions
         if (total_amount < rule.min_amount_spent) {
+          if (matchedRules.length > 1) {
+            continue;
+          }
           throw new BadRequestException(
             `Minimum amount to burn is ${rule.min_amount_spent}`,
           );
         }
 
         if (wallet.available_balance < rule.max_redeemption_points_limit) {
+          if (matchedRules.length > 1) {
+            continue;
+          }
           throw new BadRequestException(
             `You don't have enough loyalty points, ${rule.max_redeemption_points_limit} loyalty point are required and you've ${wallet.available_balance} loyalty points`,
           );
@@ -2393,6 +2432,4 @@ export class CustomerService {
       throw new BadRequestException('Burn rule not found.');
     }
   }
-
-
 }
