@@ -57,7 +57,7 @@ export class CouponTypeBootstrapService implements OnApplicationBootstrap {
       ],
       TIER_BASED: [{ name: 'discountPercentage' }],
       CASHBACK: [{ name: 'minPurchaseAmount' }],
-      DISCOUNT: [{ name: 'minPurchaseAmount' }],
+      DISCOUNT: [{ name: 'Total Purchase Amount' }],
     };
 
     const existing = await this.couponTypeRepo.findOne({

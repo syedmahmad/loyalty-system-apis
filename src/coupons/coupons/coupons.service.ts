@@ -472,7 +472,11 @@ export class CouponsService {
 
   async redeem(bodyPayload) {
     const { customer_id, campaign_id, metadata, order } = bodyPayload;
-    const { amount } = order ?? {};
+    const amount = metadata.products.reduce(
+      (sum, product) => sum + product.amount,
+      0,
+    );
+
     const today = new Date();
 
     // Step 1: Get Customer & Wallet Info
@@ -652,9 +656,6 @@ export class CouponsService {
         metadata,
         conditions,
         wallet,
-        customerId,
-        coupon,
-        order,
       );
       if (!result) {
         throw new BadRequestException('Coupon is not applicable');
@@ -664,40 +665,15 @@ export class CouponsService {
         coupon?.coupon_type_id,
       );
 
-      if (couponType.coupon_type === 'BIRTHDAY') {
-        const today = new Date();
-        const dob = new Date(wallet.customer.DOB);
-        const isBirthday =
-          today.getDate() === dob.getDate() &&
-          today.getMonth() === dob.getMonth();
+      const result = await this.checkSimpleCouponConditions(
+        metadata,
+        coupon.conditions,
+        couponType,
+        wallet,
+      );
 
-        if (!isBirthday) {
-          throw new BadRequestException(
-            "Today is not your birthday, so you're not eligible.",
-          );
-        }
-      } else if (couponType.coupon_type === 'TIER_BASED') {
-        const customerTierInfo = await this.tiersService.getCurrentCustomerTier(
-          wallet.customer.id,
-        );
-        const cutomerFallInTier = coupon.conditions.find(
-          (singleTier) => singleTier.tier === customerTierInfo.tier.id,
-        );
-        coupon.discount_type = 'percentage_discount';
-        coupon.discount_price = cutomerFallInTier.value;
-      } else {
-        const result = await this.checkSimpleCouponConditions(
-          metadata,
-          coupon.conditions,
-          customerId,
-          couponType,
-          order,
-          wallet,
-        );
-
-        if (!result) {
-          throw new BadRequestException('Coupon is not applicable');
-        }
+      if (!result) {
+        throw new BadRequestException('Coupon is not applicable');
       }
     }
 
@@ -763,155 +739,8 @@ export class CouponsService {
     };
   }
 
-  async checkComplexCouponConditions1(
-    userCouponInfo,
-    dbCouponInfo,
-    wallet,
-    coupon,
-  ) {
-    const failedConditions: any = [];
-    for (const userCoupon of userCouponInfo) {
-      const match = dbCouponInfo.find(
-        (dbCoupon) =>
-          dbCoupon.selectedCouponType === userCoupon.selectedCouponType,
-      );
-
-      // Coupon Type mismatch in userCouponInfo and dbCouponInfo
-      if (!match) {
-        failedConditions.push(
-          `No matching condition type found for '${userCoupon.selectedCouponType}'`,
-        );
-        continue;
-      }
-
-      if (match.selectedCouponType === 'BIRTHDAY') {
-        const today = new Date();
-        const dob = new Date(wallet.customer.DOB);
-        const isBirthday =
-          today.getDate() === dob.getDate() &&
-          today.getMonth() === dob.getMonth();
-
-        if (!isBirthday) {
-          failedConditions.push(
-            "Today is not your birthday, so you're not eligible.",
-          );
-          continue;
-        }
-      } else if (match.selectedCouponType === 'TIER_BASED') {
-        const customerTierInfo = await this.tiersService.getCurrentCustomerTier(
-          wallet.customer.id,
-        );
-
-        const cutomerFallInTier = match.dynamicRows.find(
-          (singleTier) => singleTier.tier === customerTierInfo?.tier?.id,
-        );
-
-        if (!cutomerFallInTier?.tier) {
-          failedConditions.push(`Customer doesn't fall in any tier`);
-          continue;
-        }
-
-        coupon['discount_type'] = 'percentage_discount';
-        coupon['discount_price'] = cutomerFallInTier.value;
-      } else {
-        // condition length mismatch in userCouponInfo and dbCouponInfo
-        if (userCoupon.dynamicRows.length !== match.dynamicRows.length) {
-          failedConditions.push(
-            `condition not satisfied '${userCoupon.selectedCouponType}'`,
-          );
-          continue;
-        }
-
-        for (let i = 0; i < userCoupon.dynamicRows.length; i++) {
-          const userRow = userCoupon.dynamicRows[i];
-          const dbRow = match.dynamicRows[i];
-
-          if (
-            !(
-              userRow.type === dbRow.type &&
-              userRow.operator === dbRow.operator &&
-              userRow.value === dbRow.value
-            )
-          ) {
-            failedConditions.push(
-              `No matching condition '${userCoupon.selectedCouponType}'`,
-            );
-            continue;
-          }
-        }
-      }
-    }
-
-    if (failedConditions.length > 0) {
-      return {
-        valid: false,
-        message: `Coupon not applicable: \n${failedConditions.join('\n')}`,
-      };
-    }
-
-    return { valid: true, message: 'Coupon is applicable.' };
-  }
-
-  checkSimpleCouponConditions1(userCouponInfo, dbCouponInfo, couponType) {
-    const failedConditions: any = [];
-
-    for (const userCoupon of userCouponInfo.conditions) {
-      const matched = dbCouponInfo.find((cond: any) => {
-        const baseMatch =
-          cond.type === userCoupon.type &&
-          (cond.operator === '' && cond.value === ''
-            ? true
-            : cond.operator === userCoupon.operator &&
-              String(cond.value) === String(userCoupon.value));
-
-        if (couponType.coupon_type === 'VEHICLE_SPECIFIC') {
-          const makeMatch =
-            userCoupon.make !== undefined
-              ? cond.make === userCoupon.make
-              : true;
-          const yearMatch =
-            userCoupon.year !== undefined
-              ? cond.year === userCoupon.year
-              : true;
-          const modelMatch =
-            userCoupon.model !== undefined
-              ? cond.model === userCoupon.model
-              : true;
-
-          const variantMatch =
-            userCoupon.variant !== undefined
-              ? Array.isArray(cond.variant) &&
-                Array.isArray(userCoupon.variant) &&
-                cond.variant.length === userCoupon.variant.length &&
-                cond.variant.every((v: any) => userCoupon.variant.includes(v))
-              : true;
-
-          return (
-            baseMatch && makeMatch && yearMatch && modelMatch && variantMatch
-          );
-        }
-
-        return baseMatch;
-      });
-
-      if (!matched) {
-        failedConditions.push(`Missing condition: "${userCoupon.type}"`);
-        continue;
-      }
-    }
-
-    if (failedConditions.length > 0) {
-      return {
-        valid: false,
-        message: `Coupon not applicable:\n${failedConditions.join('\n')}`,
-      };
-    }
-
-    return { valid: true, message: 'Coupon is applicable.' };
-  }
-
   matchConditions(couponConditions, customer) {
-    return couponConditions.every((condition) => {
+    return couponConditions.some((condition) => {
       const valuesArray = condition.value.split(',').map((v) => v.trim());
 
       switch (condition.type) {
@@ -1078,65 +907,55 @@ export class CouponsService {
     return await this.txRepo.save(walletTransaction);
   }
 
-  async checkSimpleCouponConditions(
-    metadata,
-    conditions,
-    customerId,
-    couponType,
-    order,
-    wallet,
-  ) {
-    for (const condition of conditions) {
-      const history = await this.txRepo.find({
-        where: {
-          wallet: { customer: { id: customerId } },
-          source_type: condition.type,
-        },
-        relations: ['wallet', 'wallet.customer'],
-      });
-      let pastHistoryCount = history.length;
-      const requiredValue = Number(condition.value);
+  async checkSimpleCouponConditions(metadata, conditions, couponType, wallet) {
+    switch (couponType.coupon_type) {
+      case 'VEHICLE_SPECIFIC': {
+        if (!metadata.vehicle || metadata.vehicle.length === 0) return false;
+        return metadata.vehicle.some((veh: any) =>
+          conditions.some((cond: any) => {
+            const fieldName = cond.type;
+            const vehValue = veh[fieldName];
 
-      if (couponType.coupon_type === 'DISCOUNT') {
-        if (!condition.type && !condition.value) {
-          return true;
-        }
-      } else if (couponType.coupon_type === 'GEO_TARGETED') {
-        const city = wallet.customer.city?.toLowerCase() || '';
-        const address = wallet.customer.address?.toLowerCase() || '';
-        const inputValue = condition.type?.toLowerCase() || '';
+            if (vehValue === undefined) return false;
+            const vehicleExtraFeatures = this.applyOperator(
+              String(vehValue).toLowerCase(),
+              cond.operator,
+              String(cond.value).toLowerCase(),
+            );
 
-        let isMatch = false;
-        const values = inputValue.split(',').map((v) => v.trim());
-        const includes = values.filter((v) => !v.startsWith('!='));
-        const excludes = values
-          .filter((v) => v.startsWith('!='))
-          .map((v) => v.replace('!=', '').trim());
+            // Make check (if provided in condition)
+            const makeMatch = cond.make_name
+              ? veh.make?.toLowerCase() === cond.make_name.toLowerCase()
+              : false;
 
-        // Check if user city/address matches any of the "includes"
-        if (includes.length > 0) {
-          isMatch = includes.some((v) => city === v || address.includes(v));
-        }
+            //  Year check (if provided)
+            const yearMatch = cond.year ? veh.year === cond.year : false;
 
-        // Check if user city/address matches any of the "excludes"
-        if (excludes.length > 0) {
-          const excluded = excludes.some(
-            (v) => city === v || address.includes(v),
-          );
-          if (excluded) {
-            isMatch = false; // override match if excluded
-          }
-        }
+            // Model check
+            const modelMatch = cond.model_name
+              ? veh.model?.toLowerCase() === cond.model_name.toLowerCase()
+              : false;
 
-        if (!isMatch) {
-          return false;
-        }
-      } else if (
-        couponType.coupon_type === 'CASHBACK' ||
-        couponType.coupon_type === 'REFERRAL'
-      ) {
-        pastHistoryCount = order.amount;
-      } else if (couponType.coupon_type === 'USER_SPECIFIC') {
+            // Variant check (if provided, match against array of allowed variants)
+            const variantMatch =
+              cond.variant_names && cond.variant_names.length > 0
+                ? cond.variant_names.some(
+                    (v: string) =>
+                      v.toLowerCase() === veh.variant?.toLowerCase(),
+                  )
+                : false;
+
+            return (
+              (vehicleExtraFeatures && makeMatch) ||
+              yearMatch ||
+              modelMatch ||
+              variantMatch
+            );
+          }),
+        );
+      }
+
+      case 'USER_SPECIFIC': {
         const decryptedEmail = await this.ociService.decryptData(
           wallet.customer.email,
         );
@@ -1149,139 +968,21 @@ export class CouponsService {
           phone_number: decryptedPhone,
         });
 
-        if (!isApplicableForUser) {
-          return false;
-        }
-        return true;
-      } else if (couponType.coupon_type === 'VEHICLE_SPECIFIC') {
-        const isEligible = metadata.products.some((product) => {
-          // check model name
-          const modelMatch =
-            condition.models?.some(
-              (m) => m.Model.toLowerCase() === product.model?.toLowerCase(),
-            ) || false;
+        return isApplicableForUser ? true : false;
+      }
 
-          // check fuel type
-          const fuelMatch =
-            condition.type === 'fuel_type' &&
-            condition.operator === '==' &&
-            product.fule_type?.toLowerCase() === condition.value.toLowerCase();
-
-          // check year
-          const yearMatch = product.year === condition.year;
-
-          return modelMatch || (fuelMatch && yearMatch);
-        });
-
-        if (isEligible) {
-          return true;
-        }
-
-        return false;
-      } else {
-        // check user has used required service
-        const productUsed = metadata.products.some(
-          (p) => p.name.toLowerCase() === condition.type.toLowerCase(),
+      case 'PRODUCT_SPECIFIC': {
+        if (!metadata.products || metadata.products.length === 0) return false;
+        return metadata.products.some((product: any) =>
+          conditions.some((cond: any) => product.name === cond.type),
         );
-        if (!productUsed) {
-          return false;
-        }
-
-        if (isNaN(requiredValue) && productUsed) {
-          return true;
-        }
       }
 
-      switch (condition.operator) {
-        case '>':
-          if (!(pastHistoryCount > requiredValue)) return false;
-          break;
-        case '>=':
-          if (!(pastHistoryCount >= requiredValue)) return false;
-          break;
-        case '<':
-          if (!(pastHistoryCount < requiredValue)) return false;
-          break;
-        case '<=':
-          if (!(pastHistoryCount <= requiredValue)) return false;
-          break;
-        case '==':
-          if (!(pastHistoryCount == requiredValue)) return false;
-          break;
-      }
-    }
-
-    return true;
-  }
-
-  async checkComplexCouponConditions(
-    metadata,
-    conditions,
-    wallet,
-    customerId,
-    coupon,
-    order,
-  ) {
-    const failedConditions = [];
-    for (const condition of conditions) {
-      const couponType = condition.selectedCouponType;
-
-      if (couponType == 'BIRTHDAY') {
-        const today = new Date();
-        const dob = new Date(wallet.customer.DOB);
-        const isBirthday =
-          today.getDate() === dob.getDate() &&
-          today.getMonth() === dob.getMonth();
-
-        if (!isBirthday) {
-          failedConditions.push(
-            "Today is not your birthday, so you're not eligible.",
-          );
-          continue;
-        }
-      }
-
-      if (couponType == 'SERVICE_BASED') {
-        const hasFree = condition.dynamicRows.some(
-          (row) => row.value?.toLowerCase() === 'free',
-        );
-        if (hasFree) {
-          return true;
-        }
-      }
-
-      for (let index = 0; index < condition.dynamicRows.length; index++) {
-        const eachRow = condition.dynamicRows[index];
-        const history = await this.txRepo.find({
-          where: {
-            wallet: { customer: { id: customerId } },
-            source_type: eachRow.type,
-          },
-          relations: ['wallet', 'wallet.customer'],
-        });
-        let historyCount = history.length;
-
-        if (couponType === 'CASHBACK' || couponType === 'REFERRAL') {
-          if (!order.amount) {
-            throw new BadRequestException(`Order amount is required`);
-          }
-          historyCount = order.amount;
-        } else if (couponType === 'TIER_BASED') {
-          const customerTierInfo =
-            await this.tiersService.getCurrentCustomerTier(wallet.customer.id);
-
-          if (customerTierInfo?.tier?.id != eachRow.tier) {
-            failedConditions.push(`Customer doesn't fall in any tier`);
-            continue;
-          }
-
-          coupon['discount_type'] = 'percentage_discount';
-          coupon['discount_price'] = eachRow.value;
-          return true;
-        } else if (couponType === 'GEO_TARGETED') {
-          const city = wallet.customer.city?.toLowerCase() || '';
-          const address = wallet.customer.address?.toLowerCase() || '';
-          const inputValue = eachRow.type?.toLowerCase() || '';
+      case 'GEO_TARGETED': {
+        const city = wallet.customer.city?.toLowerCase() || '';
+        const address = wallet.customer.address?.toLowerCase() || '';
+        const isEligible = conditions.every((condition) => {
+          const inputValue = condition.type?.toLowerCase() || '';
 
           let isMatch = false;
           const values = inputValue.split(',').map((v) => v.trim());
@@ -1290,27 +991,160 @@ export class CouponsService {
             .filter((v) => v.startsWith('!='))
             .map((v) => v.replace('!=', '').trim());
 
-          // Check if user city/address matches any of the "includes"
+          // Check "includes"
           if (includes.length > 0) {
-            isMatch = includes
-              .filter((v) => v && v.trim() !== '')
-              .some((v) => city === v || address.includes(v));
+            isMatch = includes.some((v) => city === v || address.includes(v));
           }
 
-          // Check if user city/address matches any of the "excludes"
+          // Check "excludes"
           if (excludes.length > 0) {
             const excluded = excludes.some(
               (v) => city === v || address.includes(v),
             );
             if (excluded) {
-              isMatch = false;
+              isMatch = false; // ❌ override if excluded
             }
           }
 
-          if (!isMatch) {
-            return false;
+          return isMatch;
+        });
+        return isEligible;
+      }
+
+      case 'SERVICE_BASED': {
+        if (!metadata.services) return false;
+        return conditions.some((cond) => {
+          const service = metadata.services.find(
+            (s: any) => s.name.toLowerCase() === cond.type.toLowerCase(),
+          );
+
+          if (!service) return false;
+          return this.applyOperator(service.value, cond.operator!, cond.value);
+        });
+      }
+
+      case 'DISCOUNT': {
+        // It means admin diretly want to give discount to customer without and rule/condition
+        if (
+          conditions.length == 1 &&
+          conditions[0].type == '' &&
+          conditions[0].operator == '' &&
+          conditions[0].value == ''
+        ) {
+          return true;
+        }
+
+        if (!metadata.products || metadata.products.length === 0) return false;
+        const totalAmount = metadata.products.reduce(
+          (sum, product) => sum + product.amount,
+          0,
+        );
+
+        return conditions.every((cond) => {
+          const value = Number(cond.value);
+          return this.applyOperator(totalAmount, cond.operator, value);
+        });
+      }
+
+      case 'TIER_BASED': {
+        const customerTierInfo = await this.tiersService.getCurrentCustomerTier(
+          wallet.customer.id,
+        );
+
+        const cutomerFallInTier = conditions.find(
+          (singleTier) => singleTier.tier === customerTierInfo.tier.id,
+        );
+
+        return cutomerFallInTier ? true : false;
+      }
+
+      case 'BIRTHDAY': {
+        const today = new Date();
+        const dob = new Date(wallet.customer.DOB);
+        const isBirthday =
+          today.getDate() === dob.getDate() &&
+          today.getMonth() === dob.getMonth();
+
+        return isBirthday ? true : false;
+      }
+
+      case 'REFERRAL':
+        if (!metadata.referral) return false;
+        const totalAmount = metadata.products.reduce(
+          (sum, product) => sum + product.amount,
+          0,
+        );
+        return conditions.some((cond) => {
+          const value = Number(cond.value);
+          return this.applyOperator(totalAmount, cond.operator, value);
+        });
+
+      default:
+        return false;
+    }
+  }
+
+  async checkComplexCouponConditions(metadata, conditions, wallet) {
+    const results: boolean[] = [];
+    for (const condition of conditions) {
+      const couponType = condition.selectedCouponType;
+      const conditions = condition.dynamicRows || [];
+
+      switch (couponType) {
+        case 'VEHICLE_SPECIFIC': {
+          if (!metadata.vehicle || metadata.vehicle.length === 0) {
+            results.push(false);
+            break;
           }
-        } else if (couponType === 'USER_SPECIFIC') {
+
+          const isVehicleSatisfied = metadata.vehicle.some((veh: any) =>
+            conditions.some((cond: any) => {
+              const fieldName = cond.type;
+              const vehValue = veh[fieldName];
+
+              if (vehValue === undefined) return false;
+              const vehicleExtraFeatures = this.applyOperator(
+                String(vehValue).toLowerCase(),
+                cond.operator,
+                String(cond.value).toLowerCase(),
+              );
+
+              // Make check (if provided in condition)
+              const makeMatch = cond.make_name
+                ? veh.make?.toLowerCase() === cond.make_name.toLowerCase()
+                : false;
+
+              //  Year check (if provided)
+              const yearMatch = cond.year ? veh.year === cond.year : false;
+
+              // Model check
+              const modelMatch = cond.model_name
+                ? veh.model?.toLowerCase() === cond.model_name.toLowerCase()
+                : false;
+
+              // Variant check (if provided, match against array of allowed variants)
+              const variantMatch =
+                cond.variant_names && cond.variant_names.length > 0
+                  ? cond.variant_names.some(
+                      (v: string) =>
+                        v.toLowerCase() === veh.variant?.toLowerCase(),
+                    )
+                  : false;
+
+              return (
+                (vehicleExtraFeatures && makeMatch) ||
+                yearMatch ||
+                modelMatch ||
+                variantMatch
+              );
+            }),
+          );
+
+          results.push(isVehicleSatisfied);
+          break;
+        }
+
+        case 'USER_SPECIFIC': {
           const decryptedEmail = await this.ociService.decryptData(
             wallet.customer.email,
           );
@@ -1318,80 +1152,177 @@ export class CouponsService {
             wallet.customer.phone,
           );
 
-          const isApplicableForUser = await this.matchConditions([eachRow], {
+          const isApplicableForUser = await this.matchConditions(conditions, {
             email: decryptedEmail,
             phone_number: decryptedPhone,
           });
 
-          if (!isApplicableForUser) {
-            return false;
+          results.push(isApplicableForUser);
+          break;
+        }
+
+        case 'PRODUCT_SPECIFIC': {
+          if (!metadata.products || metadata.products.length === 0) {
+            results.push(false);
+            break;
           }
-          return true;
-        } else if (couponType === 'VEHICLE_SPECIFIC') {
-          const isEligible = metadata.products.some((product) => {
-            // check model name
-            const modelMatch =
-              eachRow.models?.some(
-                (m) => m.Model.toLowerCase() === product.model?.toLowerCase(),
-              ) || false;
+          const hasProduct = metadata?.products?.some((product) =>
+            conditions.some((cond: any) => product.name === cond.type),
+          );
+          results.push(hasProduct);
+          break;
+        }
 
-            // check fuel type
-            const fuelMatch =
-              eachRow.type === 'fuel_type' &&
-              eachRow.operator === '==' &&
-              product.fule_type?.toLowerCase() === eachRow.value.toLowerCase();
+        case 'GEO_TARGETED': {
+          const city = wallet.customer.city?.toLowerCase() || '';
+          const address = wallet.customer.address?.toLowerCase() || '';
+          const isEligible = conditions.every((condition) => {
+            const inputValue = condition.type?.toLowerCase() || '';
 
-            // check year
-            const yearMatch = product.year === eachRow.year;
+            let isMatch = false;
+            const values = inputValue.split(',').map((v) => v.trim());
+            const includes = values.filter((v) => !v.startsWith('!='));
+            const excludes = values
+              .filter((v) => v.startsWith('!='))
+              .map((v) => v.replace('!=', '').trim());
 
-            return modelMatch && fuelMatch && yearMatch;
+            // Check "includes"
+            if (includes.length > 0) {
+              isMatch = includes.some((v) => city === v || address.includes(v));
+            }
+
+            // Check "excludes"
+            if (excludes.length > 0) {
+              const excluded = excludes.some(
+                (v) => city === v || address.includes(v),
+              );
+              if (excluded) {
+                isMatch = false; // ❌ override if excluded
+              }
+            }
+
+            return isMatch;
+          });
+          results.push(isEligible);
+          break;
+        }
+
+        case 'SERVICE_BASED': {
+          if (!metadata.services || metadata.services.length === 0) {
+            results.push(false);
+            break;
+          }
+          const isServiceSatisfied = conditions.some((cond) => {
+            const service = metadata.services.find(
+              (s: any) => s.name.toLowerCase() === cond.type.toLowerCase(),
+            );
+
+            if (!service) return false;
+            return this.applyOperator(
+              service.value,
+              cond.operator!,
+              cond.value,
+            );
           });
 
-          if (isEligible) {
-            return true;
-          }
+          results.push(isServiceSatisfied);
+          break;
+        }
 
-          return false;
-        } else {
-          // check user has used required service
-          const productUsed = metadata.products.some(
-            (p) => p.name.toLowerCase() === eachRow.type.toLowerCase(),
+        case 'DISCOUNT': {
+          if (!metadata.products || metadata.products.length === 0) {
+            results.push(false);
+            break;
+          }
+          const totalAmount = metadata.products.reduce(
+            (sum, product) => sum + product.amount,
+            0,
           );
 
+          const isdiscountapplicable = conditions.every((cond) => {
+            const value = Number(cond.value);
+            return this.applyOperator(totalAmount, cond.operator, value);
+          });
 
-          if (!productUsed) {
-            return false;
-          }
+          results.push(isdiscountapplicable);
+          break;
         }
 
-        // ✅ If operator/value exist, check count conditions
-        if (eachRow.operator && eachRow.value !== undefined) {
-          const requiredValue = Number(eachRow.value);
-          switch (eachRow.operator) {
-            case '>':
-              if (!(historyCount > requiredValue)) return false;
-              break;
-            case '>=':
-              if (!(historyCount >= requiredValue)) return false;
-              break;
-            case '==':
-              if (!(historyCount === requiredValue)) return false;
-              break;
-            case '<':
-              if (!(historyCount < requiredValue)) return false;
-              break;
-            default:
-              return false;
+        case 'TIER_BASED': {
+          if (!metadata.products || metadata.products.length === 0) {
+            results.push(false);
+            break;
           }
+          const customerTierInfo =
+            await this.tiersService.getCurrentCustomerTier(wallet.customer.id);
+
+          const cutomerFallInTier = conditions.find(
+            (singleTier) => singleTier.tier === customerTierInfo.tier.id,
+          );
+          const iscustomerTierSatisfied = cutomerFallInTier ? true : false;
+          results.push(iscustomerTierSatisfied);
+          break;
         }
+
+        case 'BIRTHDAY': {
+          const today = new Date();
+          const dob = new Date(wallet.customer.DOB);
+          const isBirthday =
+            today.getDate() === dob.getDate() &&
+            today.getMonth() === dob.getMonth();
+
+          results.push(isBirthday);
+          break;
+        }
+
+        case 'REFERRAL': {
+          if (!metadata.referral) {
+            results.push(false);
+            break;
+          }
+
+          const totalAmount = metadata.products.reduce(
+            (sum, product) => sum + product.amount,
+            0,
+          );
+
+          const isReferalSatisfied = conditions.some((cond) => {
+            const value = Number(cond.value);
+            return this.applyOperator(totalAmount, cond.operator, value);
+          });
+
+          results.push(isReferalSatisfied);
+          break;
+        }
+
+        default:
+          results.push(false);
+          break;
       }
     }
 
-    if (failedConditions.length > 0) {
-      return { success: false, message: `${failedConditions.join('\n')}` };
-    }
+    return results.every(Boolean);
+  }
 
-    return true;
+  applyOperator(actual: any, operator: string, expected: any): boolean {
+    switch (operator) {
+      case '==':
+        return actual === expected;
+      case '!=':
+        return actual !== expected;
+      case '>=':
+        return actual >= expected;
+      case '<=':
+        return actual <= expected;
+      case '>':
+        return actual > expected;
+      case '<':
+        return actual < expected;
+      case 'IN':
+        return Array.isArray(expected) && expected.includes(actual);
+      default:
+        return false;
+    }
   }
 
   async earnCoupon(bodyPayload: any) {
