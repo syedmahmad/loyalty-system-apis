@@ -1911,7 +1911,7 @@ export class CustomerService {
     // matchedRules holds all earning rules (from the rules array) whose
     // dynamic conditions are satisfied by at least one product in the
     // metadata.productitems.products array.
-    const matchedRules = [];
+    let matchedRules = [];
     // orderAmount is an object that maps each matched rule's uuid to the corresponding product's amount.
     // It is used to keep track of the amount associated with each rule that matches the dynamic conditions for a product.
     const orderAmount = {};
@@ -1951,6 +1951,27 @@ export class CustomerService {
       }
     }
     // }
+
+    const customerBURules = matchedRules.filter(
+      (singleRule) => singleRule.business_unit_id === BUId,
+    );
+    if (customerBURules.length) {
+      matchedRules = customerBURules;
+    } else {
+      const grouped = matchedRules.reduce((acc, item) => {
+        if (!acc[item.business_unit_id]) {
+          acc[item.business_unit_id] = [];
+        }
+        acc[item.business_unit_id].push(item);
+        return acc;
+      }, {});
+
+      const groupIds = Object.keys(grouped);
+      const singleGroupId =
+        groupIds[Math.floor(Math.random() * groupIds.length)];
+      const matchedGroup = grouped[singleGroupId];
+      matchedRules = matchedGroup;
+    }
 
     if (!matchedRules.length) {
       throw new NotFoundException('Earning rule not found');
@@ -2225,7 +2246,7 @@ export class CustomerService {
     });
 
     let rule;
-    const matchedRules = [];
+    let matchedRules = [];
     const orderAmount = {};
     let totalDiscountAmount = 0;
     let totalPoints = 0;
@@ -2289,6 +2310,27 @@ export class CustomerService {
       }
     }
     // }
+
+    const customerBURules = matchedRules.filter(
+      (singleRule) => singleRule.business_unit_id === BUId,
+    );
+    if (customerBURules.length) {
+      matchedRules = customerBURules;
+    } else {
+      const grouped = matchedRules.reduce((acc, item) => {
+        if (!acc[item.business_unit_id]) {
+          acc[item.business_unit_id] = [];
+        }
+        acc[item.business_unit_id].push(item);
+        return acc;
+      }, {});
+
+      const groupIds = Object.keys(grouped);
+      const singleGroupId =
+        groupIds[Math.floor(Math.random() * groupIds.length)];
+      const matchedGroup = grouped[singleGroupId];
+      matchedRules = matchedGroup;
+    }
 
     if (matchedRules.length) {
       for (let index = 0; index <= matchedRules.length - 1; index++) {

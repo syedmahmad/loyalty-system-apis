@@ -936,14 +936,19 @@ export class CouponsService {
               ? veh.model?.toLowerCase() === cond.model_name.toLowerCase()
               : false;
 
+            let variantMatch = false;
             // Variant check (if provided, match against array of allowed variants)
-            const variantMatch =
-              cond.variant_names && cond.variant_names.length > 0
-                ? cond.variant_names.some(
-                    (v: string) =>
-                      v.toLowerCase() === veh.variant?.toLowerCase(),
-                  )
-                : false;
+            if (cond.variant.length == 1 && cond.variant[0] === 'all') {
+              variantMatch = true;
+            } else {
+              variantMatch =
+                cond.variant_names && cond.variant_names.length > 0
+                  ? cond.variant_names.some(
+                      (v: string) =>
+                        v.toLowerCase() === veh.variant?.toLowerCase(),
+                    )
+                  : false;
+            }
 
             return (
               (vehicleExtraFeatures && makeMatch) ||
@@ -1122,14 +1127,19 @@ export class CouponsService {
                 ? veh.model?.toLowerCase() === cond.model_name.toLowerCase()
                 : false;
 
+              let variantMatch = false;
               // Variant check (if provided, match against array of allowed variants)
-              const variantMatch =
-                cond.variant_names && cond.variant_names.length > 0
-                  ? cond.variant_names.some(
-                      (v: string) =>
-                        v.toLowerCase() === veh.variant?.toLowerCase(),
-                    )
-                  : false;
+              if (cond.variant.length == 1 && cond.variant[0] === 'all') {
+                variantMatch = true;
+              } else {
+                variantMatch =
+                  cond.variant_names && cond.variant_names.length > 0
+                    ? cond.variant_names.some(
+                        (v: string) =>
+                          v.toLowerCase() === veh.variant?.toLowerCase(),
+                      )
+                    : false;
+              }
 
               return (
                 (vehicleExtraFeatures && makeMatch) ||
