@@ -16,6 +16,9 @@ export class Wallet {
   @PrimaryGeneratedColumn()
   id: number;
 
+  @Column({ nullable: true })
+  external_system_id: number;
+
   @ManyToOne(() => Customer, { eager: true })
   @JoinColumn({ name: 'customer_id' })
   customer: Customer;
@@ -28,6 +31,7 @@ export class Wallet {
   @JoinColumn({ name: 'business_unit_id' })
   business_unit: BusinessUnit;
 
+  // Monetary + points balances
   @Column({
     type: 'decimal',
     default: 0,
@@ -49,6 +53,7 @@ export class Wallet {
       to: (value: number) => value,
       from: (value: string) => parseFloat(value),
     },
+    comment: 'Loyalty points available for use (unclaimed balance)',
   })
   available_balance: number;
 
@@ -67,9 +72,18 @@ export class Wallet {
   @Column({ default: false })
   allow_negative: boolean;
 
-  @CreateDateColumn()
+  @Column({ type: 'int', default: 0 })
+  total_earned_points: number;
+
+  @Column({ type: 'int', default: 0 })
+  total_burned_points: number;
+
+  @Column({ type: 'int', default: 0 })
+  total_expired_points: number;
+
+  @CreateDateColumn({ nullable: true })
   created_at: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ nullable: true })
   updated_at: Date;
 }

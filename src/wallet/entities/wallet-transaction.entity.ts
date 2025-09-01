@@ -4,6 +4,7 @@ import {
   Column,
   ManyToOne,
   CreateDateColumn,
+  UpdateDateColumn,
   JoinColumn,
 } from 'typeorm';
 import { Wallet } from './wallet.entity';
@@ -28,6 +29,9 @@ export enum WalletTransactionStatus {
 export class WalletTransaction {
   @PrimaryGeneratedColumn()
   id: number;
+
+  @Column({ nullable: true })
+  external_system_id: number;
 
   @ManyToOne(() => WalletOrder)
   @JoinColumn({ name: 'wallet_order_id' })
@@ -76,4 +80,32 @@ export class WalletTransaction {
 
   @CreateDateColumn()
   created_at: Date;
+
+  @UpdateDateColumn()
+  updated_at: Date;
+
+  /** -------- Newly added fields for migration -------- */
+
+  // Maps to third-party `uuid`
+  @Column({ type: 'char', length: 36, nullable: true, unique: true })
+  external_uuid: string;
+
+  // To capture mapping with loyalty/transaction_program_id
+  @Column({ type: 'int', nullable: true })
+  external_program_id: number;
+
+  // For duplicate handling (maps to duplicate_sequence)
+  @Column({ type: 'int', default: 0 })
+  duplicate_sequence: number;
+
+  // For invoice mapping (maps to invoice_id or invoice_no)
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  invoice_id: string;
+
+  @Column({ type: 'varchar', length: 128, nullable: true })
+  invoice_no: string;
+
+  // Optional: to map reference_id from loyalty records
+  @Column({ type: 'int', nullable: true })
+  reference_id: number;
 }
