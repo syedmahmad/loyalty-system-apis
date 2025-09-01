@@ -72,7 +72,7 @@ export class Customer {
   @Column({ nullable: true })
   address: string;
 
-  @Column({ type: 'text', nullable: true })
+  @Column({ type: 'text', nullable: false, default: () => 'uuid()' })
   uuid: string;
 
   // --- Auth / Type ---

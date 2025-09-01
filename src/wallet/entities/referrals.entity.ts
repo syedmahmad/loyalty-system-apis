@@ -1,8 +1,11 @@
+import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
 import {
   Entity,
   PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
+  ManyToOne,
+  JoinColumn,
 } from 'typeorm';
 
 @Entity({ name: 'referrals' })
@@ -30,4 +33,8 @@ export class Referral {
 
   @CreateDateColumn({ type: 'timestamp', name: 'created_at' })
   created_at: Date;
+
+  @ManyToOne(() => BusinessUnit)
+  @JoinColumn({ name: 'business_unit_id' })
+  business_unit: BusinessUnit;
 }
