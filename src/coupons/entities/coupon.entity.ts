@@ -163,6 +163,30 @@ export class Coupon {
   @OneToMany(() => CouponCustomerSegment, (cs) => cs.coupon)
   customerSegments: CouponCustomerSegment[];
 
+  @Column({ type: 'int', nullable: true })
+  external_system_id: number;
+
+  @Column({ type: 'tinyint', default: 1 })
+  all_users: number; // 0 = false, 1 = true
+
+  @Column({ type: 'int', nullable: true })
+  tier_id: number;
+
+  @Column({ type: 'int', nullable: true })
+  upto_amount: number;
+
+  @Column({ type: 'tinyint', default: 0 })
+  is_welcome_coupon: number; // 0 = false, 1 = true
+
+  @Column({ type: 'int', nullable: true })
+  min_transaction_amount: number;
+
+  @Column({ type: 'time', nullable: true })
+  lean_start_time: string;
+
+  @Column({ type: 'time', nullable: true })
+  lean_end_time: string;
+
   @Column('int')
   created_by: number;
 

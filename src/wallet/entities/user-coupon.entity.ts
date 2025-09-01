@@ -45,6 +45,12 @@ export class UserCoupon {
   @Column({ type: 'timestamp', nullable: true })
   expires_at: Date;
 
+  @Column({ type: 'int', nullable: true })
+  external_system_id: number;
+
+  @Column({ type: 'int', nullable: true })
+  coupon_id: number;
+
   @CreateDateColumn()
   created_at: Date;
 }

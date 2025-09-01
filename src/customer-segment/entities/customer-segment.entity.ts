@@ -25,6 +25,12 @@ export class CustomerSegment {
   @Column()
   description: string;
 
+  @Column()
+  name_ar: string;
+
+  @Column()
+  description_ar: string;
+
   @ManyToOne(() => Tenant, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'tenant_id' })
   tenant: Tenant;

@@ -16,6 +16,14 @@ export class CreateCustomerSegmentDto {
   description: string;
 
   @IsNotEmpty()
+  @IsString()
+  name_ar: string;
+
+  @IsNotEmpty()
+  @IsString()
+  description_ar: string;
+
+  @IsNotEmpty()
   file: any; // you can later use `@IsObject()` or a custom validation pipe if needed
 
   @IsOptional()
