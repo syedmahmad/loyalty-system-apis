@@ -23,6 +23,7 @@ import { WalletTransaction } from 'src/wallet/entities/wallet-transaction.entity
 import { WalletSettings } from 'src/wallet/entities/wallet-settings.entity';
 import { UserCoupon } from 'src/wallet/entities/user-coupon.entity';
 import { WalletOrder } from 'src/wallet/entities/wallet-order.entity';
+import { OciService } from 'src/oci/oci.service';
 
 @Module({
   imports: [
@@ -49,6 +50,6 @@ import { WalletOrder } from 'src/wallet/entities/wallet-order.entity';
     ]),
   ],
   controllers: [CampaignsController],
-  providers: [CampaignsService, TiersService, WalletService],
+  providers: [CampaignsService, TiersService, WalletService, OciService],
 })
 export class CampaignModule {}

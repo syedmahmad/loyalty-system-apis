@@ -13,6 +13,7 @@ import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
 import { User } from 'src/users/entities/user.entity';
 import { Tenant } from 'src/tenants/entities/tenant.entity';
 import { Wallet } from 'src/wallet/entities/wallet.entity';
+import { OciService } from 'src/oci/oci.service';
 
 @Injectable()
 export class TiersService {
@@ -36,6 +37,8 @@ export class TiersService {
 
     @InjectDataSource()
     private readonly dataSource: DataSource,
+
+    private readonly ociService: OciService,
   ) {}
 
   async create(dto: CreateTierDto, user: string): Promise<Tier> {
@@ -469,10 +472,19 @@ export class TiersService {
       points,
       tier: {
         id: matchingTier.id,
+        uuid: matchingTier.uuid,
         name: matchingTier.name,
         level: matchingTier.level,
         min_points: matchingTier.min_points,
       },
     };
+  }
+
+  async uploadFile(buffer, bucketName, objectName) {
+    return await this.ociService.uploadBufferToOci(
+      buffer,
+      bucketName,
+      objectName,
+    );
   }
 }

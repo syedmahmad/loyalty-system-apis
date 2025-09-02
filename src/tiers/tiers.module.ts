@@ -8,6 +8,7 @@ import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
 import { User } from 'src/users/entities/user.entity';
 import { Tenant } from 'src/tenants/entities/tenant.entity';
 import { Wallet } from 'src/wallet/entities/wallet.entity';
+import { OciService } from 'src/oci/oci.service';
 
 @Module({
   imports: [
@@ -21,6 +22,6 @@ import { Wallet } from 'src/wallet/entities/wallet.entity';
     ]),
   ],
   controllers: [TiersController],
-  providers: [TiersService],
+  providers: [TiersService, OciService],
 })
 export class TiersModule {}

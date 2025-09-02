@@ -20,6 +20,7 @@ import { CustomerEarnDto } from './dto/customer-earn.dto';
 import { EarnWithEvent } from 'src/customers/dto/earn-with-event.dto';
 import { BurnWithEvent } from 'src/customers/dto/burn-with-event.dto';
 import { GvrEarnBurnWithEventsDto } from 'src/customers/dto/gvr_earn_burn_with_event.dto';
+import { MyRewardsDto } from './dto/my-rewards.dto';
 
 @Controller('customers')
 export class CustomerController {
@@ -114,5 +115,10 @@ export class CustomerController {
   @Post('gvr_burn_with_event')
   async gvrBurnWithEvent(@Body() body: GvrEarnBurnWithEventsDto) {
     return this.customerService.gvrBurnWithEvent(body);
+  }
+
+  @Post('/rewards')
+  async myRewards(@Body() body: MyRewardsDto) {
+    return this.customerService.myRewards(body);
   }
 }

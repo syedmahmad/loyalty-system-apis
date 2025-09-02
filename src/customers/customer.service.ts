@@ -54,6 +54,8 @@ import { CustomerActivity } from './entities/customer-activity.entity';
 import { Customer } from './entities/customer.entity';
 import { CustomerCoupon } from './entities/customer-coupon.entity';
 import { GvrEarnBurnWithEventsDto } from 'src/customers/dto/gvr_earn_burn_with_event.dto';
+import { Tier } from 'src/tiers/entities/tier.entity';
+import { MyRewardsDto } from './dto/my-rewards.dto';
 
 @Injectable()
 export class CustomerService {
@@ -98,6 +100,9 @@ export class CustomerService {
 
     @InjectRepository(CustomerCoupon)
     private customerCouponRepo: Repository<CustomerCoupon>,
+
+    @InjectRepository(Tier)
+    private tierRepo: Repository<Tier>,
   ) {}
 
   async createCustomer(req: Request, dto: BulkCreateCustomerDto) {
@@ -2493,6 +2498,104 @@ export class CustomerService {
       };
     } else {
       throw new BadRequestException('Burn rule not found.');
+    }
+  }
+
+  async myRewards(body: MyRewardsDto) {
+    try {
+      const { customerId, tenantId, BUId } = body;
+      const customer = await this.customerRepo.findOne({
+        where: { uuid: customerId, business_unit: { id: parseInt(BUId) } },
+      });
+      if (!customer) throw new NotFoundException('Customer not found');
+      if (customer && customer.status == 0) {
+        throw new NotFoundException('Customer is inactive');
+      }
+
+      const wallet = await this.walletService.getSingleCustomerWalletInfoById(
+        customer.id,
+      );
+      if (!wallet) throw new NotFoundException("customer's Wallet not found");
+
+      const customerTierInfo = await this.tiersService.getCurrentCustomerTier(
+        customer.id,
+      );
+      const { id, ...currentTier } = customerTierInfo.tier;
+
+      const allTiers = await this.tierRepo.find({
+        where: {
+          tenant_id: tenantId,
+          business_unit_id: parseInt(BUId),
+          status: 1,
+        },
+        order: {
+          min_points: 'ASC',
+        },
+      });
+
+      let nextTier = null;
+      const benefits = [];
+      const tiersArr = [];
+      for (let index = 0; index < allTiers.length; index++) {
+        const eachTier = allTiers[index];
+        if (wallet.total_balance >= eachTier.min_points) {
+          nextTier = allTiers[index + 1] || null;
+        }
+        tiersArr.push({
+          uuid: eachTier.uuid,
+          name: eachTier.name,
+          level: eachTier.level,
+          min_points: eachTier.min_points,
+        });
+
+        for (let bindex = 0; bindex <= eachTier.benefits.length - 1; bindex++) {
+          const eachBenefit = eachTier.benefits[bindex];
+          if (!eachBenefit) {
+            continue;
+          }
+
+          if (typeof eachBenefit === 'object' && eachBenefit !== null) {
+            benefits.push({
+              tierId: eachTier.uuid,
+              ...(eachBenefit as {
+                name_en: string;
+                name_ar: string;
+                icon: string;
+              }),
+            });
+          } else {
+            benefits.push({
+              tierId: eachTier.uuid,
+              name_en: String(eachBenefit),
+              name_ar: '',
+              icon: '',
+            });
+          }
+        }
+      }
+
+      return {
+        success: true,
+        message: 'Successfully fetched the data!',
+        result: {
+          points: wallet.available_balance,
+          currentTier: currentTier,
+          nextTier,
+          pointsToNextTier: nextTier
+            ? nextTier.min_points - wallet.total_balance
+            : 0,
+          tiers: tiersArr,
+          benefits,
+        },
+        errors: [],
+      };
+    } catch (error) {
+      throw new BadRequestException({
+        success: false,
+        message: 'Failed to fetch rewards',
+        result: null,
+        errors: error.message,
+      });
     }
   }
 }

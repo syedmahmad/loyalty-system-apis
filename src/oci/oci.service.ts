@@ -4,14 +4,18 @@ import {
   ConfigFileAuthenticationDetailsProvider,
   ConfigFileReader,
 } from 'oci-common';
+import * as objectstorage from 'oci-objectstorage';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class OciService {
   //KMS client initialization
   private readonly kmsEndpoint = process.env.OCI_ENDPOINT;
   private readonly kmsClient: keymanagement.KmsCryptoClient;
+  private readonly objectStorageClient: objectstorage.ObjectStorageClient;
+  private readonly namespace: string;
 
-  constructor() {
+  constructor(private readonly configService: ConfigService) {
     try {
       const provider = new ConfigFileAuthenticationDetailsProvider(
         ConfigFileReader.DEFAULT_FILE_PATH,
@@ -21,6 +25,10 @@ export class OciService {
         authenticationDetailsProvider: provider,
       });
       this.kmsClient.endpoint = this.kmsEndpoint!;
+
+      this.objectStorageClient = new objectstorage.ObjectStorageClient({
+        authenticationDetailsProvider: provider,
+      });
     } catch (error) {
       console.error('Error initializing KMS client:', error);
     }
@@ -99,6 +107,30 @@ export class OciService {
     } catch (error) {
       console.error('Decryption failed with error:', error);
       throw new Error('Decryption failed');
+    }
+  }
+
+  async uploadBufferToOci(
+    buffer: Buffer,
+    bucketName: string,
+    objectName: string,
+  ) {
+    try {
+      const putObjectRequest: objectstorage.requests.PutObjectRequest = {
+        namespaceName: process.env.OCI_NAMESPACE,
+        bucketName: bucketName,
+        objectName: objectName,
+        contentLength: buffer.length,
+        putObjectBody: buffer,
+        contentType: 'application/octet-stream',
+      };
+
+      const uploadedResponse =
+        await this.objectStorageClient.putObject(putObjectRequest);
+      return uploadedResponse;
+    } catch (error) {
+      console.error('Failed to upload buffer to OCI bucket', error);
+      throw error;
     }
   }
 }
