@@ -75,6 +75,13 @@ export class Customer {
   @Column({ type: 'varchar', length: 36, nullable: true })
   uuid: string;
 
+  // --- OTP Authentication ---
+  @Column({ type: 'varchar', length: 10, nullable: true })
+  otp_code: string;
+
+  @Column({ type: 'datetime', nullable: true })
+  otp_expires_at: Date;
+
   // --- Auth / Type ---
   @Column({ length: 255, nullable: true, select: false })
   password: string;
@@ -138,6 +145,9 @@ export class Customer {
   // --- Relations ---
   @OneToMany(() => CustomerSegmentMember, (m: any) => m.customer)
   memberships: CustomerSegmentMember[];
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  hashed_number: string;
 
   // --- Audit ---
   @CreateDateColumn({ nullable: true })

@@ -81,6 +81,7 @@ import { CustomerCoupon } from './entities/customer-coupon.entity';
     CouponTypeService,
     CustomerBootstrapService,
   ],
+  exports: [CustomerService],
 })
 export class CustomerModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {

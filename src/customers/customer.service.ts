@@ -100,18 +100,43 @@ export class CustomerService {
     private customerCouponRepo: Repository<CustomerCoupon>,
   ) {}
 
+  /**
+   * Creates one or more customers in bulk.
+   * - For each customer in the input DTO:
+   *   - Validates that a phone number is provided.
+   *   - Checks if a customer with the same external_customer_id and business unit already exists.
+   *     - If exists:
+   *       - Ensures the customer has a UUID and tenant set, updating if necessary.
+   *       - Ensures a QR code exists for the customer, creating one if not.
+   *       - Returns the QR code URL and status 'exists'.
+   *     - If not exists:
+   *       - Encrypts the email and phone fields.
+   *       - Creates a new customer entity with encrypted data, business unit, tenant, and a new UUID.
+   *       - Saves the new customer to the database.
+   *       - Creates and saves a QR code for the new customer.
+   *       - Creates a wallet for the new customer.
+   *       - Returns the QR code URL and status 'created'.
+   * - Returns an array of results for each customer processed.
+   *
+   * @param req - The request object, expected to have businessUnit and tenant attached.
+   * @param dto - BulkCreateCustomerDto containing an array of customers to create.
+   * @returns Array of result objects for each customer processed.
+   */
   async createCustomer(req: Request, dto: BulkCreateCustomerDto) {
     const businessUnit = (req as any).businessUnit;
     const tenant = (req as any).tenant;
 
+    // Validate that a business unit is present in the request
     if (!businessUnit) {
       throw new BadRequestException('Invalid Business Unit Key');
     }
 
+    // Generate a UUID to use for new customers
     const customerUuid = uuidv4();
 
     const results = [];
     for (const customerDto of dto.customers) {
+      // Ensure phone number is provided
       if (!customerDto.phone) {
         results.push({
           status: 'failed',
@@ -120,6 +145,7 @@ export class CustomerService {
         continue;
       }
 
+      // Check if customer already exists by external_customer_id and business unit
       const existing = await this.customerRepo.findOne({
         where: {
           external_customer_id: customerDto.external_customer_id,
@@ -128,12 +154,14 @@ export class CustomerService {
       });
 
       if (existing) {
+        // If existing customer is missing uuid or tenant, set them
         if (!existing.uuid || !existing.tenant) {
           existing.uuid ??= customerUuid;
           existing.tenant ??= tenant;
           await this.customerRepo.save(existing);
         }
 
+        // Check if a QR code exists for this customer, create if not
         let existCustomerQr = await this.qrService.findOne(existing.id);
 
         if (!existCustomerQr) {
@@ -143,6 +171,7 @@ export class CustomerService {
           );
         }
 
+        // Return status 'exists' and QR code URL
         results.push({
           status: 'exists',
           qr_code_url: `/qrcodes/qr/${existCustomerQr.short_id}`,
@@ -150,6 +179,7 @@ export class CustomerService {
         continue;
       }
 
+      // Encrypt email and phone before saving
       const encryptedEmail = await this.ociService.encryptData(
         customerDto.email,
       );
@@ -157,6 +187,7 @@ export class CustomerService {
         customerDto.phone,
       );
 
+      // Create new customer entity
       const customer = this.customerRepo.create({
         ...customerDto,
         email: encryptedEmail,
@@ -168,6 +199,7 @@ export class CustomerService {
       });
       const saved = await this.customerRepo.save(customer);
 
+      // Create and save QR code for the new customer
       const saveCustomerQrCodeInfo = await this.createAndSaveCustomerQrCode(
         customerUuid,
         saved.id,
@@ -176,12 +208,15 @@ export class CustomerService {
       // how to do that,
       // create a new transaction for customer wallet and add reason of adjustment like import form external system
       // and then add points to customer wallet
+
+      // Create a wallet for the new customer
       await this.walletService.createWallet({
         customer_id: saved.id,
         business_unit_id: businessUnit.id,
         tenant_id: tenant.id,
       });
 
+      // Return status 'created' and QR code URL
       results.push({
         status: 'created',
         // TODO: baseUrl is wrong, we do not allow direct admin API access, all communication should be through gatwway
@@ -189,6 +224,7 @@ export class CustomerService {
       });
     }
 
+    // Return results for all processed customers
     return results;
   }
 
@@ -261,14 +297,27 @@ export class CustomerService {
     };
   }
 
+  /**
+   * Creates a QR code for a customer and saves the mapping in the database.
+   * @param customerUuid - The UUID of the customer to encode in the QR code.
+   * @param customerId - The database ID of the customer for mapping.
+   * @returns The saved QR code mapping entity.
+   */
   async createAndSaveCustomerQrCode(customerUuid, customerId) {
+    // Generate a unique short ID for the QR code (8 characters)
     const shortId = nanoid(8);
+
+    // Generate a QR code as a base64-encoded image from the customer UUID
     const customerQrcode = await QRCode?.toDataURL(customerUuid);
+
+    // Create a new QR code mapping entity with the customer, short ID, and QR code image
     const mapping = this.qrCodeRepo.create({
       customer: { id: customerId },
       short_id: shortId,
       qr_code_base64: customerQrcode,
     });
+
+    // Save the mapping entity to the database and return the result
     return await this.qrCodeRepo.save(mapping);
   }
 
