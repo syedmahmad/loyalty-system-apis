@@ -32,6 +32,7 @@ import { SchedulerModule } from './schedule/schedule.module';
 import { CustomerCoupon } from './customers/entities/customer-coupon.entity';
 import { OpenaiModule } from './openai/openai.module';
 import { AuthModule } from 'src/petromin-it/auth/auth.module';
+import { AxiosLoggerInterceptor } from 'src/interceptos/axios-request-log.interceptor';
 
 @Module({
   imports: [
@@ -85,7 +86,7 @@ import { AuthModule } from 'src/petromin-it/auth/auth.module';
     AuthModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [AppService, AxiosLoggerInterceptor],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
