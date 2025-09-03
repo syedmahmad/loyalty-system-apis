@@ -7,9 +7,15 @@ import { OciService } from 'src/oci/oci.service';
 import { CustomerModule } from 'src/customers/customer.module';
 import { QrCode } from 'src/qr_codes/entities/qr_code.entity';
 import { QrcodesService } from 'src/qr_codes/qr_codes/qr_codes.service';
+import { Log } from 'src/logs/entities/log.entity';
+import { WalletModule } from 'src/wallet/wallet.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Customer, QrCode]), CustomerModule],
+  imports: [
+    TypeOrmModule.forFeature([Customer, QrCode, Log]),
+    CustomerModule,
+    WalletModule,
+  ],
   controllers: [AuthController],
   providers: [AuthService, QrcodesService, OciService],
 })

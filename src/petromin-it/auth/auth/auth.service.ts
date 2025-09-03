@@ -14,6 +14,8 @@ import { QrCode } from 'src/qr_codes/entities/qr_code.entity';
 import { encrypt } from 'src/helpers/encryption';
 import { TriggerSMS } from 'src/helpers/triggerSMS';
 import { TriggerWhatsapp } from 'src/helpers/triggerWhatsapp';
+import { Log } from 'src/logs/entities/log.entity';
+import { WalletService } from 'src/wallet/wallet/wallet.service';
 
 @Injectable()
 export class AuthService {
@@ -24,6 +26,9 @@ export class AuthService {
     private readonly customerService: CustomerService,
     @InjectRepository(QrCode)
     private readonly qrCodeRepo: Repository<QrCode>,
+    @InjectRepository(Log)
+    private readonly logRepo: Repository<Log>,
+    private readonly walletService: WalletService,
   ) {}
 
   // Generate and send OTP, upsert customer by mobileNumber, store OTP with 5-min expiry
@@ -71,16 +76,36 @@ export class AuthService {
       customer.otp_expires_at = expiresAt;
       // Save customer with new OTP info
       customer = await this.customerRepo.save(customer); // Save to DB to get the generated id
-      await this.customerService.createAndSaveCustomerQrCode(
-        customer.uuid,
+
+      const qrcode = await this.qrCodeRepo.findOne({
+        where: { customer: { id: customer.id } },
+      });
+      if (!qrcode) {
+        await this.customerService.createAndSaveCustomerQrCode(
+          customer.uuid,
+          customer.id,
+        );
+      }
+
+      const wallet = await this.walletService.getSingleCustomerWalletInfo(
         customer.id,
+        Number(businessUnitId),
       );
+
+      if (!wallet) {
+        // Create a wallet for the new customer
+        await this.walletService.createWallet({
+          customer_id: customer.id,
+          business_unit_id: Number(businessUnitId),
+          tenant_id: Number(tenantId),
+        });
+      }
 
       // trigger sms
       // Send OTP via SMS and WhatsApp in parallel, but don't block on them
       Promise.all([
-        TriggerSMS(encryptedPhone, otp, body.language_code),
-        TriggerWhatsapp(encryptedPhone, otp, body.language_code),
+        TriggerSMS(encryptedPhone, otp, body.language_code, this.logRepo),
+        TriggerWhatsapp(encryptedPhone, otp, body.language_code, this.logRepo),
       ]).catch(() => {
         // Optionally log or handle errors, but don't block the main flow
       });
@@ -142,12 +167,13 @@ export class AuthService {
       const qr = await this.qrCodeRepo.findOne({
         where: { customer: { id: customer.id } },
       });
-      const qrUrl = qr ? `/qrcodes/qr/${qr.short_id}` : null;
+      const qrUrl = qr.qr_code_url;
 
       return {
         success: true,
         message: 'Success',
         result: {
+          customer_id: customer.uuid,
           tenant_id: customer.tenant?.uuid || customer.tenant.uuid,
           business_unit_id:
             customer.business_unit?.uuid || customer.business_unit.uuid,
