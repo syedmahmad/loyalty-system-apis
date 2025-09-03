@@ -2520,7 +2520,8 @@ export class CustomerService {
       const customerTierInfo = await this.tiersService.getCurrentCustomerTier(
         customer.id,
       );
-      const { id, ...currentTier } = customerTierInfo.tier;
+
+      console.log('customerTierInfo :::', customerTierInfo);
 
       const allTiers = await this.tierRepo.find({
         where: {
@@ -2540,7 +2541,14 @@ export class CustomerService {
         const eachTier = allTiers[index];
         if (wallet.total_balance >= eachTier.min_points) {
           nextTier = allTiers[index + 1] || null;
+          nextTier = {
+            uuid: nextTier.uuid,
+            name: nextTier.name,
+            level: nextTier.level,
+            min_points: nextTier.min_points,
+          };
         }
+
         tiersArr.push({
           uuid: eachTier.uuid,
           name: eachTier.name,
@@ -2574,11 +2582,42 @@ export class CustomerService {
         }
       }
 
+      // ✅ Handle case where user doesn’t fall into any tier
+      if (!nextTier && wallet.total_balance < allTiers[0].min_points) {
+        const firstTier = allTiers[0];
+        nextTier = {
+          uuid: firstTier.uuid,
+          name: firstTier.name,
+          level: firstTier.level,
+          min_points: firstTier.min_points,
+        };
+      }
+
+      if (!customerTierInfo || !customerTierInfo.tier) {
+        return {
+          success: true,
+          message: 'Successfully fetched the data!',
+          result: {
+            points: wallet.available_balance,
+            currentTier: null,
+            nextTier,
+            pointsToNextTier: nextTier
+              ? nextTier.min_points - wallet.total_balance
+              : 0,
+            tiers: tiersArr,
+            benefits,
+          },
+          errors: [],
+        };
+      }
+
+      const { id, ...currentTier } = customerTierInfo?.tier;
+
       return {
         success: true,
         message: 'Successfully fetched the data!',
         result: {
-          points: wallet.available_balance,
+          points: customerTierInfo.points,
           currentTier: currentTier,
           nextTier,
           pointsToNextTier: nextTier
