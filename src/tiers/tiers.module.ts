@@ -9,6 +9,12 @@ import { User } from 'src/users/entities/user.entity';
 import { Tenant } from 'src/tenants/entities/tenant.entity';
 import { Wallet } from 'src/wallet/entities/wallet.entity';
 import { OciService } from 'src/oci/oci.service';
+import { Customer } from 'src/customers/entities/customer.entity';
+import { WalletService } from 'src/wallet/wallet/wallet.service';
+import { WalletTransaction } from 'src/wallet/entities/wallet-transaction.entity';
+import { WalletSettings } from 'src/wallet/entities/wallet-settings.entity';
+import { UserCoupon } from 'src/wallet/entities/user-coupon.entity';
+import { WalletOrder } from 'src/wallet/entities/wallet-order.entity';
 
 @Module({
   imports: [
@@ -19,9 +25,14 @@ import { OciService } from 'src/oci/oci.service';
       User,
       Tenant,
       Wallet,
+      Customer,
+      WalletTransaction,
+      WalletSettings,
+      UserCoupon,
+      WalletOrder,
     ]),
   ],
   controllers: [TiersController],
-  providers: [TiersService, OciService],
+  providers: [TiersService, OciService, WalletService],
 })
 export class TiersModule {}

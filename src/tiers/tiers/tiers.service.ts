@@ -14,6 +14,9 @@ import { User } from 'src/users/entities/user.entity';
 import { Tenant } from 'src/tenants/entities/tenant.entity';
 import { Wallet } from 'src/wallet/entities/wallet.entity';
 import { OciService } from 'src/oci/oci.service';
+import { tierBenefitsDto } from '../dto/tier-benefits.dto';
+import { Customer } from 'src/customers/entities/customer.entity';
+import { WalletService } from 'src/wallet/wallet/wallet.service';
 
 @Injectable()
 export class TiersService {
@@ -39,6 +42,11 @@ export class TiersService {
     private readonly dataSource: DataSource,
 
     private readonly ociService: OciService,
+
+    @InjectRepository(Customer)
+    private readonly customerRepo: Repository<Customer>,
+
+    private readonly walletService: WalletService,
   ) {}
 
   async create(dto: CreateTierDto, user: string): Promise<Tier> {
@@ -486,5 +494,138 @@ export class TiersService {
       bucketName,
       objectName,
     );
+  }
+
+  async tierBenefits(body: tierBenefitsDto) {
+    try {
+      const { customerId, tenantId, BUId } = body;
+      const customer = await this.customerRepo.findOne({
+        where: { uuid: customerId, business_unit: { id: parseInt(BUId) } },
+      });
+      if (!customer) throw new NotFoundException('Customer not found');
+      if (customer && customer.status == 0) {
+        throw new NotFoundException('Customer is inactive');
+      }
+
+      const wallet = await this.walletService.getSingleCustomerWalletInfoById(
+        customer.id,
+      );
+      if (!wallet) throw new NotFoundException("customer's Wallet not found");
+
+      const customerTierInfo = await this.getCurrentCustomerTier(customer.id);
+
+      const allTiers = await this.tiersRepository.find({
+        where: {
+          tenant_id: tenantId,
+          business_unit_id: parseInt(BUId),
+          status: 1,
+        },
+        order: {
+          min_points: 'ASC',
+        },
+      });
+
+      let nextTier = null;
+      const benefits = [];
+      const tiersArr = [];
+      for (let index = 0; index < allTiers.length; index++) {
+        const eachTier = allTiers[index];
+        if (wallet.total_balance >= eachTier.min_points) {
+          nextTier = allTiers[index + 1] || null;
+          nextTier = {
+            uuid: nextTier.uuid,
+            name: nextTier.name,
+            level: nextTier.level,
+            min_points: nextTier.min_points,
+          };
+        }
+
+        tiersArr.push({
+          uuid: eachTier.uuid,
+          name: eachTier.name,
+          level: eachTier.level,
+          min_points: eachTier.min_points,
+        });
+
+        for (let bindex = 0; bindex <= eachTier.benefits.length - 1; bindex++) {
+          const eachBenefit = eachTier.benefits[bindex];
+          if (!eachBenefit) {
+            continue;
+          }
+
+          if (typeof eachBenefit === 'object' && eachBenefit !== null) {
+            benefits.push({
+              tierId: eachTier.uuid,
+              ...(eachBenefit as {
+                name_en: string;
+                name_ar: string;
+                icon: string;
+              }),
+            });
+          } else {
+            benefits.push({
+              tierId: eachTier.uuid,
+              name_en: String(eachBenefit),
+              name_ar: '',
+              icon: '',
+            });
+          }
+        }
+      }
+
+      // ✅ Handle case where user doesn’t fall into any tier
+      if (!nextTier && wallet.total_balance < allTiers[0].min_points) {
+        const firstTier = allTiers[0];
+        nextTier = {
+          uuid: firstTier.uuid,
+          name: firstTier.name,
+          level: firstTier.level,
+          min_points: firstTier.min_points,
+        };
+      }
+
+      if (!customerTierInfo || !customerTierInfo.tier) {
+        return {
+          success: true,
+          message: 'Successfully fetched the data!',
+          result: {
+            points: wallet.available_balance,
+            currentTier: null,
+            nextTier,
+            pointsToNextTier: nextTier
+              ? nextTier.min_points - wallet.total_balance
+              : 0,
+            tiers: tiersArr,
+            benefits,
+          },
+          errors: [],
+        };
+      }
+
+      const { id, ...currentTier } = customerTierInfo?.tier;
+
+      return {
+        success: true,
+        message: 'Successfully fetched the data!',
+        result: {
+          points: customerTierInfo.points,
+          currentTier: currentTier,
+          nextTier,
+          pointsToNextTier: nextTier
+            ? nextTier.min_points - wallet.total_balance
+            : 0,
+          tiers: tiersArr,
+          benefits,
+        },
+        errors: [],
+      };
+    } catch (error) {
+      throw new BadRequestException({
+        success: false,
+        message: 'Failed to fetch rewards',
+        result: null,
+        errors: error.message,
+      });
+    }
   }
 }

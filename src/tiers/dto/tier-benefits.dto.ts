@@ -1,6 +1,6 @@
 import { IsNotEmpty, IsNumber } from 'class-validator';
 
-export class MyRewardsDto {
+export class tierBenefitsDto {
   @IsNotEmpty()
   customerId: string;
 

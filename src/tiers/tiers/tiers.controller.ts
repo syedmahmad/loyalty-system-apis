@@ -22,6 +22,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { User } from 'src/users/entities/user.entity';
 import { Repository } from 'typeorm';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { tierBenefitsDto } from '../dto/tier-benefits.dto';
 
 @Controller('tiers')
 export class TiersController {
@@ -180,5 +181,10 @@ export class TiersController {
       success: false,
       message: 'Failed to upload file',
     };
+  }
+
+  @Post('/benefits')
+  async myRewards(@Body() body: tierBenefitsDto) {
+    return this.service.tierBenefits(body);
   }
 }
