@@ -76,14 +76,12 @@ export class AuthService {
       );
 
       // trigger sms
-      await TriggerSMS(encryptedPhone, otp);
+      await TriggerSMS(encryptedPhone, otp, body.language_code);
 
       return {
         success: true,
         message: 'OTP send to your mobile',
-        result: {
-          customer_id: customer.uuid,
-        },
+        result: null,
       };
     } catch (error) {
       return {

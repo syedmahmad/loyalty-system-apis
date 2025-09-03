@@ -3,6 +3,7 @@ import axios from 'axios';
 export async function TriggerSMS(
   encryptedPhone: string,
   otp: string,
+  language_code: string,
 ): Promise<any> {
   try {
     const endpoint = process.env.NCMC_COMMUNICATION_ENDPOINT;
@@ -15,11 +16,11 @@ export async function TriggerSMS(
       endpoint,
       {
         template_id: process.env.NCMC_COMMUNICATION_TEMPLATE,
-        language_code: 'en',
+        language_code: language_code,
         to: [
           {
             number: encryptedPhone,
-            dynamic_fields: { otp },
+            dynamic_fields: { OTP: otp },
           },
         ],
       },
