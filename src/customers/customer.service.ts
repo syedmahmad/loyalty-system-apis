@@ -2570,8 +2570,6 @@ export class CustomerService {
         customer.id,
       );
 
-      console.log('customerTierInfo :::', customerTierInfo);
-
       const allTiers = await this.tierRepo.find({
         where: {
           tenant_id: tenantId,
