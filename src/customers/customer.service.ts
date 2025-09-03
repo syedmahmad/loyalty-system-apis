@@ -9,6 +9,9 @@ import * as dayjs from 'dayjs';
 import { Request } from 'express';
 import { nanoid } from 'nanoid';
 import * as QRCode from 'qrcode';
+import * as os from 'os';
+import * as path from 'path';
+import * as fs from 'fs';
 import { CampaignsService } from 'src/campaigns/campaigns/campaigns.service';
 import { CampaignCoupons } from 'src/campaigns/entities/campaign-coupon.entity';
 import { CampaignCustomerSegment } from 'src/campaigns/entities/campaign-customer-segments.entity';
@@ -54,6 +57,8 @@ import { CustomerActivity } from './entities/customer-activity.entity';
 import { Customer } from './entities/customer.entity';
 import { CustomerCoupon } from './entities/customer-coupon.entity';
 import { GvrEarnBurnWithEventsDto } from 'src/customers/dto/gvr_earn_burn_with_event.dto';
+import { Tier } from 'src/tiers/entities/tier.entity';
+import { MyRewardsDto } from './dto/my-rewards.dto';
 
 @Injectable()
 export class CustomerService {
@@ -98,6 +103,9 @@ export class CustomerService {
 
     @InjectRepository(CustomerCoupon)
     private customerCouponRepo: Repository<CustomerCoupon>,
+
+    @InjectRepository(Tier)
+    private tierRepo: Repository<Tier>,
   ) {}
 
   /**
@@ -240,15 +248,33 @@ export class CustomerService {
     return customer;
   }
 
-  async getAllCustomers(client_id: number, search?: string) {
-    return this.customerRepo.find({
+  async getAllCustomers(
+    client_id: number,
+    page: number = 1,
+    pageSize: number = 20,
+    search?: string,
+  ) {
+    const take = pageSize;
+    const skip = (page - 1) * take;
+
+    const [data, total] = await this.customerRepo.findAndCount({
       relations: ['business_unit', 'tenant'],
       where: {
         tenant: { id: client_id },
         ...(search ? { name: Like(`%${search}%`) } : {}),
       },
+      take,
+      skip,
       order: { created_at: 'DESC' },
     });
+
+    return {
+      data,
+      total,
+      page,
+      pageSize,
+      totalPages: Math.ceil(total / pageSize),
+    };
   }
 
   async updateStatus(id: number, status: 0 | 1) {
@@ -304,21 +330,59 @@ export class CustomerService {
    * @returns The saved QR code mapping entity.
    */
   async createAndSaveCustomerQrCode(customerUuid, customerId) {
-    // Generate a unique short ID for the QR code (8 characters)
     const shortId = nanoid(8);
+    const tempDir = os.tmpdir();
+    const fileName = `${customerUuid}.png`;
+    const tempFilePath = path.join(tempDir, fileName);
 
-    // Generate a QR code as a base64-encoded image from the customer UUID
-    const customerQrcode = await QRCode?.toDataURL(customerUuid);
+    try {
+      // Generate QR code to temp file
+      await QRCode.toFile(tempFilePath, customerUuid);
 
-    // Create a new QR code mapping entity with the customer, short ID, and QR code image
-    const mapping = this.qrCodeRepo.create({
-      customer: { id: customerId },
-      short_id: shortId,
-      qr_code_base64: customerQrcode,
+      // Convert file stream to buffer
+      const fileStreamBuffer = fs.createReadStream(tempFilePath);
+      const buffer = await this.streamToBuffer(fileStreamBuffer);
+
+      // Upload to OCI
+      const uploadedData = await this.ociService.uploadBufferToOci(
+        buffer,
+        'dragon',
+        fileName,
+      );
+
+      // Save mapping in DB
+      const mapping = this.qrCodeRepo.create({
+        customer: { id: customerId },
+        short_id: shortId,
+        qr_code_url: uploadedData ? `${process.env.OCI_URL}/${fileName}` : null,
+      });
+
+      // Save the mapping entity to the database and return the result
+      return await this.qrCodeRepo.save(mapping);
+    } catch (error) {
+      console.error('Error creating and saving customer QR code:', error);
+      throw new Error('Failed to create and save customer QR code');
+    } finally {
+      // Always clean up temp file
+      fs.unlink(tempFilePath, (err) => {
+        if (err) {
+          console.warn('Failed to delete temp QR file:', err);
+        } else {
+          console.log('Temp QR file deleted:', tempFilePath);
+        }
+      });
+    }
+  }
+
+  streamToBuffer(stream: fs.ReadStream): Promise<Buffer> {
+    return new Promise((resolve, reject) => {
+      const chunks: Buffer[] = [];
+      stream.on('data', (chunk) =>
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)),
+      );
+      stream.on('end', () => resolve(Buffer.concat(chunks)));
+      stream.on('error', reject);
     });
-
-    // Save the mapping entity to the database and return the result
-    return await this.qrCodeRepo.save(mapping);
   }
 
   async getCustomerWithWalletAndTransactions(
@@ -2542,6 +2606,141 @@ export class CustomerService {
       };
     } else {
       throw new BadRequestException('Burn rule not found.');
+    }
+  }
+
+  async myRewards(body: MyRewardsDto) {
+    try {
+      const { customerId, tenantId, BUId } = body;
+      const customer = await this.customerRepo.findOne({
+        where: { uuid: customerId, business_unit: { id: parseInt(BUId) } },
+      });
+      if (!customer) throw new NotFoundException('Customer not found');
+      if (customer && customer.status == 0) {
+        throw new NotFoundException('Customer is inactive');
+      }
+
+      const wallet = await this.walletService.getSingleCustomerWalletInfoById(
+        customer.id,
+      );
+      if (!wallet) throw new NotFoundException("customer's Wallet not found");
+
+      const customerTierInfo = await this.tiersService.getCurrentCustomerTier(
+        customer.id,
+      );
+
+      const allTiers = await this.tierRepo.find({
+        where: {
+          tenant_id: tenantId,
+          business_unit_id: parseInt(BUId),
+          status: 1,
+        },
+        order: {
+          min_points: 'ASC',
+        },
+      });
+
+      let nextTier = null;
+      const benefits = [];
+      const tiersArr = [];
+      for (let index = 0; index < allTiers.length; index++) {
+        const eachTier = allTiers[index];
+        if (wallet.total_balance >= eachTier.min_points) {
+          nextTier = allTiers[index + 1] || null;
+          nextTier = {
+            uuid: nextTier.uuid,
+            name: nextTier.name,
+            level: nextTier.level,
+            min_points: nextTier.min_points,
+          };
+        }
+
+        tiersArr.push({
+          uuid: eachTier.uuid,
+          name: eachTier.name,
+          level: eachTier.level,
+          min_points: eachTier.min_points,
+        });
+
+        for (let bindex = 0; bindex <= eachTier.benefits.length - 1; bindex++) {
+          const eachBenefit = eachTier.benefits[bindex];
+          if (!eachBenefit) {
+            continue;
+          }
+
+          if (typeof eachBenefit === 'object' && eachBenefit !== null) {
+            benefits.push({
+              tierId: eachTier.uuid,
+              ...(eachBenefit as {
+                name_en: string;
+                name_ar: string;
+                icon: string;
+              }),
+            });
+          } else {
+            benefits.push({
+              tierId: eachTier.uuid,
+              name_en: String(eachBenefit),
+              name_ar: '',
+              icon: '',
+            });
+          }
+        }
+      }
+
+      // ✅ Handle case where user doesn’t fall into any tier
+      if (!nextTier && wallet.total_balance < allTiers[0].min_points) {
+        const firstTier = allTiers[0];
+        nextTier = {
+          uuid: firstTier.uuid,
+          name: firstTier.name,
+          level: firstTier.level,
+          min_points: firstTier.min_points,
+        };
+      }
+
+      if (!customerTierInfo || !customerTierInfo.tier) {
+        return {
+          success: true,
+          message: 'Successfully fetched the data!',
+          result: {
+            points: wallet.available_balance,
+            currentTier: null,
+            nextTier,
+            pointsToNextTier: nextTier
+              ? nextTier.min_points - wallet.total_balance
+              : 0,
+            tiers: tiersArr,
+            benefits,
+          },
+          errors: [],
+        };
+      }
+
+      const { id, ...currentTier } = customerTierInfo?.tier;
+
+      return {
+        success: true,
+        message: 'Successfully fetched the data!',
+        result: {
+          points: customerTierInfo.points,
+          currentTier: currentTier,
+          nextTier,
+          pointsToNextTier: nextTier
+            ? nextTier.min_points - wallet.total_balance
+            : 0,
+          tiers: tiersArr,
+          benefits,
+        },
+        errors: [],
+      };
+    } catch (error) {
+      throw new BadRequestException({
+        success: false,
+        message: 'Failed to fetch rewards',
+        result: null,
+        errors: error.message,
+      });
     }
   }
 }

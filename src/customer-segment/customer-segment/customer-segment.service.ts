@@ -74,7 +74,15 @@ export class CustomerSegmentsService {
     }
   }
 
-  async findAll(client_id: number, name: string) {
+  async findAll(
+    client_id: number,
+    page: number = 1,
+    pageSize: number = 7,
+    name: string,
+  ) {
+    const take = pageSize;
+    const skip = (page - 1) * take;
+
     const baseConditions = {
       tenant_id: client_id,
       status: 1,
@@ -91,10 +99,20 @@ export class CustomerSegmentsService {
       where = baseConditions;
     }
 
-    return await this.segmentRepository.find({
+    const [data, total] = await this.segmentRepository.findAndCount({
       where,
       relations: ['members', 'members.customer'],
+      take,
+      skip,
     });
+
+    return {
+      data,
+      total,
+      page,
+      pageSize,
+      totalPages: Math.ceil(total / pageSize),
+    };
   }
 
   async findOne(id: number) {

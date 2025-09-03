@@ -10,6 +10,8 @@ import {
   Query,
   UseGuards,
   BadRequestException,
+  UseInterceptors,
+  UploadedFile,
 } from '@nestjs/common';
 import { TiersService } from './tiers.service';
 import { CreateTierDto } from '../dto/create-tier.dto';
@@ -19,6 +21,7 @@ import * as jwt from 'jsonwebtoken';
 import { InjectRepository } from '@nestjs/typeorm';
 import { User } from 'src/users/entities/user.entity';
 import { Repository } from 'typeorm';
+import { FileInterceptor } from '@nestjs/platform-express';
 
 @Controller('tiers')
 export class TiersController {
@@ -151,5 +154,31 @@ export class TiersController {
       tenantId,
       businessUnitId,
     );
+  }
+
+  @Post('file')
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadFile(@UploadedFile() file: any) {
+    const bucketName = process.env.OCI_BUCKET;
+    const objectName = file.originalname;
+    const buffer = file.buffer;
+    const response = await this.service.uploadFile(
+      buffer,
+      bucketName,
+      objectName,
+    );
+
+    if (response) {
+      return {
+        success: true,
+        message: 'File uploaded successfully',
+        uploaded_url: `${process.env.OCI_URL}/${objectName}`,
+      };
+    }
+
+    return {
+      success: false,
+      message: 'Failed to upload file',
+    };
   }
 }
