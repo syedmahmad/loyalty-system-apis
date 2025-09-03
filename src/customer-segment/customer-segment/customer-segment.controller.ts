@@ -51,9 +51,11 @@ export class CustomerSegmentsController {
   @Get(':client_id')
   async findAll(
     @Param('client_id') client_id: number,
+    @Query('page') page?: number,
+    @Query('pageSize') pageSize?: number,
     @Query('name') name?: string,
   ) {
-    return await this.service.findAll(client_id, name);
+    return await this.service.findAll(client_id, page, pageSize, name);
   }
 
   @Get('view-customers/:segment_id')

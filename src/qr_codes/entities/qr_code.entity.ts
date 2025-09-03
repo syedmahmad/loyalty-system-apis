@@ -21,7 +21,7 @@ export class QrCode {
   short_id: string;
 
   @Column({ type: 'text', nullable: true })
-  qr_code_base64: string;
+  qr_code_url: string;
 
   @CreateDateColumn()
   created_at: Date;
