@@ -28,7 +28,7 @@ export class AuthService {
   // Generate and send OTP, upsert customer by mobileNumber, store OTP with 5-min expiry
   async getOtp(body: GetOtpDto): Promise<any> {
     try {
-      const businessUnitId = process.env.NCMC_PETROMIN_TENANT;
+      const businessUnitId = process.env.NCMC_PETROMIN_BU;
       const tenantId = process.env.NCMC_PETROMIN_TENANT;
       const plainMobile = body.mobileNumber.trim();
 
@@ -83,7 +83,6 @@ export class AuthService {
         message: 'OTP send to your mobile',
         result: {
           customer_id: customer.uuid,
-          expires_in: '5 minutes',
         },
       };
     } catch (error) {
@@ -98,8 +97,11 @@ export class AuthService {
   // Verify OTP; on success return tenant_uuid, business_unit_uuid and QR url
   async verifyOtp(body: VerifyOtpDto): Promise<any> {
     try {
-      const businessUnitId = process.env.NCMC_PETROMIN_TENANT;
+      const businessUnitId = process.env.NCMC_PETROMIN_BU;
       const tenantId = process.env.NCMC_PETROMIN_TENANT;
+      if (!businessUnitId || !tenantId) {
+        throw new BadRequestException('Missing tenant or business unit');
+      }
 
       const { otp, mobileNumber } = body;
       if (!otp || !mobileNumber) {
@@ -108,10 +110,6 @@ export class AuthService {
           message: 'otp and mobileNumber are required',
           result: null,
         };
-      }
-
-      if (!businessUnitId || !tenantId) {
-        throw new BadRequestException('Missing tenant or business unit');
       }
 
       const plainMobile = body.mobileNumber.trim();
@@ -125,7 +123,6 @@ export class AuthService {
         relations: ['business_unit', 'tenant'],
       });
 
-      console.log('customer:////////////////', customer);
       if (!customer) throw new NotFoundException('Customer not found');
       if (!customer.otp_code || !customer.otp_expires_at)
         throw new BadRequestException('OTP not generated');

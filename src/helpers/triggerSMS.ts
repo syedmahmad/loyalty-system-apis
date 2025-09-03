@@ -31,5 +31,7 @@ export async function TriggerSMS(
         timeout: 10000,
       },
     );
-  } catch (err) {}
+  } catch (err) {
+    // maintain external logs
+  }
 }
