@@ -13,6 +13,7 @@ import { CustomerService } from 'src/customers/customer.service';
 import { QrCode } from 'src/qr_codes/entities/qr_code.entity';
 import { encrypt } from 'src/helpers/encryption';
 import { TriggerSMS } from 'src/helpers/triggerSMS';
+import { TriggerWhatsapp } from 'src/helpers/triggerWhatsapp';
 
 @Injectable()
 export class AuthService {
@@ -76,7 +77,13 @@ export class AuthService {
       );
 
       // trigger sms
-      await TriggerSMS(encryptedPhone, otp, body.language_code);
+      // Send OTP via SMS and WhatsApp in parallel, but don't block on them
+      Promise.all([
+        TriggerSMS(encryptedPhone, otp, body.language_code),
+        TriggerWhatsapp(encryptedPhone, otp, body.language_code),
+      ]).catch(() => {
+        // Optionally log or handle errors, but don't block the main flow
+      });
 
       return {
         success: true,
