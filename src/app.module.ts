@@ -31,6 +31,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { SchedulerModule } from './schedule/schedule.module';
 import { CustomerCoupon } from './customers/entities/customer-coupon.entity';
 import { OpenaiModule } from './openai/openai.module';
+import { AuthModule } from 'src/petromin-it/auth/auth.module';
 
 @Module({
   imports: [
@@ -81,6 +82,7 @@ import { OpenaiModule } from './openai/openai.module';
     SchedulerModule,
     CustomerCoupon,
     OpenaiModule,
+    AuthModule,
   ],
   controllers: [AppController],
   providers: [AppService],

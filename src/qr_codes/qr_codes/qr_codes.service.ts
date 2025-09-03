@@ -12,7 +12,6 @@ export class QrcodesService {
 
   async findOne(shortId) {
     const mapping = await this.qrcodesRepository.findOne({
-      // TODO: why also fetching by customer id? give spcific reason
       /** Reason: If customer already persent but his QR is not generated ,
         then we dont know his shortId. In that case we are checking by customer_id inside qr_codes table, 
         if that customer_id not present then creating QR for the customer.
