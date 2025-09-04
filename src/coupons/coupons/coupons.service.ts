@@ -200,7 +200,13 @@ export class CouponsService {
     name: string,
     limit: number,
     userId: number,
+    business_unit_id: number,
+    page: number = 1,
+    pageSize: number = 10,
   ) {
+    const take = pageSize;
+    const skip = (page - 1) * take;
+
     const user = await this.userRepository.findOne({ where: { id: userId } });
     if (!user) {
       throw new BadRequestException('User not found against user-token');
@@ -225,7 +231,11 @@ export class CouponsService {
         p.name === `${tenantName}_All Business Unit`,
     );
 
-    const baseConditions = { status: Not(2), tenant_id: client_id };
+    const baseConditions = {
+      status: Not(2),
+      tenant_id: client_id,
+      ...(business_unit_id ? { business_unit_id } : {}),
+    };
     let whereClause = {};
 
     if (hasGlobalAccess || isSuperAdmin) {
@@ -257,18 +267,29 @@ export class CouponsService {
 
       const availableBusinessUnitIds = businessUnits.map((unit) => unit.id);
 
-      const specificCoupons = await this.couponsRepository.find({
-        where: { ...whereClause, business_unit: In(availableBusinessUnitIds) },
+      const [data, total] = await this.couponsRepository.findAndCount({
+        where: {
+          ...whereClause,
+          ...(business_unit_id
+            ? { business_unit_id: business_unit_id }
+            : { business_unit: In(availableBusinessUnitIds) }),
+        },
         relations: { business_unit: true },
         order: { created_at: 'DESC' },
-        ...(name && { take: 20 }),
-        ...(limit && { take: limit }),
+        take,
+        skip,
       });
 
-      return { coupons: specificCoupons };
+      return {
+        data,
+        total,
+        page,
+        pageSize,
+        totalPages: Math.ceil(total / pageSize),
+      };
     }
 
-    const coupons = await this.couponsRepository.find({
+    const [data, total] = await this.couponsRepository.findAndCount({
       where: whereClause,
       relations: [
         'business_unit',
@@ -276,11 +297,17 @@ export class CouponsService {
         'customerSegments.segment',
       ],
       order: { created_at: 'DESC' },
-      ...(name && { take: 20 }),
-      ...(limit && { take: limit }),
+      take,
+      skip,
     });
 
-    return { coupons: coupons };
+    return {
+      data,
+      total,
+      page,
+      pageSize,
+      totalPages: Math.ceil(total / pageSize),
+    };
   }
 
   async findAllThirdParty(tenant_id: string, name: string, limit: number) {

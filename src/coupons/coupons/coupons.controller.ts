@@ -62,7 +62,10 @@ export class CouponsController {
     @Param('client_id') client_id: number,
     @Headers('user-secret') userSecret: string,
     @Query('name') name?: string, // optional query param,
+    @Query('bu') bu?: number, // optional query param,
     @Query('limit') limit?: number, // optional query param,
+    @Query('page') page?: number, // optional query param,
+    @Query('pageSize') pageSize?: number, // optional query param,
   ) {
     if (!userSecret) {
       throw new BadRequestException('user-secret not found in headers');
@@ -80,7 +83,15 @@ export class CouponsController {
       throw new BadRequestException('user not found against provided token');
     }
 
-    return await this.service.findAll(client_id, name, limit, user.id);
+    return await this.service.findAll(
+      client_id,
+      name,
+      limit,
+      user.id,
+      bu,
+      page,
+      pageSize,
+    );
   }
 
   @Get('/third-party/:tenant_id')
