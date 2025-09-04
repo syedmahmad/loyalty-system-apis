@@ -33,6 +33,7 @@ import { CustomerCoupon } from './customers/entities/customer-coupon.entity';
 import { OpenaiModule } from './openai/openai.module';
 import { AuthModule } from 'src/petromin-it/auth/auth.module';
 import { AxiosLoggerInterceptor } from 'src/interceptos/axios-request-log.interceptor';
+import { HttpModule } from '@nestjs/axios';
 
 @Module({
   imports: [
@@ -69,6 +70,7 @@ import { AxiosLoggerInterceptor } from 'src/interceptos/axios-request-log.interc
     PointsModule,
     TiersModule,
     LogModule,
+    HttpModule,
     AuditTrailModule,
     TenantsModule,
     ReportsModule,
