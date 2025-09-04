@@ -8,6 +8,9 @@ export class GetOtpDto {
   })
   mobileNumber: string;
 
+  @IsString()
+  referral_code?: string;
+
   @IsNotEmpty()
   @IsString()
   @Matches(/^(en|ar)$/, {
@@ -20,6 +23,9 @@ export class VerifyOtpDto {
   @IsNotEmpty()
   @IsString()
   otp: string;
+
+  @IsString()
+  referral_code?: string;
 
   @IsNotEmpty()
   @Matches(/^(\+9665\d{8}|\+92\d{10}|\+91\d{10})$/, {

@@ -2120,7 +2120,7 @@ export class CustomerService {
         wallet: { id: wallet.id },
         business_unit: { id: parseInt(BUId) },
         type: 'earn',
-        source_type: event,
+        // source_type: event,
       };
 
       const previousTx = await this.txRepo.findOne({
@@ -2362,7 +2362,7 @@ export class CustomerService {
       wallet: { id: wallet.id },
       business_unit: { id: parseInt(BUId) },
       type: 'burn',
-      source_type: event,
+      // source_type: event,
     };
 
     const previousTx = await this.txRepo.findOne({

@@ -155,4 +155,7 @@ export class Customer {
 
   @UpdateDateColumn({ nullable: true })
   updated_at: Date;
+
+  @Column({ type: 'tinyint', default: 0 })
+  is_new_user: number;
 }

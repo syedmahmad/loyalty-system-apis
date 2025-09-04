@@ -16,6 +16,10 @@ import { TriggerSMS } from 'src/helpers/triggerSMS';
 import { TriggerWhatsapp } from 'src/helpers/triggerWhatsapp';
 import { Log } from 'src/logs/entities/log.entity';
 import { WalletService } from 'src/wallet/wallet/wallet.service';
+import {
+  WalletTransactionStatus,
+  WalletTransactionType,
+} from 'src/wallet/entities/wallet-transaction.entity';
 
 @Injectable()
 export class AuthService {
@@ -64,6 +68,7 @@ export class AuthService {
           tenant: { id: parseInt(tenantId) },
           uuid: uuidv4(),
           status: 1,
+          is_new_user: 1,
         });
       }
 
@@ -154,12 +159,36 @@ export class AuthService {
       });
 
       if (!customer) throw new NotFoundException('Customer not found');
+      const customerWallet =
+        await this.walletService.getSingleCustomerWalletInfoById(customer.id);
+      if (!customerWallet)
+        throw new NotFoundException('Customer Wallet Not Found');
       if (!customer.otp_code || !customer.otp_expires_at)
         throw new BadRequestException('OTP not generated');
       if (String(customer.otp_code) !== String(otp))
         throw new BadRequestException('Invalid OTP');
       if (new Date(customer.otp_expires_at).getTime() < Date.now())
         throw new BadRequestException('OTP Expired');
+
+      // give him signup points
+      if (customer && customer.is_new_user) {
+        customer.is_new_user = 0;
+        // reward points
+        await this.walletService.addTransaction(
+          {
+            wallet_id: customerWallet.id,
+            business_unit_id: customer.business_unit.id,
+            type: WalletTransactionType.EARN,
+            status: WalletTransactionStatus.ACTIVE,
+            amount: 0,
+            source_type: 'signup_bonus',
+            source_id: 1,
+            description: 'Signup bonus credited',
+          },
+          customer.id,
+          false,
+        );
+      }
 
       customer.otp_code = null;
       customer.otp_expires_at = null;

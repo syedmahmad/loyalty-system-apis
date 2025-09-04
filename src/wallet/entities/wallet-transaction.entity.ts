@@ -10,6 +10,7 @@ import {
 import { Wallet } from './wallet.entity';
 import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
 import { WalletOrder } from './wallet-order.entity';
+import { Customer } from 'src/customers/entities/customer.entity';
 
 export enum WalletTransactionType {
   EARN = 'earn',
@@ -78,6 +79,12 @@ export class WalletTransaction {
   @Column({ nullable: true })
   created_by: number;
 
+  @Column({ type: 'int', nullable: true })
+  is_expired: number; // 0 means not expired 1 means expired
+
+  @CreateDateColumn()
+  expires_at: Date;
+
   @CreateDateColumn()
   created_at: Date;
 
@@ -89,6 +96,10 @@ export class WalletTransaction {
   // Maps to third-party `uuid`
   @Column({ type: 'char', length: 36, nullable: true, unique: true })
   external_uuid: string;
+
+  // To capture mapping with loyalty/transaction_program_id
+  @Column({ type: 'varchar', nullable: true })
+  external_program_type: string;
 
   // To capture mapping with loyalty/transaction_program_id
   @Column({ type: 'int', nullable: true })
@@ -108,4 +119,8 @@ export class WalletTransaction {
   // Optional: to map reference_id from loyalty records
   @Column({ type: 'int', nullable: true })
   reference_id: number;
+
+  @ManyToOne(() => Customer, { nullable: true, onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'customer_id' })
+  customer: Customer;
 }
