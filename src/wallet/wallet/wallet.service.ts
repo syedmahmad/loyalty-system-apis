@@ -249,17 +249,35 @@ export class WalletService {
     };
   }
 
-  async listWallets(client_id: number, buId?: number) {
+  async listWallets(
+    client_id: number,
+    buId?: number,
+    page: number = 1,
+    pageSize: number = 10,
+  ) {
+    const take = pageSize;
+    const skip = (page - 1) * take;
+
     const where: any = {
       tenant: { id: client_id },
       ...(buId ? { business_unit: { id: buId } } : {}),
     };
 
-    return this.walletRepo.find({
-      where,
+    const [data, total] = await this.walletRepo.findAndCount({
       relations: ['business_unit', 'customer'],
+      where,
+      take,
+      skip,
       order: { created_at: 'DESC' },
     });
+
+    return {
+      data,
+      total,
+      page,
+      pageSize,
+      totalPages: Math.ceil(total / pageSize),
+    };
   }
 
   async getSettingsByBusinessUnit(buId: number) {
@@ -353,5 +371,4 @@ export class WalletService {
     const data = await this.walletRepo.save(wallet);
     return data;
   }
-
 }

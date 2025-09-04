@@ -19,6 +19,7 @@ import { Repository } from 'typeorm';
 import { CreateCouponDto } from '../dto/create-coupon.dto';
 import { UpdateCouponDto } from '../dto/update-coupon.dto';
 import { CouponsService } from './coupons.service';
+import { CustomerCouponsDto } from '../dto/customer-coupon.dto';
 
 @Controller('coupons')
 export class CouponsController {
@@ -171,5 +172,10 @@ export class CouponsController {
   @Post('earn')
   async earnCoupon(@Body() body: any) {
     return this.service.earnCoupon(body);
+  }
+
+  @Post('customer')
+  async getCustomerCoupons(@Body() body: CustomerCouponsDto) {
+    return await this.service.getCustomerCoupons(body);
   }
 }

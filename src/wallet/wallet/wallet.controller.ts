@@ -74,8 +74,10 @@ export class WalletController {
   async listWallets(
     @Param('client_id') client_id: number,
     @Query('business_unit') buId?: number,
+    @Query('page') page?: number,
+    @Query('pageSize') pageSize?: number,
   ) {
-    return this.walletService.listWallets(client_id, buId);
+    return this.walletService.listWallets(client_id, buId, page, pageSize);
   }
 
   @Get('settings/:businessUnitId')

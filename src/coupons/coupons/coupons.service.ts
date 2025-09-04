@@ -1522,4 +1522,64 @@ export class CouponsService {
       };
     }
   }
+
+  async getCustomerCoupons(body) {
+    const { customerId, bUId } = body;
+    const customer = await this.customerRepo.findOne({
+      where: { uuid: customerId, business_unit: { id: parseInt(bUId) } },
+    });
+
+    if (!customer) throw new NotFoundException('Customer not found');
+    if (customer && customer.status == 0) {
+      throw new NotFoundException('Customer is inactive');
+    }
+
+    const customerCoupons = await this.customerCouponRepo.find({
+      where: {
+        customer: { id: customer.id },
+      },
+      relations: ['coupon'],
+    });
+
+    const available = [];
+    const expired = [];
+    const today = new Date();
+    if (customerCoupons.length) {
+      for (let index = 0; index <= customerCoupons.length - 1; index++) {
+        const eachCoupon = customerCoupons[index].coupon;
+        // Coupon is expried
+        if (
+          eachCoupon.date_to &&
+          eachCoupon.date_to < today &&
+          eachCoupon?.status === 0
+        ) {
+          expired.push({
+            uuid: eachCoupon.uuid,
+            code: eachCoupon.code,
+            title: eachCoupon.coupon_title,
+            title_ar: eachCoupon.coupon_title_ar,
+            expiry_date: eachCoupon.date_to,
+          });
+        }
+
+        available.push({
+          uuid: eachCoupon.uuid,
+          code: eachCoupon.code,
+          title: eachCoupon.coupon_title,
+          title_ar: eachCoupon.coupon_title_ar,
+          expiry_date: eachCoupon.date_to,
+        });
+      }
+    }
+
+    return {
+      success: true,
+      message: 'Successfully fetched the data!',
+      result: {
+        available,
+        expired,
+      },
+      errors: [],
+    };
+  }
 }

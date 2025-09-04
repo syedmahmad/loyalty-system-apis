@@ -58,6 +58,7 @@ import { Customer } from './entities/customer.entity';
 import { CustomerCoupon } from './entities/customer-coupon.entity';
 import { GvrEarnBurnWithEventsDto } from 'src/customers/dto/gvr_earn_burn_with_event.dto';
 import { Tier } from 'src/tiers/entities/tier.entity';
+import { isValidUrl } from 'src/helpers/helper';
 
 @Injectable()
 export class CustomerService {
@@ -170,8 +171,7 @@ export class CustomerService {
 
         // Check if a QR code exists for this customer, create if not
         let existCustomerQr = await this.qrService.findOne(existing.id);
-
-        if (!existCustomerQr) {
+        if (!existCustomerQr || !isValidUrl(existCustomerQr.qr_code_url)) {
           existCustomerQr = await this.createAndSaveCustomerQrCode(
             customerUuid,
             existing.id,
@@ -348,6 +348,19 @@ export class CustomerService {
         'dragon',
         fileName,
       );
+
+      const checkExistCustomerInQR = await this.qrCodeRepo.findOne({
+        where: {
+          customer: { id: customerId },
+        },
+      });
+
+      if (checkExistCustomerInQR) {
+        checkExistCustomerInQR.qr_code_url = uploadedData
+          ? `${process.env.OCI_URL}/${fileName}`
+          : null;
+        return await this.qrCodeRepo.save(checkExistCustomerInQR);
+      }
 
       // Save mapping in DB
       const mapping = this.qrCodeRepo.create({
@@ -2607,5 +2620,4 @@ export class CustomerService {
       throw new BadRequestException('Burn rule not found.');
     }
   }
-
 }
