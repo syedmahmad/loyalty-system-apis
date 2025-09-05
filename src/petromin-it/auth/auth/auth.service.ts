@@ -16,8 +16,7 @@ import { TriggerSMS } from 'src/helpers/triggerSMS';
 import { TriggerWhatsapp } from 'src/helpers/triggerWhatsapp';
 import { Log } from 'src/logs/entities/log.entity';
 import { WalletService } from 'src/wallet/wallet/wallet.service';
-import { nanoid } from 'nanoid';
-
+import { customAlphabet } from 'nanoid';
 @Injectable()
 export class AuthService {
   constructor(
@@ -54,7 +53,6 @@ export class AuthService {
         },
         relations: ['business_unit', 'tenant'],
       });
-
       if (!customer) {
         // The original code only creates a new customer entity in memory, but does not save it to the database,
         // so the customer.id is not generated yet. To get the newly created id, you must save the entity first.
@@ -67,7 +65,10 @@ export class AuthService {
           status: 1,
           is_new_user: 1,
           // Use nanoid for unique referral_code generation (Nest.js uses nanoid for unique IDs)
-          referral_code: nanoid(6).toUpperCase(),
+          referral_code: customAlphabet(
+            'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
+            6,
+          ),
         });
       }
 
