@@ -719,6 +719,7 @@ export class CustomerService {
     const walletTransaction: Partial<WalletTransaction> = {
       wallet: wallet, // pass the full Wallet entity instance
       orders: walletOrderRes,
+      customer: customer,
       // wallet_order_id: walletOrderId,
       business_unit: wallet.business_unit, // pass the full BusinessUnit entity instance
       type: WalletTransactionType.EARN,

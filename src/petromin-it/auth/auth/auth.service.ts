@@ -16,10 +16,7 @@ import { TriggerSMS } from 'src/helpers/triggerSMS';
 import { TriggerWhatsapp } from 'src/helpers/triggerWhatsapp';
 import { Log } from 'src/logs/entities/log.entity';
 import { WalletService } from 'src/wallet/wallet/wallet.service';
-import {
-  WalletTransactionStatus,
-  WalletTransactionType,
-} from 'src/wallet/entities/wallet-transaction.entity';
+import { nanoid } from 'nanoid';
 
 @Injectable()
 export class AuthService {
@@ -69,6 +66,8 @@ export class AuthService {
           uuid: uuidv4(),
           status: 1,
           is_new_user: 1,
+          // Use nanoid for unique referral_code generation (Nest.js uses nanoid for unique IDs)
+          referral_code: nanoid(6).toUpperCase(),
         });
       }
 
@@ -138,7 +137,7 @@ export class AuthService {
         throw new BadRequestException('Missing tenant or business unit');
       }
 
-      const { otp, mobileNumber } = body;
+      const { otp, mobileNumber, referral_code } = body;
       if (!otp || !mobileNumber) {
         return {
           success: false,
@@ -173,21 +172,101 @@ export class AuthService {
       // give him signup points
       if (customer && customer.is_new_user) {
         customer.is_new_user = 0;
-        // reward points
-        await this.walletService.addTransaction(
-          {
-            wallet_id: customerWallet.id,
-            business_unit_id: customer.business_unit.id,
-            type: WalletTransactionType.EARN,
-            status: WalletTransactionStatus.ACTIVE,
-            amount: 0,
-            source_type: 'signup_bonus',
-            source_id: 1,
-            description: 'Signup bonus credited',
-          },
-          customer.id,
-          false,
-        );
+        // reward signup points
+        const earnSignupPoints = {
+          customer_id: customer.uuid,
+          event: 'Signup Points', // this is important what if someone changes this event name form Frontend
+          tenantId: String(customer.tenant.id),
+          BUId: String(customer.business_unit.id),
+        };
+        try {
+          const earnedPoints =
+            await this.customerService.earnWithEvent(earnSignupPoints);
+          // log the external call
+          const logs = await this.logRepo.create({
+            requestBody: JSON.stringify(earnSignupPoints),
+            responseBody: JSON.stringify(earnedPoints),
+            url: earnSignupPoints.event,
+            method: 'POST',
+            statusCode: 200,
+          } as Log);
+          await this.logRepo.save(logs);
+        } catch (err) {
+          const logs = await this.logRepo.create({
+            requestBody: JSON.stringify(earnSignupPoints),
+            responseBody: JSON.stringify(err),
+            url: earnSignupPoints.event,
+            method: 'POST',
+            statusCode: 200,
+          } as Log);
+          await this.logRepo.save(logs);
+        }
+
+        // Additional Points for Phone
+        const earnAddPhonePoints = {
+          customer_id: customer.uuid,
+          event: 'Additional Points for Phone', // this is important what if someone changes this event name form Frontend
+          tenantId: String(customer.tenant.id),
+          BUId: String(customer.business_unit.id),
+        };
+        try {
+          const earnedPoints =
+            await this.customerService.earnWithEvent(earnAddPhonePoints);
+          // log the external call
+          const logs = await this.logRepo.create({
+            requestBody: JSON.stringify(earnAddPhonePoints),
+            responseBody: JSON.stringify(earnedPoints),
+            url: earnAddPhonePoints.event,
+            method: 'POST',
+            statusCode: 200,
+          } as Log);
+          await this.logRepo.save(logs);
+        } catch (err) {
+          const logs = await this.logRepo.create({
+            requestBody: JSON.stringify(earnAddPhonePoints),
+            responseBody: JSON.stringify(err),
+            url: earnAddPhonePoints.event,
+            method: 'POST',
+            statusCode: 200,
+          } as Log);
+          await this.logRepo.save(logs);
+        }
+
+        if (referral_code) {
+          const referrer_customer = await this.customerRepo.findOne({
+            where: { referral_code: referral_code },
+          });
+          customer.referrer_id = referrer_customer.id;
+          // rewards points to referrer
+          const earnReferrerPoints = {
+            customer_id: referrer_customer.uuid, // need to give points to referrer
+            event: 'Referrer Reward Points', // this is important what if someone changes this event name form Frontend
+            tenantId: String(customer.tenant.id),
+            BUId: String(customer.business_unit.id),
+          };
+          try {
+            const earnedPoints =
+              await this.customerService.earnWithEvent(earnReferrerPoints);
+            // log the external call
+            const logs = await this.logRepo.create({
+              requestBody: JSON.stringify(earnReferrerPoints),
+              responseBody: JSON.stringify(earnedPoints),
+              url: earnReferrerPoints.event,
+              method: 'POST',
+              statusCode: 200,
+            } as Log);
+            await this.logRepo.save(logs);
+          } catch (err) {
+            const logs = await this.logRepo.create({
+              requestBody: JSON.stringify(earnReferrerPoints),
+              responseBody: JSON.stringify(err),
+              url: earnReferrerPoints.event,
+              method: 'POST',
+              statusCode: 200,
+            } as Log);
+            await this.logRepo.save(logs);
+          }
+        }
       }
 
       customer.otp_code = null;
