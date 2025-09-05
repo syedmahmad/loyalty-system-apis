@@ -16,7 +16,7 @@ import { TriggerSMS } from 'src/helpers/triggerSMS';
 import { TriggerWhatsapp } from 'src/helpers/triggerWhatsapp';
 import { Log } from 'src/logs/entities/log.entity';
 import { WalletService } from 'src/wallet/wallet/wallet.service';
-import { customAlphabet } from 'nanoid';
+import { nanoid } from 'nanoid';
 @Injectable()
 export class AuthService {
   constructor(
@@ -65,10 +65,7 @@ export class AuthService {
           status: 1,
           is_new_user: 1,
           // Use nanoid for unique referral_code generation (Nest.js uses nanoid for unique IDs)
-          referral_code: customAlphabet(
-            'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
-            6,
-          ),
+          referral_code: nanoid(6).toUpperCase(),
         });
       }
 
