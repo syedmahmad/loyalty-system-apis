@@ -3,7 +3,6 @@ import {
   PrimaryGeneratedColumn,
   Column,
   ManyToOne,
-  CreateDateColumn,
   UpdateDateColumn,
   JoinColumn,
 } from 'typeorm';
@@ -82,10 +81,10 @@ export class WalletTransaction {
   @Column({ type: 'int', nullable: true })
   is_expired: number; // 0 means not expired 1 means expired
 
-  @CreateDateColumn()
+  @Column({ type: 'datetime', nullable: true })
   expires_at: Date;
 
-  @CreateDateColumn()
+  @Column({ type: 'datetime', nullable: true })
   created_at: Date;
 
   @UpdateDateColumn()
