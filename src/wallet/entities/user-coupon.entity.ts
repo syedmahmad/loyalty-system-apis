@@ -39,10 +39,10 @@ export class UserCoupon {
   @Column({ nullable: true })
   issued_from_id: number;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ type: 'datetime', nullable: true })
   redeemed_at: Date;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ type: 'datetime', nullable: true })
   expires_at: Date;
 
   @Column({ type: 'int', nullable: true })
