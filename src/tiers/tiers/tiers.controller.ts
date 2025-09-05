@@ -184,7 +184,7 @@ export class TiersController {
   }
 
   @Post('/benefits')
-  async myRewards(@Body() body: tierBenefitsDto) {
+  async tierBenefits(@Body() body: tierBenefitsDto) {
     return this.service.tierBenefits(body);
   }
 }

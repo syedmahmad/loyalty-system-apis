@@ -531,13 +531,15 @@ export class TiersService {
       for (let index = 0; index < allTiers.length; index++) {
         const eachTier = allTiers[index];
         if (wallet.total_balance >= eachTier.min_points) {
-          nextTier = allTiers[index + 1] || null;
-          nextTier = {
-            uuid: nextTier.uuid,
-            name: nextTier.name,
-            level: nextTier.level,
-            min_points: nextTier.min_points,
-          };
+          const next = allTiers[index + 1] || null;
+          nextTier = next
+            ? {
+                uuid: next.uuid,
+                name: next.name,
+                level: next.level,
+                min_points: next.min_points,
+              }
+            : null;
         }
 
         tiersArr.push({
