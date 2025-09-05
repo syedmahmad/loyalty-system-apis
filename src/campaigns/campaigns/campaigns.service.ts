@@ -212,9 +212,13 @@ export class CampaignsService {
     client_id: number,
     name: string,
     userId: number,
-  ): Promise<Campaign[]> {
-    let optionalWhereClause = {};
+    page: number = 1,
+    pageSize: number = 10,
+  ) {
+    const take = pageSize;
+    const skip = (page - 1) * take;
 
+    let optionalWhereClause = {};
     const user = await this.userRepository.findOne({ where: { id: userId } });
     if (!user)
       throw new BadRequestException('User not found against user-token');
@@ -239,15 +243,25 @@ export class CampaignsService {
     }
 
     if (hasGlobalAccess || isSuperAdmin) {
-      return this.campaignRepository.find({
+      const [data, total] = await this.campaignRepository.findAndCount({
         where: {
           tenant_id: Number(client_id),
           status: 1,
           ...optionalWhereClause,
         },
         relations: ['rules', 'tiers', 'business_unit', 'coupons'],
+        take,
+        skip,
         order: { created_at: 'DESC' },
       });
+
+      return {
+        data,
+        total,
+        page,
+        pageSize,
+        totalPages: Math.ceil(total / pageSize),
+      };
     }
 
     const accessibleBU = privileges
@@ -267,7 +281,7 @@ export class CampaignsService {
 
     const businessUnitIds = businessUnits.map((bu) => bu.id);
 
-    return this.campaignRepository.find({
+    const [data, total] = await this.campaignRepository.findAndCount({
       where: {
         tenant_id: Number(client_id),
         status: 1,
@@ -282,8 +296,18 @@ export class CampaignsService {
         'customerSegments',
         'customerSegments.segment',
       ],
+      take,
+      skip,
       order: { created_at: 'DESC' },
     });
+
+    return {
+      data,
+      total,
+      page,
+      pageSize,
+      totalPages: Math.ceil(total / pageSize),
+    };
   }
 
   async findAllForThirdPart(

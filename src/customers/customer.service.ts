@@ -59,6 +59,7 @@ import { CustomerCoupon } from './entities/customer-coupon.entity';
 import { GvrEarnBurnWithEventsDto } from 'src/customers/dto/gvr_earn_burn_with_event.dto';
 import { Tier } from 'src/tiers/entities/tier.entity';
 import { isValidUrl } from 'src/helpers/helper';
+import { CustomerDto } from './dto/customer.dto';
 
 @Injectable()
 export class CustomerService {
@@ -2618,6 +2619,225 @@ export class CustomerService {
       };
     } else {
       throw new BadRequestException('Burn rule not found.');
+    }
+  }
+
+  async customerInfo(req: Request, body: CustomerDto) {
+    const businessUnit = (req as any).businessUnit;
+    const { custom_customer_unique_id, customer_phone_number } = body;
+
+    try {
+      if (!businessUnit) {
+        throw new BadRequestException('Invalid Business Unit Key');
+      }
+
+      const customer = await this.customerRepo.findOne({
+        where: [
+          { uuid: custom_customer_unique_id },
+          { phone: customer_phone_number },
+        ],
+      });
+
+      if (!customer) {
+        throw new NotFoundException(`Customer not found`);
+      }
+
+      if (customer.status == 0) {
+        throw new NotFoundException(`Customer is inactive`);
+      }
+
+      const walletinfo = await this.walletService.getSingleCustomerWalletInfo(
+        customer.id,
+        businessUnit.id,
+      );
+
+      if (!walletinfo) {
+        throw new NotFoundException(`Customer wallet not configured`);
+      }
+
+      const transactionInfo = await this.walletService.getWalletTransactions(
+        walletinfo?.id,
+      );
+
+      let total_transaction_amount = 0;
+      let total_transaction_count = 0;
+      if (transactionInfo && transactionInfo.data.length) {
+        total_transaction_count = transactionInfo.data.length;
+        for (let index = 0; index <= transactionInfo.data.length - 1; index++) {
+          const eachTransaction = transactionInfo.data[index];
+          total_transaction_amount += Number(eachTransaction.amount);
+        }
+      }
+
+      const customerTierInfo = await this.tiersService.getCurrentCustomerTier(
+        customer.id,
+      );
+
+      return {
+        success: true,
+        message: 'Customer details fetched successfully',
+        result: {
+          customer_name: customer.name,
+          custom_customer_first_name: customer.first_name,
+          custom_customer_last_name: customer.last_name,
+          custom_customer_unique_id: customer.uuid,
+          customer_referral_code: customer.referral_code,
+          custom_customer_loyalty_points: walletinfo.available_balance,
+          custom_total_transaction_amount: total_transaction_amount,
+          custom_total_transaction_count: total_transaction_count,
+          customer_tier: customerTierInfo ? customerTierInfo.tier.name : '',
+          // next_expiry_date: '2025-11-20',
+          // next_expiry_points: '25030',
+        },
+        errors: [],
+      };
+    } catch (error) {
+      throw new BadRequestException({
+        success: false,
+        message: 'Failed to fetch customer info',
+        result: null,
+        errors: error.message,
+      });
+    }
+  }
+
+  async burnTransaction(body) {
+    const {
+      customer_id,
+      customer_phone_number,
+      transaction_amount,
+      from_app,
+      remarks,
+    } = body;
+
+    try {
+      const customer = await this.customerRepo.findOne({
+        where: [{ uuid: customer_id }, { phone: customer_phone_number }],
+        relations: ['tenant', 'business_unit'],
+      });
+
+      if (!customer) {
+        throw new NotFoundException(`Customer not found`);
+      }
+
+      if (customer.status == 0) {
+        throw new BadRequestException(`Customer is inactive`);
+      }
+
+      const decryptedPhone = await this.ociService.decryptData(customer.phone);
+
+      const wallet = await this.walletService.getSingleCustomerWalletInfo(
+        customer.id,
+        customer.business_unit.id,
+      );
+
+
+      if (!wallet) {
+        throw new NotFoundException(`Customer wallet not configured`);
+      }
+
+      // Get active burn rules
+      const rules = await this.ruleRepo.find({
+        where: {
+          rule_type: 'burn',
+          tenant: { id: customer.tenant.id },
+        },
+      });
+
+      if (!rules.length) {
+        throw new NotFoundException(`Rules not found`);
+      }
+
+      let matchedRule;
+      for (const rule of rules) {
+        if (transaction_amount >= rule.min_amount_spent) {
+          matchedRule = rule;
+          break;
+        }
+      }
+
+      // Validate rule conditions
+      if (transaction_amount < matchedRule.min_amount_spent) {
+        throw new BadRequestException(
+          `Minimum amount to burn is ${matchedRule.min_amount_spent}`,
+        );
+      }
+
+      if (wallet.available_balance < matchedRule.max_redeemption_points_limit) {
+        throw new BadRequestException(
+          `You don't have enough loyalty points, ${matchedRule.max_redeemption_points_limit} loyalty point are required and you've ${wallet.available_balance} loyalty points`,
+        );
+      }
+
+      // Determine applicable conversion rate
+      const conversionRate = matchedRule.points_conversion_factor;
+
+      // Calculate points and discount
+      let discountAmount = 0;
+      let pointsToBurn = 0;
+
+      if (matchedRule.burn_type === 'FIXED') {
+        pointsToBurn = matchedRule.max_redeemption_points_limit;
+        discountAmount = pointsToBurn * conversionRate;
+
+        if (discountAmount > transaction_amount) {
+          discountAmount = transaction_amount;
+          pointsToBurn = transaction_amount / conversionRate;
+        }
+      } else if (matchedRule.burn_type === 'PERCENTAGE') {
+        discountAmount =
+          (transaction_amount * matchedRule.max_burn_percent_on_invoice) / 100;
+        pointsToBurn = matchedRule.max_redeemption_points_limit;
+      } else {
+        throw new BadRequestException('Invalid burn type in rule');
+      }
+
+      // Create burn transaction
+      const burnPayload = {
+        customer_id: customer.id,
+        business_unit_id: customer.business_unit.id,
+        wallet_id: wallet.id,
+        type: WalletTransactionType.BURN,
+        amount: pointsToBurn,
+        status: WalletTransactionStatus.ACTIVE,
+        source_type: matchedRule.name,
+        source_id: matchedRule.id,
+        description: `Burned ${pointsToBurn} points for discount of ${discountAmount} on amount ${transaction_amount}`,
+      };
+
+      const tx = await this.walletService.addTransaction(
+        {
+          ...burnPayload,
+          wallet_order_id: null,
+          wallet_id: wallet?.id,
+          business_unit_id: customer?.business_unit?.id,
+        },
+        customer?.id,
+        true,
+      );
+
+      return {
+        success: true,
+        message: `MAX burn point is ${pointsToBurn} with burn amount ${discountAmount}`,
+        result: {
+          customer_id: customer.uuid,
+          customer_phone_number: decryptedPhone,
+          // from_app: 'spareit',
+          transaction_id: tx.id,
+          transaction_amount: tx.amount,
+          max_burn_point: matchedRule.max_redeemption_points_limit,
+          max_burn_amount: discountAmount,
+          redemption_factor: conversionRate,
+        },
+        errors: [],
+      };
+    } catch (error) {
+      throw new BadRequestException({
+        success: false,
+        message: 'Failed to burn transaction',
+        result: null,
+        errors: error.message,
+      });
     }
   }
 }

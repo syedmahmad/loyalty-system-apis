@@ -61,7 +61,9 @@ export class CampaignsController {
     @Param('client_id') client_id: number,
     @Headers('user-secret') userSecret: string,
     @Query('name') name?: string,
-  ): Promise<Campaign[]> {
+    @Query('page') page?: number,
+    @Query('pageSize') pageSize?: number,
+  ) {
     if (!userSecret) {
       throw new BadRequestException('user-secret not found in headers');
     }
@@ -78,7 +80,13 @@ export class CampaignsController {
       throw new BadRequestException('user not found against provided token');
     }
 
-    return this.campaignService.findAll(client_id, name, user.id);
+    return this.campaignService.findAll(
+      client_id,
+      name,
+      user.id,
+      page,
+      pageSize,
+    );
   }
 
   @Get('/third-party/:tenantId/:businessUnitId')

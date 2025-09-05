@@ -91,6 +91,7 @@ export class CustomerModule implements NestModule {
         method: RequestMethod.POST,
       },
       { path: 'customers/single/:uuid', method: RequestMethod.GET },
+      { path: 'customers/info', method: RequestMethod.POST },
     );
   }
 }
