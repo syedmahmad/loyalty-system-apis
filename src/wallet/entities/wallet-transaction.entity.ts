@@ -120,7 +120,7 @@ export class WalletTransaction {
   @Column({ type: 'int', nullable: true })
   reference_id: number;
 
-  @ManyToOne(() => Customer, { nullable: true, onDelete: 'CASCADE' })
+  @ManyToOne(() => Customer, { nullable: true })
   @JoinColumn({ name: 'customer_id' })
   customer: Customer;
 }
