@@ -6,12 +6,14 @@ import {
   RequestDeletionDto,
 } from '../dto/update-profile.dto';
 import { Customer } from 'src/customers/entities/customer.entity';
+import { OciService } from 'src/oci/oci.service';
 
 @Injectable()
 export class CustomerProfileService {
   constructor(
     @InjectRepository(Customer)
     private readonly customerRepo: Repository<Customer>,
+    private readonly ociService: OciService,
   ) {}
 
   async getProfile(customerId: string) {
@@ -24,8 +26,21 @@ export class CustomerProfileService {
     const customer = await this.customerRepo.findOne({
       where: { id: customerInfo.id },
     });
+
     if (!customer) throw new NotFoundException('Customer not found');
-    return customer;
+
+    const decryptedEmail = await this.ociService.decryptData(customer.email);
+    customer.email = decryptedEmail;
+
+    const decryptedPhone = await this.ociService.decryptData(customer.phone);
+    customer.phone = decryptedPhone;
+
+    return {
+      success: true,
+      message: 'This is the requested profile information',
+      result: customer,
+      errors: [],
+    };
   }
 
   async updateProfile(customerId: string, dto: UpdateProfileDto) {
@@ -36,7 +51,25 @@ export class CustomerProfileService {
     if (!customer) throw new NotFoundException('Customer not found');
 
     await this.customerRepo.update(customer.id, { id: customer.id, ...dto });
-    return this.getProfile(customerId);
+
+    const profile = await this.getProfile(customerId);
+
+    const decryptedEmail = await this.ociService.decryptData(
+      profile.result.email,
+    );
+    profile.result.email = decryptedEmail;
+
+    const decryptedPhone = await this.ociService.decryptData(
+      profile.result.phone,
+    );
+    profile.result.phone = decryptedPhone;
+
+    return {
+      success: true,
+      message: 'Profile updated successfully',
+      result: { ...profile.result },
+      errors: [],
+    };
   }
 
   async requestAccountDeletion(customerId: string, dto: RequestDeletionDto) {
@@ -54,7 +87,12 @@ export class CustomerProfileService {
       reason_for_deletion_other: dto.reason_for_deletion_other,
     });
 
-    return { message: 'Account deletion requested' };
+    return {
+      success: true,
+      message: 'Account deletion requested',
+      result: {},
+      errors: [],
+    };
   }
 
   /**
@@ -81,7 +119,12 @@ export class CustomerProfileService {
       deleted_at: new Date(),
     });
 
-    return { message: 'Account soft deleted successfully' };
+    return {
+      success: true,
+      message: 'Account soft deleted successfully',
+      result: {},
+      errors: [],
+    };
   }
 
   /**
@@ -108,6 +151,11 @@ export class CustomerProfileService {
       deleted_by: null,
     });
 
-    return { message: 'Account restored successfully' };
+    return {
+      success: true,
+      message: 'Account restored successfully',
+      result: {},
+      errors: [],
+    };
   }
 }
