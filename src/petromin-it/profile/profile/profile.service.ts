@@ -54,16 +54,6 @@ export class CustomerProfileService {
 
     const profile = await this.getProfile(customerId);
 
-    const decryptedEmail = await this.ociService.decryptData(
-      profile.result.email,
-    );
-    profile.result.email = decryptedEmail;
-
-    const decryptedPhone = await this.ociService.decryptData(
-      profile.result.phone,
-    );
-    profile.result.phone = decryptedPhone;
-
     return {
       success: true,
       message: 'Profile updated successfully',
