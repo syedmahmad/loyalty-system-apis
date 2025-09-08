@@ -34,6 +34,7 @@ import { OpenaiModule } from './openai/openai.module';
 import { AuthModule } from 'src/petromin-it/auth/auth.module';
 import { AxiosLoggerInterceptor } from 'src/interceptos/axios-request-log.interceptor';
 import { HttpModule } from '@nestjs/axios';
+import { CustomerProfileModule } from './petromin-it/profile/profile.module';
 
 @Module({
   imports: [
@@ -70,6 +71,7 @@ import { HttpModule } from '@nestjs/axios';
     PointsModule,
     TiersModule,
     LogModule,
+    CustomerProfileModule,
     HttpModule,
     AuditTrailModule,
     TenantsModule,

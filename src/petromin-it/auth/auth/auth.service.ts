@@ -17,7 +17,6 @@ import { TriggerWhatsapp } from 'src/helpers/triggerWhatsapp';
 import { Log } from 'src/logs/entities/log.entity';
 import { WalletService } from 'src/wallet/wallet/wallet.service';
 import { nanoid } from 'nanoid';
-
 @Injectable()
 export class AuthService {
   constructor(
@@ -54,7 +53,6 @@ export class AuthService {
         },
         relations: ['business_unit', 'tenant'],
       });
-
       if (!customer) {
         // The original code only creates a new customer entity in memory, but does not save it to the database,
         // so the customer.id is not generated yet. To get the newly created id, you must save the entity first.

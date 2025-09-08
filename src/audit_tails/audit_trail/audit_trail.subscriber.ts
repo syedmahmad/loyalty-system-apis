@@ -30,6 +30,8 @@ export class GlobalAuditSubscriber implements EntitySubscriberInterface {
   async beforeUpdate(event: UpdateEvent<any>) {
     if (['Log', 'AuditTrail'].includes(event.metadata.name)) return;
 
+    console.log('event.entity.id,', event.entity);
+
     const repo = event.manager.getRepository(AuditTrail);
     await repo.save({
       table: event.metadata.name,
