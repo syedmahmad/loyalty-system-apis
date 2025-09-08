@@ -122,5 +122,4 @@ export class CustomerController {
   async gvrBurnWithEvent(@Body() body: GvrEarnBurnWithEventsDto) {
     return this.customerService.gvrBurnWithEvent(body);
   }
-
 }
