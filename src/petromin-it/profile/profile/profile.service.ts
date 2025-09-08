@@ -50,7 +50,31 @@ export class CustomerProfileService {
 
     if (!customer) throw new NotFoundException('Customer not found');
 
-    await this.customerRepo.update(customer.id, { id: customer.id, ...dto });
+    let encryptedPhone: string | undefined;
+    let encryptedEmail: string | undefined;
+
+    try {
+      if (dto.phone) {
+        encryptedPhone = (await this.ociService.encryptData(
+          dto.phone,
+        )) as string;
+      }
+
+      if (dto.email) {
+        encryptedEmail = (await this.ociService.encryptData(
+          dto.email,
+        )) as string;
+      }
+    } catch (err) {
+      throw new Error(`Encryption failed: ${err.message}`);
+    }
+
+    await this.customerRepo.update(customer.id, {
+      ...dto,
+      id: customer.id,
+      email: encryptedEmail,
+      phone: encryptedPhone,
+    });
 
     const profile = await this.getProfile(customerId);
 
