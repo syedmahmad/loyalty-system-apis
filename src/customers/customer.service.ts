@@ -2732,7 +2732,6 @@ export class CustomerService {
         customer.business_unit.id,
       );
 
-
       if (!wallet) {
         throw new NotFoundException(`Customer wallet not configured`);
       }
@@ -2803,7 +2802,10 @@ export class CustomerService {
         status: WalletTransactionStatus.ACTIVE,
         source_type: matchedRule.name,
         source_id: matchedRule.id,
-        description: `Burned ${pointsToBurn} points for discount of ${discountAmount} on amount ${transaction_amount}`,
+        description: remarks
+          ? remarks
+          : `Burned ${pointsToBurn} points for discount of ${discountAmount} on amount ${transaction_amount}`,
+        external_program_type: from_app ? from_app : null,
       };
 
       const tx = await this.walletService.addTransaction(
@@ -2836,6 +2838,138 @@ export class CustomerService {
       throw new BadRequestException({
         success: false,
         message: 'Failed to burn transaction',
+        result: null,
+        errors: error.message,
+      });
+    }
+  }
+
+  async earnHistory(body, pageNumber, pgsize) {
+    const { customer_id } = body;
+
+    const page = Number(pageNumber) || 1;
+    const pageSize = Number(pgsize) || 10;
+    const take = pageSize;
+    const skip = (page - 1) * take;
+
+    try {
+      const customer = await this.customerRepo.findOne({
+        where: { uuid: customer_id },
+        relations: ['tenant', 'business_unit'],
+      });
+
+      if (!customer) {
+        throw new NotFoundException(`Customer not found`);
+      }
+
+      if (customer.status == 0) {
+        throw new BadRequestException(`Customer is inactive`);
+      }
+
+      const wallet = await this.walletService.getSingleCustomerWalletInfo(
+        customer.id,
+        customer.business_unit.id,
+      );
+
+      if (!wallet) {
+        throw new NotFoundException(`Customer wallet not configured`);
+      }
+
+      const [earnedData, total] = await this.txRepo.findAndCount({
+        select: ['id', 'amount', 'description', 'invoice_no', 'created_at'],
+        where: {
+          type: WalletTransactionType.EARN,
+          status: WalletTransactionStatus.ACTIVE,
+          wallet: { id: wallet.id },
+          business_unit: { id: wallet.business_unit.id },
+        },
+        take,
+        skip,
+        order: { created_at: 'DESC' },
+      });
+
+      return {
+        success: true,
+        message: `Successfully fetched the data!`,
+        result: {
+          earnhistory: earnedData,
+          total,
+          page: Number(page),
+          pageSize: Number(pageSize),
+          totalPages: Math.ceil(total / pageSize),
+        },
+        errors: [],
+      };
+    } catch (error) {
+      throw new BadRequestException({
+        success: false,
+        message: 'Failed to get earn history',
+        result: null,
+        errors: error.message,
+      });
+    }
+  }
+
+  async burnHistory(body, pageNumber, pgsize) {
+    const { customer_id } = body;
+
+    const page = Number(pageNumber) || 1;
+    const pageSize = Number(pgsize) || 10;
+    const take = pageSize;
+    const skip = (page - 1) * take;
+
+    try {
+      const customer = await this.customerRepo.findOne({
+        where: { uuid: customer_id },
+        relations: ['tenant', 'business_unit'],
+      });
+
+      if (!customer) {
+        throw new NotFoundException(`Customer not found`);
+      }
+
+      if (customer.status == 0) {
+        throw new BadRequestException(`Customer is inactive`);
+      }
+
+      const wallet = await this.walletService.getSingleCustomerWalletInfo(
+        customer.id,
+        customer.business_unit.id,
+      );
+
+      if (!wallet) {
+        throw new NotFoundException(`Customer wallet not configured`);
+      }
+
+      const [burnData, total] = await this.txRepo.findAndCount({
+        select: ['id', 'amount', 'description', 'invoice_no', 'created_at'],
+        where: {
+          type: WalletTransactionType.BURN,
+          status: WalletTransactionStatus.ACTIVE,
+          wallet: { id: wallet.id },
+          business_unit: { id: wallet.business_unit.id },
+        },
+        take,
+        skip,
+        order: { created_at: 'DESC' },
+      });
+
+      return {
+        success: true,
+        message: `Successfully fetched the data!`,
+        result: {
+          burnhistory: burnData,
+          total,
+          page: Number(page),
+          pageSize: Number(pageSize),
+          totalPages: Math.ceil(total / pageSize),
+        },
+        errors: [],
+      };
+    } catch (error) {
+      throw new BadRequestException({
+        success: false,
+        message: 'Failed to get burn history',
         result: null,
         errors: error.message,
       });

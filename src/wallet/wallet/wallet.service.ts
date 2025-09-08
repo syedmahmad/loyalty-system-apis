@@ -2,7 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as dayjs from 'dayjs';
 import { User } from 'src/users/entities/user.entity';
-import { ILike, Not, Repository } from 'typeorm';
+import { ILike, IsNull, Not, Repository } from 'typeorm';
 import { CreateWalletOrderDto } from '../dto/create-wallet-order.dto';
 import { CreateWalletSettingsDto } from '../dto/create-wallet-settings.dto';
 import { CreateWalletTransactionDto } from '../dto/create-wallet-transaction.dto';
@@ -215,23 +215,35 @@ export class WalletService {
     const skip = (page - 1) * take;
 
     let whereClause: any;
-
-    const baseCondition = {
-      wallet: { id: walletId },
-      ...(transactionType === 'points' && { source_type: Not('coupon') }),
-      ...(transactionType === 'coupon' && { source_type: 'coupon' }),
-    };
+    if (transactionType === 'points') {
+      // points = source_type != 'coupon' OR source_type IS NULL
+      whereClause = [
+        { wallet: { id: walletId }, source_type: Not('coupon') },
+        { wallet: { id: walletId }, source_type: IsNull() },
+      ];
+    } else if (transactionType === 'coupon') {
+      whereClause = { wallet: { id: walletId }, source_type: 'coupon' };
+    } else {
+      whereClause = { wallet: { id: walletId } };
+    }
 
     if (query) {
       const searchTerm = `%${query}%`;
-      whereClause = [
-        { ...baseCondition, type: ILike(searchTerm) },
-        { ...baseCondition, amount: ILike(searchTerm) },
-        { ...baseCondition, status: ILike(searchTerm) },
-        { ...baseCondition, description: ILike(searchTerm) },
-      ];
-    } else {
-      whereClause = baseCondition;
+      const searchFields = ['type', 'amount', 'status', 'description'];
+
+      if (Array.isArray(whereClause)) {
+        whereClause = whereClause.flatMap((cond) =>
+          searchFields.map((field) => ({
+            ...cond,
+            [field]: ILike(searchTerm),
+          })),
+        );
+      } else {
+        whereClause = searchFields.map((field) => ({
+          ...whereClause,
+          [field]: ILike(searchTerm),
+        }));
+      }
     }
 
     const [data, total] = await this.txRepo.findAndCount({
