@@ -41,7 +41,9 @@ export class RulesService {
         points_conversion_factor: dto.points_conversion_factor,
         max_burn_percent_on_invoice: dto.max_burn_percent_on_invoice,
         description: dto.description,
-        validity_after_assignment: dto.validity_after_assignment,
+        validity_after_assignment: dto.validity_after_assignment
+          ? dto.validity_after_assignment
+          : 0,
         frequency: dto.frequency,
         created_by: createdBy,
         updated_by: createdBy,
@@ -235,6 +237,9 @@ export class RulesService {
       rule.dynamic_conditions = dto.dynamic_conditions || null;
       rule.is_priority = dto.is_priority;
       rule.business_unit_id = dto.business_unit_id;
+      rule.validity_after_assignment = dto.validity_after_assignment
+        ? dto.validity_after_assignment
+        : 0;
 
       await manager.save(rule);
       await queryRunner.commitTransaction();
