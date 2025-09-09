@@ -2975,4 +2975,75 @@ export class CustomerService {
       });
     }
   }
+
+  async transactionHistory(body, pageNumber, pgsize) {
+    const { customer_id } = body;
+    const page = Number(pageNumber) || 1;
+    const pageSize = Number(pgsize) || 10;
+    const take = pageSize;
+    const skip = (page - 1) * take;
+
+    try {
+      const customer = await this.customerRepo.findOne({
+        where: { uuid: customer_id },
+        relations: ['tenant', 'business_unit'],
+      });
+
+      if (!customer) {
+        throw new NotFoundException(`Customer not found`);
+      }
+
+      if (customer.status == 0) {
+        throw new BadRequestException(`Customer is inactive`);
+      }
+
+      const wallet = await this.walletService.getSingleCustomerWalletInfo(
+        customer.id,
+        customer.business_unit.id,
+      );
+
+      if (!wallet) {
+        throw new NotFoundException(`Customer wallet not configured`);
+      }
+
+      const [transactionData, total] = await this.txRepo.findAndCount({
+        select: [
+          'id',
+          'type',
+          'amount',
+          'description',
+          'invoice_no',
+          'created_at',
+        ],
+        where: {
+          type: In([WalletTransactionType.BURN, WalletTransactionType.EARN]),
+          status: WalletTransactionStatus.ACTIVE,
+          wallet: { id: wallet.id },
+          business_unit: { id: wallet.business_unit.id },
+        },
+        take,
+        skip,
+      });
+
+      return {
+        success: true,
+        message: `Successfully fetched the data!`,
+        result: {
+          transactionhistory: transactionData,
+          total,
+          page: Number(page),
+          pageSize: Number(pageSize),
+          totalPages: Math.ceil(total / pageSize),
+        },
+        errors: [],
+      };
+    } catch (error) {
+      throw new BadRequestException({
+        success: false,
+        message: 'Failed to get transaction history',
+        result: null,
+        errors: error.message,
+      });
+    }
+  }
 }

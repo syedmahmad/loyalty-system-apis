@@ -152,4 +152,13 @@ export class CustomerController {
   ) {
     return this.customerService.burnHistory(body, page, pageSize);
   }
+
+  @Post('/transaction-history')
+  async transactionHistory(
+    @Body() body: CustomerEarnHistoryDto,
+    @Query('page') page: number,
+    @Query('pageSize') pageSize: number,
+  ) {
+    return this.customerService.transactionHistory(body, page, pageSize);
+  }
 }
