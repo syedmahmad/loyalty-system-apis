@@ -62,7 +62,7 @@ export class AuthService {
           business_unit: { id: parseInt(businessUnitId) },
           tenant: { id: parseInt(tenantId) },
           uuid: uuidv4(),
-          status: 1,
+          status: 0,
           is_new_user: 1,
           // Use nanoid for unique referral_code generation (Nest.js uses nanoid for unique IDs)
           referral_code: nanoid(6).toUpperCase(),
@@ -170,6 +170,7 @@ export class AuthService {
       // give him signup points
       if (customer && customer.is_new_user) {
         customer.is_new_user = 0;
+        customer.status = 1;
         // reward signup points
         const earnSignupPoints = {
           customer_id: customer.uuid,
@@ -295,18 +296,3 @@ export class AuthService {
     }
   }
 }
-// curl --location PROCESS.ENV.NCMC_COMMUNICATION_ENDPOINT \
-// --header 'Authorization: Bearer PROCESS.ENV.NCMC_COMMUNICATION_TOKEN' \
-// --header 'Content-Type: application/json' \
-// --data '{
-//    "template_id": "ad31fd0d-1dc5-4c39-88a2-934fea5b2cd1",
-//   "language_code": "en",
-//   "to": [
-//     {
-//       "number": ENCRYPTED_MOBILE_NUMBER,
-//       "dynamic_fields": {
-//         "otp": "9112"
-//       }
-//     }
-//   ]
-// }'

@@ -523,14 +523,14 @@ export class CustomerService {
         },
       });
       /*
-        rule.dynamic_conditions: [{"condition_type":"station_id","condition_operator":"==","condition_value":"NCMC001"},
-        {"condition_type":"fuel_type","condition_operator":"==","condition_value":"gasoline"},
+        rule.dynamic_conditions: [{"condition_type":"store_id","condition_operator":"==","condition_value":"NCMC001"},
+        {"condition_type":"name","condition_operator":"==","condition_value":"gasoline"},
         {"condition_type":"quantity","condition_operator":"==","condition_value":"3.5 litter"},
         {"condition_type":"amount","condition_operator":"==","condition_value":"10"}]
 
         "metadata": {
-          "station_id": "NCMC_station_002"
-          "fuel_type": "High Octance",
+          "store_id": "NCMC_station_002"
+          "name": "High Octance",
           "quantity": "5 Litter",
           "amount": 10
         }
@@ -1939,12 +1939,29 @@ export class CustomerService {
       {"condition_type":"amount","condition_operator":"==","condition_value":"10"}]
 
       "metadata": {
-        "station_id": "NCMC_station_002"
+        "station_id": "NCMC_station_002",
         "fuel_type": "High Octance",
         "quantity": "5 Litter",
         "amount": 10
-    }
-      */
+      }
+  */
+
+  /**
+   * This function checks if the provided metadata matches ANY of the rule's dynamic conditions.
+   * It returns true if at least one condition matches, false otherwise.
+   *
+   * For the example above, it will compare each condition in rule.dynamic_conditions
+   * against the corresponding value in metadata:
+   * - For "station_id", it will check if "NCMC_station_002" === "NCMC001" (false)
+   * - For "fuel_type", it will check if "High Octance" === "gasoline" (false)
+   * - For "quantity", it will check if "5 Litter" === "3.5 litter" (false)
+   * - For "amount", it will check if 10 === 10 (true)
+   *
+   * Since at least one condition ("amount") matches, the function will return true.
+   *
+   * Note: The function uses .some(), so it only requires one match to return true.
+   * If you want ALL conditions to match, use .every() instead.
+   */
   validateRuleAgainstMetadata(rule: any, metadata: Record<string, any>) {
     // case sensitive should also be check here
     return rule.dynamic_conditions.some((cond: any) => {
