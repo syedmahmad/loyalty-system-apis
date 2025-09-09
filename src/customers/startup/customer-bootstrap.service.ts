@@ -31,6 +31,9 @@ export class CustomerBootstrapService implements OnApplicationBootstrap {
       where: { hashed_number: null },
     });
 
+    if (customersNeedingHash.length === 0) {
+      return;
+    }
     // 2. Prepare array for updated customers
     const updatedCustomers = [];
 
