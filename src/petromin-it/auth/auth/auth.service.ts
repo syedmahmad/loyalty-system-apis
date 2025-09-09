@@ -45,6 +45,18 @@ export class AuthService {
         throw new BadRequestException('Missing tenant or business unit');
       }
 
+      if (body?.referral_code) {
+        const data = await this.customerRepo.findOne({
+          where: {
+            referral_code: body.referral_code,
+            business_unit: { id: Number(businessUnitId) },
+            tenant: { id: Number(tenantId) },
+          },
+        });
+        if (!data) {
+          throw new BadRequestException('referral code does not belongs to us');
+        }
+      }
       const encryptedPhone = await this.ociService.encryptData(plainMobile);
       const hashedPhone = encrypt(plainMobile);
 
@@ -244,10 +256,11 @@ export class AuthService {
             },
             relations: ['business_unit', 'tenant'],
           });
-          console.log(
-            '/////////////////referrer_customer//////////////////////////',
-            referrer_customer,
-          );
+          if (!referrer_customer) {
+            throw new BadRequestException(
+              'referral code does not belongs to us',
+            );
+          }
           customer.referrer_id = referrer_customer.id;
           // rewards points to referrer
           const earnReferrerPoints = {
@@ -258,6 +271,7 @@ export class AuthService {
           };
           console.log(
             '//////////gand phat rhi yha////////////',
+            referrer_customer,
             earnReferrerPoints,
           );
           try {
