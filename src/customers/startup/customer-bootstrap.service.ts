@@ -57,7 +57,8 @@ export class CustomerBootstrapService implements OnApplicationBootstrap {
         // );
         // customer.phone = encryptedPhone;
         // customer.email = encryptedEmail;
-        hashed_number = encrypt(phoneNumber);
+        // hashed_number = encrypt(phoneNumber);
+        continue;
       }
       customer.hashed_number = hashed_number;
       updatedCustomers.push(customer);
