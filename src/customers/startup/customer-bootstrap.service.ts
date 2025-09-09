@@ -47,6 +47,7 @@ export class CustomerBootstrapService implements OnApplicationBootstrap {
       try {
         // Try to decrypt the phone number (assume it's encrypted)
         // phoneNumber = await this.ociService.decryptData(customer.phone);
+        phoneNumber = `${customer.country_code}${customer.phone}`;
         hashed_number = encrypt(phoneNumber);
       } catch {
         // If decryption fails, treat as plaintext, encrypt and re-encrypt for storage
