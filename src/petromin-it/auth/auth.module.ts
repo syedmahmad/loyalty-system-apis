@@ -9,10 +9,11 @@ import { QrCode } from 'src/qr_codes/entities/qr_code.entity';
 import { QrcodesService } from 'src/qr_codes/qr_codes/qr_codes.service';
 import { Log } from 'src/logs/entities/log.entity';
 import { WalletModule } from 'src/wallet/wallet.module';
+import { Referral } from 'src/wallet/entities/referrals.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Customer, QrCode, Log]),
+    TypeOrmModule.forFeature([Customer, QrCode, Log, Referral]),
     CustomerModule,
     WalletModule,
   ],
