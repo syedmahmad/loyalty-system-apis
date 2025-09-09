@@ -1,7 +1,7 @@
 // coupon_type/startup/coupon-type-bootstrap.service.ts
 import { Injectable, OnApplicationBootstrap } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
 import { Customer } from '../entities/customer.entity';
 import { Wallet } from 'src/wallet/entities/wallet.entity';
 import { WalletSettings } from 'src/wallet/entities/wallet-settings.entity';
@@ -28,7 +28,7 @@ export class CustomerBootstrapService implements OnApplicationBootstrap {
     );
     //1. Fetch all customers where hashed_number is null
     const customersNeedingHash = await this.customerRepo.find({
-      where: { hashed_number: null },
+      where: { hashed_number: IsNull() },
     });
     console.log('customersNeedingHash', customersNeedingHash);
     // If there are no customers needing hash, stop further execution
