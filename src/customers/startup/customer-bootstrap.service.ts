@@ -31,7 +31,9 @@ export class CustomerBootstrapService implements OnApplicationBootstrap {
       where: { hashed_number: null },
     });
 
-    if (customersNeedingHash.length === 0) {
+    // If there are no customers needing hash, stop further execution
+    if (!customersNeedingHash || customersNeedingHash.length === 0) {
+      console.log('No customers needing hash. Stopping bootstrap process.');
       return;
     }
     // 2. Prepare array for updated customers
@@ -39,31 +41,8 @@ export class CustomerBootstrapService implements OnApplicationBootstrap {
 
     // 3. For each customer, generate hashed_number if not present
     for (const customer of customersNeedingHash) {
-      // Defensive: If customer already has hashed_number, skip (shouldn't happen due to query)
-      // if (customer.hashed_number || !customer.phone) {
-      //   // updatedCustomers.push(customer);
-      //   continue;
-      // }
-
-      let phoneNumber: string;
-      let hashed_number: string;
-      try {
-        // Try to decrypt the phone number (assume it's encrypted)
-        // phoneNumber = await this.ociService.decryptData(customer.phone);
-        phoneNumber = `${customer.country_code}${customer.phone}`;
-        hashed_number = encrypt(phoneNumber);
-      } catch {
-        // If decryption fails, treat as plaintext, encrypt and re-encrypt for storage
-        // phoneNumber = `${customer.country_code}${customer.phone}`;
-        // const encryptedPhone = await this.ociService.encryptData(phoneNumber);
-        // const encryptedEmail = await this.ociService.encryptData(
-        //   customer.email,
-        // );
-        // customer.phone = encryptedPhone;
-        // customer.email = encryptedEmail;
-        // hashed_number = encrypt(phoneNumber);
-        continue;
-      }
+      const phoneNumber = `${customer.country_code}${customer.phone}`;
+      const hashed_number = encrypt(phoneNumber);
       customer.hashed_number = hashed_number;
       updatedCustomers.push(customer);
     }
