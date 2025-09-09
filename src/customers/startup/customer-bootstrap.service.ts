@@ -37,10 +37,10 @@ export class CustomerBootstrapService implements OnApplicationBootstrap {
     // 3. For each customer, generate hashed_number if not present
     for (const customer of customersNeedingHash) {
       // Defensive: If customer already has hashed_number, skip (shouldn't happen due to query)
-      if (customer.hashed_number || !customer.phone) {
-        // updatedCustomers.push(customer);
-        continue;
-      }
+      // if (customer.hashed_number || !customer.phone) {
+      //   // updatedCustomers.push(customer);
+      //   continue;
+      // }
 
       let phoneNumber: string;
       let hashed_number: string;
