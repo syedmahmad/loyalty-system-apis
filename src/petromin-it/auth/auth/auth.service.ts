@@ -252,6 +252,11 @@ export class AuthService {
             tenantId: String(referrer_customer.tenant.id),
             BUId: String(referrer_customer.business_unit.id),
           };
+          console.log(
+            '//////////gand phat rhi yha////////////',
+            referrer_customer,
+            earnReferrerPoints,
+          );
           try {
             const earnedPoints =
               await this.customerService.earnWithEvent(earnReferrerPoints);
