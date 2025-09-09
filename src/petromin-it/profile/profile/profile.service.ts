@@ -25,6 +25,24 @@ export class CustomerProfileService {
 
     const customer = await this.customerRepo.findOne({
       where: { id: customerInfo.id },
+      select: [
+        'uuid',
+        'first_name',
+        'last_name',
+        'name',
+        'email',
+        'phone',
+        'country_code',
+        'gender',
+        'DOB',
+        'image_url',
+        'nationality',
+        'address',
+        'city',
+        'custom_city',
+        'country',
+        'notify_tier',
+      ],
     });
 
     if (!customer) throw new NotFoundException('Customer not found');
@@ -76,12 +94,51 @@ export class CustomerProfileService {
       phone: encryptedPhone,
     });
 
-    const profile = await this.getProfile(customerId);
+    const profile = await this.customerRepo.findOne({
+      where: { id: customer.id },
+      select: [
+        'uuid',
+        'first_name',
+        'last_name',
+        'name',
+        'email',
+        'phone',
+        'country_code',
+        'gender',
+        'DOB',
+        'image_url',
+        'nationality',
+        'address',
+        'city',
+        'custom_city',
+        'country',
+        'notify_tier',
+      ],
+    });
+
+    let decryptedEmail;
+    let decryptedPhone;
+
+    try {
+      if (profile.phone) {
+        decryptedPhone = (await this.ociService.decryptData(
+          profile.phone,
+        )) as string;
+      }
+
+      if (profile.email) {
+        decryptedEmail = (await this.ociService.decryptData(
+          profile.email,
+        )) as string;
+      }
+    } catch (err) {
+      throw new Error(`Encryption failed: ${err.message}`);
+    }
 
     return {
       success: true,
       message: 'Profile updated successfully',
-      result: { ...profile.result },
+      result: { ...profile, email: decryptedEmail, phone: decryptedPhone },
       errors: [],
     };
   }
