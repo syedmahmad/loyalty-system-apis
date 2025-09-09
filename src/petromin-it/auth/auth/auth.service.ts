@@ -244,6 +244,10 @@ export class AuthService {
             },
             relations: ['business_unit', 'tenant'],
           });
+          console.log(
+            '/////////////////referrer_customer//////////////////////////',
+            referrer_customer,
+          );
           customer.referrer_id = referrer_customer.id;
           // rewards points to referrer
           const earnReferrerPoints = {
@@ -254,7 +258,6 @@ export class AuthService {
           };
           console.log(
             '//////////gand phat rhi yha////////////',
-            referrer_customer,
             earnReferrerPoints,
           );
           try {
