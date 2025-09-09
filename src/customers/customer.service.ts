@@ -618,6 +618,7 @@ export class CustomerService {
 
     // 5. Calculate reward points
     let rewardPoints = rule.reward_points;
+    // TODO: BIG NOTE:
     const Orderamount = metadata?.amount ? Number(metadata.amount) : undefined;
 
     // I think, we will add this || rule.rule_type === 'dynamic'
@@ -724,7 +725,7 @@ export class CustomerService {
       business_unit: wallet.business_unit, // pass the full BusinessUnit entity instance
       type: WalletTransactionType.EARN,
       source_type: event,
-      amount: rewardPoints,
+      amount: Orderamount || 0,
       status:
         pendingDays > 0
           ? WalletTransactionStatus.PENDING
@@ -736,7 +737,7 @@ export class CustomerService {
       unlock_date:
         pendingDays > 0 ? dayjs().add(pendingDays, 'day').toDate() : null,
 
-      point_balance: wallet.available_balance,
+      point_balance: rewardPoints, //wallet.available_balance,
 
       // Set the expiry_date for the wallet transaction.
       // If the rule has a validity_after_assignment value:

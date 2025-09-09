@@ -29,30 +29,31 @@ export class CustomerProfileService {
         'uuid',
         'first_name',
         'last_name',
-        'name',
+        // 'name',
         'email',
         'phone',
-        'country_code',
+        // 'country_code',
         'gender',
         'DOB',
         'image_url',
-        'nationality',
+        // 'nationality',
         'address',
         'city',
-        'custom_city',
+        // 'custom_city',
         'country',
-        'notify_tier',
+        // 'notify_tier',
       ],
     });
 
     if (!customer) throw new NotFoundException('Customer not found');
 
-    const decryptedEmail = await this.ociService.decryptData(customer.email);
-    customer.email = decryptedEmail;
+    if (!customer.external_customer_id) {
+      const decryptedEmail = await this.ociService.decryptData(customer.email);
+      customer.email = decryptedEmail;
 
-    const decryptedPhone = await this.ociService.decryptData(customer.phone);
-    customer.phone = decryptedPhone;
-
+      const decryptedPhone = await this.ociService.decryptData(customer.phone);
+      customer.phone = decryptedPhone;
+    }
     return {
       success: true,
       message: 'This is the requested profile information',
@@ -71,20 +72,22 @@ export class CustomerProfileService {
     let encryptedPhone: string | undefined;
     let encryptedEmail: string | undefined;
 
-    try {
-      if (dto.phone) {
-        encryptedPhone = (await this.ociService.encryptData(
-          dto.phone,
-        )) as string;
-      }
+    if (!customer.external_customer_id) {
+      try {
+        if (dto.phone) {
+          encryptedPhone = (await this.ociService.encryptData(
+            dto.phone,
+          )) as string;
+        }
 
-      if (dto.email) {
-        encryptedEmail = (await this.ociService.encryptData(
-          dto.email,
-        )) as string;
+        if (dto.email) {
+          encryptedEmail = (await this.ociService.encryptData(
+            dto.email,
+          )) as string;
+        }
+      } catch (err) {
+        throw new Error(`Encryption failed: ${err.message}`);
       }
-    } catch (err) {
-      throw new Error(`Encryption failed: ${err.message}`);
     }
 
     await this.customerRepo.update(customer.id, {
@@ -100,39 +103,41 @@ export class CustomerProfileService {
         'uuid',
         'first_name',
         'last_name',
-        'name',
+        // 'name',
         'email',
         'phone',
-        'country_code',
+        // 'country_code',
         'gender',
         'DOB',
         'image_url',
-        'nationality',
+        // 'nationality',
         'address',
         'city',
-        'custom_city',
+        // 'custom_city',
         'country',
-        'notify_tier',
+        // 'notify_tier',
       ],
     });
 
     let decryptedEmail;
     let decryptedPhone;
 
-    try {
-      if (profile.phone) {
-        decryptedPhone = (await this.ociService.decryptData(
-          profile.phone,
-        )) as string;
-      }
+    if (!customer.external_customer_id) {
+      try {
+        if (profile.phone) {
+          decryptedPhone = (await this.ociService.decryptData(
+            profile.phone,
+          )) as string;
+        }
 
-      if (profile.email) {
-        decryptedEmail = (await this.ociService.decryptData(
-          profile.email,
-        )) as string;
+        if (profile.email) {
+          decryptedEmail = (await this.ociService.decryptData(
+            profile.email,
+          )) as string;
+        }
+      } catch (err) {
+        throw new Error(`Encryption failed: ${err.message}`);
       }
-    } catch (err) {
-      throw new Error(`Encryption failed: ${err.message}`);
     }
 
     return {

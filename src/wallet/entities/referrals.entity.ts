@@ -16,7 +16,7 @@ export class Referral {
   @Column({ type: 'int', nullable: true })
   external_system_id: number;
 
-  @Column({ type: 'int' })
+  @Column({ type: 'int', nullable: true })
   program_id: number;
 
   @Column({ type: 'int' })

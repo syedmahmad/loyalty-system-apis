@@ -11,8 +11,8 @@ export class EarnWithEvent {
   @IsOptional()
   @IsObject()
   metadata?: {
-    station_id?: string;
-    fuel_type?: string;
+    store_id?: string;
+    name?: string;
     quantity?: string | number;
     amount?: number;
     [key: string]: any;
