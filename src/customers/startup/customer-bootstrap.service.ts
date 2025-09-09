@@ -31,10 +31,6 @@ export class CustomerBootstrapService implements OnApplicationBootstrap {
       where: { hashed_number: null },
     });
 
-    if (customersNeedingHash.length === 0) {
-      return;
-    }
-
     // 2. Prepare array for updated customers
     const updatedCustomers = [];
 
@@ -50,17 +46,17 @@ export class CustomerBootstrapService implements OnApplicationBootstrap {
       let hashed_number: string;
       try {
         // Try to decrypt the phone number (assume it's encrypted)
-        phoneNumber = await this.ociService.decryptData(customer.phone);
+        // phoneNumber = await this.ociService.decryptData(customer.phone);
         hashed_number = encrypt(phoneNumber);
       } catch {
         // If decryption fails, treat as plaintext, encrypt and re-encrypt for storage
-        phoneNumber = `${customer.country_code}${customer.phone}`;
-        const encryptedPhone = await this.ociService.encryptData(phoneNumber);
-        const encryptedEmail = await this.ociService.encryptData(
-          customer.email,
-        );
-        customer.phone = encryptedPhone;
-        customer.email = encryptedEmail;
+        // phoneNumber = `${customer.country_code}${customer.phone}`;
+        // const encryptedPhone = await this.ociService.encryptData(phoneNumber);
+        // const encryptedEmail = await this.ociService.encryptData(
+        //   customer.email,
+        // );
+        // customer.phone = encryptedPhone;
+        // customer.email = encryptedEmail;
         hashed_number = encrypt(phoneNumber);
       }
       customer.hashed_number = hashed_number;
