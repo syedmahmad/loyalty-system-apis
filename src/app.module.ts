@@ -35,6 +35,7 @@ import { AuthModule } from 'src/petromin-it/auth/auth.module';
 import { AxiosLoggerInterceptor } from 'src/interceptos/axios-request-log.interceptor';
 import { HttpModule } from '@nestjs/axios';
 import { CustomerProfileModule } from './petromin-it/profile/profile.module';
+import { ReferralModule } from './petromin-it/referral/referral.module';
 
 @Module({
   imports: [
@@ -88,6 +89,7 @@ import { CustomerProfileModule } from './petromin-it/profile/profile.module';
     CustomerCoupon,
     OpenaiModule,
     AuthModule,
+    ReferralModule,
   ],
   controllers: [AppController],
   providers: [AppService, AxiosLoggerInterceptor],
