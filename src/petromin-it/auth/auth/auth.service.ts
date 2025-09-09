@@ -170,6 +170,7 @@ export class AuthService {
       if (new Date(customer.otp_expires_at).getTime() < Date.now())
         throw new BadRequestException('OTP Expired');
 
+      console.log('/////////////////mid//////////////////////////');
       // give him signup points
       if (customer && customer.is_new_user) {
         customer.is_new_user = 0;
@@ -203,7 +204,7 @@ export class AuthService {
           } as Log);
           await this.logRepo.save(logs);
         }
-
+        console.log('/////////////////singup points//////////////////////////');
         // Additional Points for Phone
         const earnAddPhonePoints = {
           customer_id: customer.uuid,
@@ -233,10 +234,15 @@ export class AuthService {
           } as Log);
           await this.logRepo.save(logs);
         }
-
+        console.log('/////////////////phone points//////////////////////////');
         if (referral_code) {
           const referrer_customer = await this.customerRepo.findOne({
-            where: { referral_code: referral_code },
+            where: {
+              referral_code: referral_code,
+              business_unit: { id: customer.business_unit.id },
+              tenant: { id: customer.tenant.id },
+            },
+            relations: ['business_unit', 'tenant'],
           });
           customer.referrer_id = referrer_customer.id;
           // rewards points to referrer
@@ -249,6 +255,9 @@ export class AuthService {
           try {
             const earnedPoints =
               await this.customerService.earnWithEvent(earnReferrerPoints);
+            console.log(
+              '/////////////////referral points//////////////////////////',
+            );
             // log the external call
             const logs = await this.logRepo.create({
               requestBody: JSON.stringify(earnReferrerPoints),
@@ -267,6 +276,9 @@ export class AuthService {
               business_unit: customer.business_unit,
             });
             await this.refRepo.save(refRst);
+            console.log(
+              '/////////////////referral repo entity created//////////////////////////',
+            );
           } catch (err) {
             const logs = await this.logRepo.create({
               requestBody: JSON.stringify(earnReferrerPoints),
@@ -279,7 +291,7 @@ export class AuthService {
           }
         }
       }
-
+      console.log('/////////////////the end//////////////////////////');
       customer.otp_code = null;
       customer.otp_expires_at = null;
       await this.customerRepo.save(customer);

@@ -36,8 +36,6 @@ export class CustomerBootstrapService implements OnApplicationBootstrap {
       console.log('No customers needing hash. Stopping bootstrap process.');
       return;
     }
-
-    console.log('after///////////////////');
     // 2. Prepare array for updated customers
     const updatedCustomers = [];
 
@@ -48,7 +46,7 @@ export class CustomerBootstrapService implements OnApplicationBootstrap {
       customer.hashed_number = hashed_number;
       updatedCustomers.push(customer);
     }
-    console.log('before update');
+
     // 4. Upsert updated customers (must provide conflict criteria)
     if (updatedCustomers.length > 0) {
       // 'id' is the primary key for Customer
