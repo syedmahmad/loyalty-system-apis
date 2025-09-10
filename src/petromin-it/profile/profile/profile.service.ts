@@ -23,6 +23,14 @@ export class CustomerProfileService {
 
     if (!customerInfo) throw new NotFoundException('Customer not found');
 
+    if (customerInfo.status === 0) {
+      throw new NotFoundException('Customer is Inactive');
+    }
+
+    if (customerInfo.status === 3) {
+      throw new NotFoundException('Customer is deleted');
+    }
+
     const customer = await this.customerRepo.findOne({
       where: { id: customerInfo.id },
       select: [
@@ -68,6 +76,14 @@ export class CustomerProfileService {
     });
 
     if (!customer) throw new NotFoundException('Customer not found');
+
+    if (customer.status === 0) {
+      throw new NotFoundException('Customer is Inactive');
+    }
+
+    if (customer.status === 3) {
+      throw new NotFoundException('Customer is deleted');
+    }
 
     let encryptedPhone: string | undefined;
     let encryptedEmail: string | undefined;
@@ -174,25 +190,23 @@ export class CustomerProfileService {
   /**
    * Soft delete = deactivate account but keep record
    */
-  async confirmAccountDeletion(customerId: string) {
+  async confirmAccountDeletion(customerId: string, dto: RequestDeletionDto) {
     const customerInfo = await this.customerRepo.findOne({
       where: { uuid: customerId },
     });
 
     if (!customerInfo) throw new NotFoundException('Customer not found');
 
-    const customer = await this.customerRepo.findOne({
-      where: { id: customerInfo.id },
-    });
-    if (!customer) throw new NotFoundException('Customer not found');
-
     await this.customerRepo.update(customerInfo.id, {
       id: customerInfo.id,
-      deletion_status: 1, // marked as deleted
-      is_delete_requested: 0, // clear request flag
-      status: 0, // inactive
+      deletion_status: 1, // marked as deleted, it should be 1 as per existing system
+      is_delete_requested: 1, // clear request flag, it should be 1 as per existing system
+      status: 3, // inactive should be set to 3 according to exsiitng spareit.
       deleted_by: customerInfo.id,
-      deleted_at: new Date(),
+      deleted_at: new Date(), //this shoudl eb set
+      delete_requested_at: new Date(),
+      reason_for_deletion: dto.reason_for_deletion,
+      reason_for_deletion_other: dto.reason_for_deletion_other,
     });
 
     return {

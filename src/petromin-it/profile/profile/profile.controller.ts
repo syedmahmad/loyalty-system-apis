@@ -1,13 +1,4 @@
-import {
-  Controller,
-  Get,
-  Param,
-  Put,
-  Body,
-  Post,
-  Delete,
-  Patch,
-} from '@nestjs/common';
+import { Controller, Get, Param, Put, Body, Post, Patch } from '@nestjs/common';
 import {
   UpdateProfileDto,
   RequestDeletionDto,
@@ -36,9 +27,12 @@ export class CustomerProfileController {
     return await this.profileService.requestAccountDeletion(id, dto);
   }
 
-  @Delete()
-  async confirmDeletion(@Param('id') id: string) {
-    return await this.profileService.confirmAccountDeletion(id);
+  @Post()
+  async confirmDeletion(
+    @Param('id') id: string,
+    @Body() dto: RequestDeletionDto,
+  ) {
+    return await this.profileService.confirmAccountDeletion(id, dto);
   }
 
   @Patch('restore')
