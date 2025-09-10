@@ -2661,8 +2661,14 @@ export class CustomerService {
         throw new NotFoundException(`Customer not found`);
       }
 
-      if (customer.status == 0) {
-        throw new NotFoundException(`Customer is inactive`);
+      if (
+        customer.status == 0 ||
+        customer?.is_delete_requested == 1 ||
+        customer?.deletion_status == 1
+      ) {
+        throw new NotFoundException(
+          `This customer is no longer active or has been removed`,
+        );
       }
 
       const walletinfo = await this.walletService.getSingleCustomerWalletInfo(
@@ -2906,11 +2912,14 @@ export class CustomerService {
         order: { created_at: 'DESC' },
       });
 
+      // remove id before returning
+      const earnhistory = earnedData.map(({ id, ...rest }) => rest);
+
       return {
         success: true,
         message: `Successfully fetched the data!`,
         result: {
-          earnhistory: earnedData,
+          earnhistory,
           total,
           page: Number(page),
           pageSize: Number(pageSize),
@@ -2972,11 +2981,14 @@ export class CustomerService {
         order: { created_at: 'DESC' },
       });
 
+      // remove id before returning
+      const burnhistory = burnData.map(({ id, ...rest }) => rest);
+
       return {
         success: true,
         message: `Successfully fetched the data!`,
         result: {
-          burnhistory: burnData,
+          burnhistory,
           total,
           page: Number(page),
           pageSize: Number(pageSize),
@@ -3043,11 +3055,14 @@ export class CustomerService {
         skip,
       });
 
+      // remove id before returning
+      const transactionhistory = transactionData.map(({ id, ...rest }) => rest);
+
       return {
         success: true,
         message: `Successfully fetched the data!`,
         result: {
-          transactionhistory: transactionData,
+          transactionhistory,
           total,
           page: Number(page),
           pageSize: Number(pageSize),

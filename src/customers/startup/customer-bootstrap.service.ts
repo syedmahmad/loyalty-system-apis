@@ -5,10 +5,8 @@ import { IsNull, Repository } from 'typeorm';
 import { Customer } from '../entities/customer.entity';
 import { Wallet } from 'src/wallet/entities/wallet.entity';
 import { WalletSettings } from 'src/wallet/entities/wallet-settings.entity';
-// import { encrypt } from 'src/helpers/encryption';
 import { OciService } from 'src/oci/oci.service';
 import { encrypt } from 'src/helpers/encryption';
-// import { encrypt } from 'src/helpers/encryption';
 
 @Injectable()
 export class CustomerBootstrapService implements OnApplicationBootstrap {
