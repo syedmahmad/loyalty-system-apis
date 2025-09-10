@@ -730,15 +730,14 @@ export class CouponsService {
 
     // Checking customer is assigned to this coupon or not
     if (hasSegments.length === 0) {
-      const isCustomerAssignedTothisCoupon =
-        await this.customerCouponRepo.findOne({
-          where: {
-            customer: { id: customer.id },
-            coupon: { id: coupon.id },
-          },
-        });
+      const isUserAssignedTothisCoupon = await this.userCouponRepo.findOne({
+        where: [
+          { customer: { id: customer.id }, coupon_id: coupon.id },
+          { customer: { id: customer.id }, issued_from_id: coupon.id },
+        ],
+      });
 
-      if (!isCustomerAssignedTothisCoupon) {
+      if (!isUserAssignedTothisCoupon || coupon.all_users == 0) {
         throw new NotFoundException('Customer is not eligible for this coupon');
       }
     }
@@ -822,6 +821,7 @@ export class CouponsService {
       business_unit: { id: wallet.business_unit.id },
       issued_from_type: 'coupon',
       issued_from_id: coupon.id,
+      coupon_id: coupon?.id,
     });
 
     coupon.number_of_times_used = Number(coupon.number_of_times_used + 1);
@@ -1561,41 +1561,75 @@ export class CouponsService {
       throw new NotFoundException('Customer is inactive');
     }
 
-    const customerCoupons = await this.customerCouponRepo.find({
+    const userCoupons = await this.userCouponRepo.find({
       where: {
         customer: { id: customer.id },
+        status: In([CouponStatus.EXPIRED, CouponStatus.ISSUED]),
       },
-      relations: ['coupon'],
+      order: { redeemed_at: 'DESC' },
     });
 
     const available = [];
     const expired = [];
     const today = new Date();
-    if (customerCoupons.length) {
-      for (let index = 0; index <= customerCoupons.length - 1; index++) {
-        const eachCoupon = customerCoupons[index].coupon;
-        // Coupon is expried
-        if (
-          eachCoupon.date_to &&
-          eachCoupon.date_to < today &&
-          eachCoupon?.status === 0
-        ) {
-          expired.push({
-            uuid: eachCoupon.uuid,
-            code: eachCoupon.code,
-            title: eachCoupon.coupon_title,
-            title_ar: eachCoupon.coupon_title_ar,
-            expiry_date: eachCoupon.date_to,
-          });
+    if (userCoupons.length) {
+      for (let index = 0; index <= userCoupons.length - 1; index++) {
+        const eachUserCoupon = userCoupons[index];
+        const singleCoupon = await this.couponsRepository.findOne({
+          where: [
+            { id: eachUserCoupon.coupon_id },
+            { id: eachUserCoupon.issued_from_id },
+          ],
+        });
+
+        if (!singleCoupon) {
+          continue;
         }
 
-        available.push({
-          uuid: eachCoupon.uuid,
-          code: eachCoupon.code,
-          title: eachCoupon.coupon_title,
-          title_ar: eachCoupon.coupon_title_ar,
-          expiry_date: eachCoupon.date_to,
-        });
+        if (singleCoupon.date_to && singleCoupon.date_to < today) {
+          expired.push({
+            uuid: singleCoupon.uuid,
+            code: singleCoupon.code,
+            title: singleCoupon.coupon_title,
+            title_ar: singleCoupon.coupon_title_ar,
+            expiry_date: singleCoupon.date_to,
+          });
+        } else {
+          available.push({
+            uuid: singleCoupon.uuid,
+            code: singleCoupon.code,
+            title: singleCoupon.coupon_title,
+            title_ar: singleCoupon.coupon_title_ar,
+            expiry_date: singleCoupon.date_to,
+          });
+        }
+      }
+    }
+
+    const couponsForAllUser = await this.couponsRepository.find({
+      where: [{ all_users: 1, status: 1 }],
+    });
+
+    if (couponsForAllUser.length) {
+      for (let index = 0; index <= couponsForAllUser.length - 1; index++) {
+        const singleCoupon = couponsForAllUser[index];
+        if (singleCoupon.date_to && singleCoupon.date_to < today) {
+          expired.push({
+            uuid: singleCoupon.uuid,
+            code: singleCoupon.code,
+            title: singleCoupon.coupon_title,
+            title_ar: singleCoupon.coupon_title_ar,
+            expiry_date: singleCoupon.date_to,
+          });
+        } else {
+          available.push({
+            uuid: singleCoupon.uuid,
+            code: singleCoupon.code,
+            title: singleCoupon.coupon_title,
+            title_ar: singleCoupon.coupon_title_ar,
+            expiry_date: singleCoupon.date_to,
+          });
+        }
       }
     }
 
