@@ -55,7 +55,7 @@ export class Customer {
   DOB: Date;
 
   @Column({ default: 0 })
-  status: 0 | 1;
+  status: 0 | 1 | 3;
 
   @Column({ nullable: true })
   country: string;

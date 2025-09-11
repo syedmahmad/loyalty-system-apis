@@ -18,6 +18,7 @@ import {
   WalletTransactionType,
 } from '../entities/wallet-transaction.entity';
 import { Wallet } from '../entities/wallet.entity';
+import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class WalletService {
@@ -164,6 +165,7 @@ export class WalletService {
       wallet: { id: dto.wallet_id } as any,
       unlock_date: unlockDate,
       expiry_date: expiryDate,
+      uuid: uuidv4(),
     };
 
     if (dto.wallet_order_id) {

@@ -1,0 +1,439 @@
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { GetCustomerDataDto } from '../dto/burning.dto';
+import { Customer } from 'src/customers/entities/customer.entity';
+import { Wallet } from 'src/wallet/entities/wallet.entity';
+import {
+  WalletTransaction,
+  WalletTransactionStatus,
+  WalletTransactionType,
+} from 'src/wallet/entities/wallet-transaction.entity';
+import { TiersService } from 'src/tiers/tiers/tiers.service';
+import { decrypt, encrypt } from 'src/helpers/encryption';
+import { Rule } from 'src/rules/entities/rules.entity';
+import { WalletService } from 'src/wallet/wallet/wallet.service';
+
+@Injectable()
+export class BurningService {
+  constructor(
+    @InjectRepository(Customer)
+    private readonly customerRepo: Repository<Customer>,
+
+    @InjectRepository(Wallet)
+    private readonly walletRepo: Repository<Wallet>,
+
+    @InjectRepository(WalletTransaction)
+    private readonly walletTxnRepo: Repository<WalletTransaction>,
+
+    @InjectRepository(Rule)
+    private readonly ruleRepo: Repository<Rule>,
+
+    private readonly tiersService: TiersService,
+    private readonly walletService: WalletService,
+  ) {}
+
+  // #region getCustomerData Service
+  async getCustomerData(dto: GetCustomerDataDto) {
+    // Step 1: Encrypt phone number
+    const hashedPhone = encrypt(dto.customer_phone_number);
+
+    // Step 2: Find customer (by uuid or phone hash)
+    const customer = await this.customerRepo.findOne({
+      where: [
+        { uuid: dto.custom_customer_unique_id },
+        { hashed_number: hashedPhone },
+      ],
+    });
+
+    if (!customer) {
+      throw new NotFoundException('Customer not found');
+    }
+
+    if (customer.status === 0) {
+      throw new NotFoundException('Customer is inactive');
+    }
+
+    if (customer.status === 3) {
+      throw new NotFoundException('Customer is deleted');
+    }
+
+    // Step 3: Fetch customer wallet
+    const wallet = await this.walletRepo.findOne({
+      where: { customer: { id: customer.id } },
+    });
+
+    // Default to 0 if no wallet found
+    const loyaltyPoints = wallet?.available_balance ?? 0;
+
+    // Step 4: Calculate transactions (amount + count)
+    const transactions = await this.walletTxnRepo.find({
+      where: {
+        customer: { id: customer.id },
+        status: WalletTransactionStatus.ACTIVE,
+        wallet: { id: wallet.id },
+      },
+      select: ['amount'],
+    });
+
+    // Calculate the total amount of all active transactions by adding up the "amount" field of each transaction
+    const totalAmount = transactions.reduce(
+      (sum, txn) => sum + Number(txn.amount), // add current transaction's amount to the running total
+      0,
+    );
+
+    // Count how many active transactions exist for this customer
+    const totalCount = transactions.length;
+
+    // Step 5: Get current tier using our TierService
+    const tierResult = await this.tiersService.getCurrentCustomerTier(
+      customer.id,
+    );
+
+    // Step 6: Build response
+    return {
+      success: true,
+      message: 'Customer details fetched successfully',
+      result: {
+        customer_name: customer.name,
+        custom_customer_first_name: customer.first_name,
+        custom_customer_last_name: customer.last_name,
+        custom_customer_unique_id: customer.uuid,
+        customer_referral_code: customer.referral_code,
+        custom_customer_loyalty_points: loyaltyPoints,
+        custom_total_transaction_amount: totalAmount,
+        custom_total_transaction_count: totalCount,
+        customer_tier: tierResult?.tier?.name ?? null,
+      },
+      errors: [],
+    };
+  }
+  // #endregion
+
+  //#region Burn Transaction
+  /**
+   * Handles burning loyalty points for a given transaction.
+   *
+   * Flow:
+   *  1. Validate customer (exists + active).
+   *  2. Get customer's wallet and active burn rules.
+   *  3. Match the correct rule based on transaction amount.
+   *  4. Calculate burnable points and discount:
+   *      - Limited by wallet balance and max redemption limit.
+   *      - Discount capped by max burn percentage on invoice.
+   *  5. Create burn transaction in the wallet.
+   *  6. Return structured response with details.
+   */
+  async burnTransaction(body) {
+    //#region Step 1: Extract request body
+    const {
+      customer_id,
+      customer_phone_number,
+      transaction_amount,
+      from_app,
+      remarks,
+    } = body;
+
+    const hashedPhone = encrypt(customer_phone_number);
+
+    //#endregion
+
+    try {
+      //#region Step 2: Find customer
+      const customer = await this.customerRepo.findOne({
+        where: [{ uuid: customer_id }, { hashed_number: hashedPhone }],
+        relations: ['tenant', 'business_unit'],
+      });
+
+      if (!customer) {
+        throw new NotFoundException(`Customer not found`);
+      }
+
+      if (customer.status === 0) {
+        throw new BadRequestException(`Customer is inactive`);
+      }
+
+      if (customer.status === 3) {
+        throw new BadRequestException(`Customer is deleted`);
+      }
+
+      //#endregion
+
+      //#region Step 3: Get customer wallet
+      const wallet = await this.walletService.getSingleCustomerWalletInfo(
+        customer.id,
+        customer.business_unit.id,
+      );
+
+      if (!wallet) {
+        throw new NotFoundException(`Customer wallet not configured`);
+      }
+      //#endregion
+
+      //#region Step 4: Get active burn rules
+      const rules = await this.ruleRepo.find({
+        where: {
+          rule_type: 'burn',
+          tenant: { id: customer.tenant.id },
+        },
+      });
+
+      if (!rules.length) {
+        throw new NotFoundException(`Rules not found`);
+      }
+
+      // Pick the first rule that matches transaction amount
+      let matchedRule: Rule | undefined;
+      for (const rule of rules) {
+        if (transaction_amount >= rule.min_amount_spent) {
+          matchedRule = rule;
+          break;
+        }
+      }
+
+      if (!matchedRule) {
+        throw new BadRequestException(
+          `No applicable burn rule for transaction amount`,
+        );
+      }
+      //#endregion
+
+      //#region Step 5: Calculate burnable points and discount
+      // Step 5.1: Start with min(wallet balance, max redemption limit)
+      let pointsToBurn = Math.min(
+        wallet.available_balance,
+        matchedRule.max_redeemption_points_limit,
+      );
+
+      // Step 5.2: Convert points into discount
+      let discountAmount = pointsToBurn * matchedRule.points_conversion_factor;
+
+      // Step 5.3: Calculate allowed maximum discount based on % of invoice
+      const maxAllowedDiscount =
+        (transaction_amount * matchedRule.max_burn_percent_on_invoice) / 100;
+
+      // Step 5.4: If discount exceeds allowed % cap, adjust both discount and points
+      if (discountAmount > maxAllowedDiscount) {
+        discountAmount = maxAllowedDiscount;
+        pointsToBurn = Math.floor(
+          discountAmount / matchedRule.points_conversion_factor,
+        );
+      }
+      //#endregion
+
+      //#region Step 6: Create burn transaction in wallet
+      const burnPayload = {
+        customer_id: customer.id,
+        business_unit_id: customer.business_unit.id,
+        wallet_id: wallet.id,
+        type: WalletTransactionType.BURN,
+        amount: pointsToBurn,
+        status: WalletTransactionStatus.PENDING,
+        source_type: matchedRule.name,
+        source_id: matchedRule.id,
+        description: remarks
+          ? remarks
+          : `Burned ${pointsToBurn} points for discount of ${discountAmount} on amount ${transaction_amount}`,
+        external_program_type: from_app ? from_app : null,
+      };
+
+      const tx = await this.walletService.addTransaction(
+        {
+          ...burnPayload,
+          wallet_order_id: null,
+          wallet_id: wallet?.id,
+          business_unit_id: customer?.business_unit?.id,
+        },
+        customer?.id,
+        true,
+      );
+      //#endregion
+
+      //#region Step 7: Build and return response
+      return {
+        success: true,
+        message: `Burn successful: ${pointsToBurn} points burned for discount of ${discountAmount}`,
+        result: {
+          customer_id: customer.uuid,
+          customer_phone_number,
+          transaction_id: tx.id,
+          transaction_amount: tx.amount,
+          max_burn_point: matchedRule.max_redeemption_points_limit,
+          max_burn_amount: discountAmount,
+          redemption_factor: matchedRule.points_conversion_factor,
+        },
+        errors: [],
+      };
+      //#endregion
+    } catch (error) {
+      //#region Step 8: Error handling
+      throw new BadRequestException({
+        success: false,
+        message: 'Failed to burn transaction',
+        result: null,
+        errors: error.message,
+      });
+      //#endregion
+    }
+  }
+  //#endregion
+
+  //#region Confirm Burn Transaction
+  /**
+   * Confirms a pending burn transaction by applying the provided burn points.
+   *
+   * Flow:
+   *  1. Validate transaction exists (PENDING).
+   *  2. Validate customer + wallet.
+   *  3. Apply burn points from payload (capped by wallet balance).
+   *  4. Recalculate discount and final amount.
+   *  5. Update transaction status to ACTIVE.
+   *  6. Return structured response.
+   */
+  async confirmBurnTransaction(body) {
+    //#region Step 1: Extract request body
+    const { transaction_id, burn_point, coupon_code } = body;
+    //#endregion
+
+    try {
+      //#region Step 2: Find existing pending transaction
+      const transaction = await this.walletTxnRepo.findOne({
+        where: { uuid: transaction_id },
+        relations: ['customer'],
+      });
+
+      if (!transaction) {
+        throw new NotFoundException(`Transaction not found`);
+      }
+
+      if (transaction.status !== WalletTransactionStatus.PENDING) {
+        throw new BadRequestException(`Transaction already processed`);
+      }
+      //#endregion
+
+      //#region Step 3: Find customer & wallet
+      const customer = await this.customerRepo.findOne({
+        where: { id: transaction.customer.id },
+        relations: ['tenant', 'business_unit'],
+      });
+
+      if (!customer) {
+        throw new NotFoundException(`Customer not found`);
+      }
+
+      if (customer.status === 0) {
+        throw new BadRequestException(`Customer is inactive`);
+      }
+
+      if (customer.status === 3) {
+        throw new BadRequestException(`Customer is deleted`);
+      }
+
+      const wallet = await this.walletService.getSingleCustomerWalletInfo(
+        customer.id,
+        customer.business_unit.id,
+      );
+
+      if (!wallet) {
+        throw new NotFoundException(`Customer wallet not configured`);
+      }
+      //#endregion
+
+      //#region Step 4: Validate burn points & calculate discount
+      const appliedBurnPoints = Math.min(
+        wallet.available_balance,
+        Number(burn_point),
+      );
+
+      // fetch conversion factor from rule linked to transaction
+      const rule = await this.ruleRepo.findOne({
+        where: { id: transaction.source_id },
+      });
+
+      if (!rule) {
+        throw new NotFoundException(`Burn rule not found for transaction`);
+      }
+
+      if (wallet.available_balance < burn_point) {
+        throw new BadRequestException('Insufficient Points balance');
+      }
+
+      // 1) Cap by user's available balance and rule's max redemption limit
+      let pointsToBurn = Math.min(
+        burn_point,
+        wallet.available_balance,
+        rule.max_redeemption_points_limit,
+      );
+
+      // 2) Convert points to monetary discount
+      let discountAmount = pointsToBurn * rule.points_conversion_factor;
+
+      // 3) Calculate percentage cap (max allowed discount based on invoice)
+      const maxAllowedDiscount =
+        (transaction.amount * (rule.max_burn_percent_on_invoice ?? 0)) / 100;
+
+      // 4) If calculated discount is greater than allowed percentage cap,
+      //    cap the discount and recalculate the points to burn accordingly.
+      if (discountAmount > maxAllowedDiscount) {
+        // cap discount
+        discountAmount = maxAllowedDiscount;
+
+        // recompute points needed for this capped discount
+        // floor to ensure we don't try to burn fractional points
+        pointsToBurn = Math.floor(
+          discountAmount / rule.points_conversion_factor,
+        );
+
+        // recalc discountAmount from floored points (to keep values consistent)
+        discountAmount = pointsToBurn * rule.points_conversion_factor;
+      }
+
+      // Ensure non-negative final amount
+      const finalAmount = Math.max(0, transaction.amount - discountAmount);
+      //#endregion
+
+      //#region Step 5: Update transaction
+      transaction.point_balance = appliedBurnPoints; // ✅ store actual burned points here
+      transaction.status = WalletTransactionStatus.ACTIVE;
+      transaction.description = coupon_code
+        ? `Applied coupon ${coupon_code}, burned ${appliedBurnPoints} points for discount of ${discountAmount}`
+        : `Confirmed burn of ${appliedBurnPoints} points for discount of ${discountAmount}`;
+      transaction.external_program_type =
+        transaction.external_program_type ?? null;
+
+      const updatedTx = await this.walletTxnRepo.save(transaction);
+      //#endregion
+
+      //#region Step 6: Build and return response
+      return {
+        success: true,
+        message: 'Your transaction has been completed successfully',
+        result: {
+          customer_id: customer.uuid,
+          customer_phone_number: decrypt(customer.hashed_number),
+          transaction_id: updatedTx.uuid,
+          transaction_amount: transaction.amount,
+          loyalty_discount: discountAmount,
+          final_amount: finalAmount > 0 ? finalAmount : 0,
+          loyalty_points_burned: appliedBurnPoints,
+        },
+        errors: [],
+      };
+      //#endregion
+    } catch (error) {
+      //#region Step 7: Error handling
+      throw new BadRequestException({
+        success: false,
+        message: 'Failed to confirm transaction',
+        result: null,
+        errors: error.message,
+      });
+      //#endregion
+    }
+  }
+  //#endregion
+}
