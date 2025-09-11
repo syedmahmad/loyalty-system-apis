@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { Customer } from 'src/customers/entities/customer.entity';
@@ -16,50 +16,54 @@ export class ReferralService {
 
   async getReferralHistory(customerId: string) {
     // find the customer
+    // Optimized: combine queries, reduce lookups, and use a map for referees
     const customer = await this.customerRepo.findOne({
       where: { uuid: customerId },
-      select: ['id', 'name', 'email', 'phone', 'referral_code'],
+      select: ['id', 'name', 'email', 'phone', 'referral_code', 'status'],
     });
 
-    if (!customer) {
-      throw new Error('Customer not found');
-    }
+    if (!customer) throw new BadRequestException('Customer not found');
+    if (customer.status === 0)
+      throw new BadRequestException('Customer is inactive');
+    if (customer.status === 3)
+      throw new BadRequestException('Customer is deleted');
 
-    if (customer.status === 0) {
-      throw new Error('Customer is inactive');
-    }
-
-    if (customer.status === 3) {
-      throw new Error('Customer is deleted');
-    }
-
-    // load referral history (people who joined via this customer)
+    // Get all referrals and referees in one go
     const referrals = await this.referralRepo.find({
       where: { referrer_id: customer.id },
-      relations: ['business_unit'], // add more relations if needed
+      relations: ['business_unit'],
       order: { created_at: 'DESC' },
     });
 
-    // map referee details
-    const refereeIds = referrals.map((r) => r.referee_id);
+    if (!referrals.length) {
+      return {
+        success: true,
+        message: 'Referral history retrieved successfully',
+        result: {
+          referral_code: customer.referral_code,
+          history: [],
+        },
+        errors: [],
+      };
+    }
 
-    const referees =
-      refereeIds.length > 0
-        ? await this.customerRepo.find({
-            where: { id: In(refereeIds) },
-            select: ['id', 'name', 'email', 'phone', 'external_customer_id'],
-          })
-        : [];
+    const refereeIds = Array.from(new Set(referrals.map((r) => r.referee_id)));
+    const referees = await this.customerRepo.find({
+      where: { id: In(refereeIds) },
+      // select: ['id', 'name', 'email', 'phone'],
+      select: ['id', 'name'],
+    });
 
-    // build response
+    // Build a map for quick lookup
+    const refereeMap = new Map(referees.map((r) => [r.id, r]));
+
     return {
       success: true,
       message: 'Referral history retrieved successfully',
       result: {
         referral_code: customer.referral_code,
         history: referrals.map((ref) => ({
-          referee_name:
-            referees.find((c) => c.id === ref.referee_id)?.name || null,
+          referee_name: refereeMap.get(ref.referee_id)?.name || null,
           referrer_points: ref.referrer_points,
           referee_points: ref.referee_points,
           created_at: ref.created_at,
