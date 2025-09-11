@@ -34,5 +34,6 @@ import { WalletOrder } from 'src/wallet/entities/wallet-order.entity';
   ],
   controllers: [TiersController],
   providers: [TiersService, OciService, WalletService],
+  exports: [TiersService],
 })
 export class TiersModule {}

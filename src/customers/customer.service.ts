@@ -82,7 +82,6 @@ export class CustomerService {
     private WalletOrderrepo: Repository<WalletOrder>,
     @InjectRepository(WalletSettings)
     private walletSettingsRepo: Repository<WalletSettings>,
-    private readonly campaignsService: CampaignsService,
     @InjectRepository(CampaignCustomerSegment)
     private readonly campaignCustomerSegmentRepo: Repository<CampaignCustomerSegment>,
     @InjectRepository(CampaignRule)
