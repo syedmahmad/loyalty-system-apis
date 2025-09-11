@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString, Matches } from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString, Matches } from 'class-validator';
 
 export class GetOtpDto {
   @IsNotEmpty()
@@ -9,6 +9,7 @@ export class GetOtpDto {
   mobileNumber: string;
 
   @IsString()
+  @IsOptional()
   referral_code?: string;
 
   @IsNotEmpty()
@@ -25,6 +26,7 @@ export class VerifyOtpDto {
   otp: string;
 
   @IsString()
+  @IsOptional()
   referral_code?: string;
 
   @IsNotEmpty()

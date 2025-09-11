@@ -28,7 +28,6 @@ export class CustomerBootstrapService implements OnApplicationBootstrap {
     const customersNeedingHash = await this.customerRepo.find({
       where: { hashed_number: IsNull() },
     });
-    console.log('customersNeedingHash', customersNeedingHash);
     // If there are no customers needing hash, stop further execution
     if (!customersNeedingHash || customersNeedingHash.length === 0) {
       console.log('No customers needing hash. Stopping bootstrap process.');
