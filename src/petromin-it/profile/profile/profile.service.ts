@@ -7,6 +7,7 @@ import {
 } from '../dto/update-profile.dto';
 import { Customer } from 'src/customers/entities/customer.entity';
 import { OciService } from 'src/oci/oci.service';
+// import { CustomerService } from 'src/customers/customer.service';
 
 @Injectable()
 export class CustomerProfileService {
@@ -14,6 +15,7 @@ export class CustomerProfileService {
     @InjectRepository(Customer)
     private readonly customerRepo: Repository<Customer>,
     private readonly ociService: OciService,
+    // private readonly customerService: CustomerService,
   ) {}
 
   async getProfile(customerId: string) {
@@ -134,6 +136,38 @@ export class CustomerProfileService {
         // 'notify_tier',
       ],
     });
+
+    // Additional Points for Phone
+    // if (profile.email) {
+    //   const earnAddPhonePoints = {
+    //     customer_id: customer.uuid,
+    //     event: 'Additional Points for Email', // this is important what if someone changes this event name form Frontend
+    //     tenantId: String(customer.tenant.id),
+    //     BUId: String(customer.business_unit.id),
+    //   };
+    //   try {
+    //     const earnedPoints =
+    //       await this.customerService.earnWithEvent(earnAddPhonePoints);
+    //     // log the external call
+    //     const logs = await this.logRepo.create({
+    //       requestBody: JSON.stringify(earnAddPhonePoints),
+    //       responseBody: JSON.stringify(earnedPoints),
+    //       url: earnAddPhonePoints.event,
+    //       method: 'POST',
+    //       statusCode: 200,
+    //     } as Log);
+    //     await this.logRepo.save(logs);
+    //   } catch (err) {
+    //     const logs = await this.logRepo.create({
+    //       requestBody: JSON.stringify(earnAddPhonePoints),
+    //       responseBody: JSON.stringify(err),
+    //       url: earnAddPhonePoints.event,
+    //       method: 'POST',
+    //       statusCode: 200,
+    //     } as Log);
+    //     await this.logRepo.save(logs);
+    //   }
+    // }
 
     let decryptedEmail;
     let decryptedPhone;
