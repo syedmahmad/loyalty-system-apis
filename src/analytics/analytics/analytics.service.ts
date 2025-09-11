@@ -144,8 +144,6 @@ export class LoyaltyAnalyticsService {
 
     const orders = await this.walletOrderRepository.find({ where });
 
-    console.log('orders', orders);
-
     const itemMap = new Map<string, number>();
     for (const order of orders) {
       const items = Array.isArray(order.items)

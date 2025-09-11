@@ -40,7 +40,6 @@ export class CouponTypeService {
   }
 
   async update(id: number, dto: UpdateCouponTypeDto) {
-    console.log('dto ::', dto);
     const coupon = await this.findOne(id);
     const updatedCoupon = await this.couponTypeRepository.save(coupon);
     return updatedCoupon;

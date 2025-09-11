@@ -380,8 +380,6 @@ export class CampaignsService {
         ...rest
       } = campaign;
 
-      console.log('///////////////////////', rules);
-
       return {
         ...omitCritical(rest),
         business_unit: business_unit ? omitCritical(business_unit) : null,

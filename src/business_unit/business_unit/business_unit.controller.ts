@@ -74,8 +74,6 @@ export class BusinessUnitsController {
     if (!user) {
       throw new BadRequestException('user not found against provided token');
     }
-
-    console.log('.///////////', client_id, name, user);
     return await this.service.findAll(client_id, name, user.id);
   }
 

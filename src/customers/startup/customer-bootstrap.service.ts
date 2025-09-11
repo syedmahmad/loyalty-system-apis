@@ -22,7 +22,7 @@ export class CustomerBootstrapService implements OnApplicationBootstrap {
 
   async onApplicationBootstrap() {
     console.log(
-      '/////////////////Encrpting email and phone and adding hash////////////////////////',
+      'Starting Encrpting email and phone and adding hash////////////',
     );
     //1. Fetch all customers where hashed_number is null
     const customersNeedingHash = await this.customerRepo.find({
@@ -56,7 +56,7 @@ export class CustomerBootstrapService implements OnApplicationBootstrap {
       }
     }
     console.log(
-      '/////////////////Encrpting email and phone and adding hash////////////////////////',
+      'Ending Encrpting email and phone and adding hash////////////////////////',
     );
     // const customers = await this.customerRepo.find({
     //   where: {

@@ -59,7 +59,6 @@ export class OciService {
 
       // Send the encryption request
       const encryptResponse = await this.kmsClient.encrypt(encryptRequest);
-      //console.log('Encryption succeeded. Response:', encryptResponse);
       return encryptResponse.encryptedData.ciphertext; // Return the encrypted response
     } catch (error) {
       console.error('Encryption failed with error:', error);
