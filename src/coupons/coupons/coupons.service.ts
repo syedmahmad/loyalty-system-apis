@@ -127,7 +127,7 @@ export class CouponsService {
       const savedCoupon = await repo.save(coupon);
 
       // Assign customer segments
-      if (dto.customer_segment_ids?.length) {
+      if (dto.customer_segment_ids?.length && dto.all_users == 0) {
         const segments = await this.segmentRepository.findBy({
           id: In(dto.customer_segment_ids),
         });
@@ -421,15 +421,61 @@ export class CouponsService {
       const toAdd = incomingSegmentIds.filter(
         (sid) => !existingIds.includes(sid),
       );
-      const toRemove = existingIds.filter(
+
+      let toRemove = existingIds.filter(
         (sid) => !incomingSegmentIds.includes(sid),
       );
 
+      if (dto.all_users == 1 && incomingSegmentIds.length) {
+        toRemove = incomingSegmentIds;
+      }
+
       if (toRemove.length) {
-        await queryRunner.manager.delete(CouponCustomerSegment, {
-          coupon: { id },
-          segment: In(toRemove),
+        // Delete all coupon_customer_segments
+        const toDelete = await queryRunner.manager.find(CouponCustomerSegment, {
+          where: { coupon: { id }, segment: In(toRemove) },
         });
+        if (toDelete.length) {
+          await queryRunner.manager.remove(CouponCustomerSegment, toDelete);
+        }
+
+        /* Delete all user_coupon
+        Fetch all customers that belong to the given customer segments */
+        const customerFromSegments =
+          await this.customerSegmentMemberRepository.find({
+            where: {
+              segment_id: In(toRemove),
+            },
+          });
+
+        if (customerFromSegments.length) {
+          const customerArr = [];
+          // Loop through each customer that belongs to the segments
+          for (let index = 0; index < customerFromSegments.length; index++) {
+            const eachCustomer = customerFromSegments[index];
+
+            // Ensure the customer exists in the customer table
+            const customer = await this.customerRepo.findOne({
+              where: { id: eachCustomer.customer_id },
+              relations: ['business_unit'],
+            });
+
+            // Skip if the customer does not exist
+            if (!customer) {
+              continue;
+            }
+
+            customerArr.push(customer.id);
+          }
+
+          const customersToDelete = await queryRunner.manager.find(UserCoupon, {
+            where: { coupon_id: id, customer: In(customerArr) },
+          });
+
+          if (customersToDelete.length) {
+            await queryRunner.manager.remove(UserCoupon, customersToDelete);
+          }
+        }
       }
 
       if (toAdd.length) {

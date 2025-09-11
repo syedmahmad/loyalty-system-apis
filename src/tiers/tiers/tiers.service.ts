@@ -507,6 +507,10 @@ export class TiersService {
         throw new NotFoundException('Customer is inactive');
       }
 
+      if (customer.status === 3) {
+        throw new NotFoundException('Customer is deleted');
+      }
+
       const wallet = await this.walletService.getSingleCustomerWalletInfoById(
         customer.id,
       );
