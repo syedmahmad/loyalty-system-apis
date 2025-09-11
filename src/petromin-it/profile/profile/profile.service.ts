@@ -78,6 +78,7 @@ export class CustomerProfileService {
   async updateProfile(customerId: string, dto: UpdateProfileDto) {
     const customer = await this.customerRepo.findOne({
       where: { uuid: customerId },
+      relations: ['tenant', 'business_unit'],
     });
 
     if (!customer) throw new NotFoundException('Customer not found');
