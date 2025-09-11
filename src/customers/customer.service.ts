@@ -2662,6 +2662,7 @@ export class CustomerService {
 
       if (
         customer.status == 0 ||
+        customer.status == 3 ||
         customer?.is_delete_requested == 1 ||
         customer?.deletion_status == 1
       ) {
@@ -2746,6 +2747,10 @@ export class CustomerService {
 
       if (customer.status == 0) {
         throw new BadRequestException(`Customer is inactive`);
+      }
+
+      if (customer.status === 3) {
+        throw new NotFoundException('Customer is deleted');
       }
 
       const decryptedPhone = await this.ociService.decryptData(customer.phone);
@@ -2889,6 +2894,10 @@ export class CustomerService {
         throw new BadRequestException(`Customer is inactive`);
       }
 
+      if (customer.status === 3) {
+        throw new NotFoundException('Customer is deleted');
+      }
+
       const wallet = await this.walletService.getSingleCustomerWalletInfo(
         customer.id,
         customer.business_unit.id,
@@ -2958,6 +2967,10 @@ export class CustomerService {
         throw new BadRequestException(`Customer is inactive`);
       }
 
+      if (customer.status === 3) {
+        throw new NotFoundException('Customer is deleted');
+      }
+
       const wallet = await this.walletService.getSingleCustomerWalletInfo(
         customer.id,
         customer.business_unit.id,
@@ -3024,6 +3037,10 @@ export class CustomerService {
 
       if (customer.status == 0) {
         throw new BadRequestException(`Customer is inactive`);
+      }
+
+      if (customer.status === 3) {
+        throw new NotFoundException('Customer is deleted');
       }
 
       const wallet = await this.walletService.getSingleCustomerWalletInfo(

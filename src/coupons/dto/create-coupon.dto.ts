@@ -48,4 +48,7 @@ export class CreateCouponDto {
   terms_and_conditions_ar?: string;
 
   created_by?: number;
+
+  @IsInt()
+  all_users: number;
 }
