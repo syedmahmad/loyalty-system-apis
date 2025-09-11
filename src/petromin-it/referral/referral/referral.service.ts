@@ -18,11 +18,19 @@ export class ReferralService {
     // find the customer
     const customer = await this.customerRepo.findOne({
       where: { uuid: customerId },
-      select: ['name', 'email', 'phone', 'referral_code'],
+      select: ['id', 'name', 'email', 'phone', 'referral_code'],
     });
 
     if (!customer) {
       throw new Error('Customer not found');
+    }
+
+    if (customer.status === 0) {
+      throw new Error('Customer is inactive');
+    }
+
+    if (customer.status === 3) {
+      throw new Error('Customer is deleted');
     }
 
     // load referral history (people who joined via this customer)
