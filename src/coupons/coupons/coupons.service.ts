@@ -157,7 +157,8 @@ export class CouponsService {
           });
 
         if (customerFromSegments.length) {
-          const customerCoupons: CustomerCoupon[] = [];
+          const userCoupons: UserCoupon[] = [];
+
           // Loop through each customer that belongs to the segments
           for (let index = 0; index < customerFromSegments.length; index++) {
             const eachCustomer = customerFromSegments[index];
@@ -165,22 +166,29 @@ export class CouponsService {
             // Ensure the customer exists in the customer table
             const customer = await this.customerRepo.findOne({
               where: { id: eachCustomer.customer_id },
+              relations: ['business_unit'],
             });
 
             // Skip if the customer does not exist
             if (!customer) {
               continue;
             }
-            const customerCoupon = this.customerCouponRepo.create({
+
+            const userCoupon = this.userCouponRepo.create({
+              coupon_code: savedCoupon.code,
+              status: CouponStatus.ISSUED,
               customer: { id: customer.id },
-              coupon: { id: savedCoupon.id },
+              business_unit: { id: customer.business_unit.id },
+              issued_from_type: 'coupon',
+              issued_from_id: savedCoupon.id,
+              coupon_id: savedCoupon?.id,
             });
-            customerCoupons.push(customerCoupon);
+            userCoupons.push(userCoupon);
           }
 
           // Save all the created customerCoupons in one go (bulk insert)
-          if (customerCoupons.length) {
-            await queryRunner.manager.save(CustomerCoupon, customerCoupons);
+          if (userCoupons.length) {
+            await queryRunner.manager.save(UserCoupon, userCoupons);
           }
         }
       }
@@ -449,7 +457,7 @@ export class CouponsService {
           });
 
         if (customerFromSegments.length) {
-          const customerCoupons: CustomerCoupon[] = [];
+          const userCoupons: UserCoupon[] = [];
           // Loop through each customer that belongs to the segments
           for (let index = 0; index < customerFromSegments.length; index++) {
             const eachCustomer = customerFromSegments[index];
@@ -457,22 +465,29 @@ export class CouponsService {
             // Ensure the customer exists in the customer table
             const customer = await this.customerRepo.findOne({
               where: { id: eachCustomer.customer_id },
+              relations: ['business_unit'],
             });
 
             // Skip if the customer does not exist
             if (!customer) {
               continue;
             }
-            const customerCoupon = this.customerCouponRepo.create({
+
+            const userCoupon = this.userCouponRepo.create({
+              coupon_code: coupon?.code,
+              status: CouponStatus.ISSUED,
               customer: { id: customer.id },
-              coupon: { id: id },
+              business_unit: { id: customer.business_unit.id },
+              issued_from_type: 'coupon',
+              issued_from_id: coupon?.id,
+              coupon_id: coupon?.id,
             });
-            customerCoupons.push(customerCoupon);
+            userCoupons.push(userCoupon);
           }
 
           // Save all the created customerCoupons in one go (bulk insert)
-          if (customerCoupons.length) {
-            await queryRunner.manager.save(CustomerCoupon, customerCoupons);
+          if (userCoupons.length) {
+            await queryRunner.manager.save(UserCoupon, userCoupons);
           }
         }
       }
