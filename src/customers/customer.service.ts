@@ -55,7 +55,6 @@ import { QrcodesService } from '../qr_codes/qr_codes/qr_codes.service';
 import { BulkCreateCustomerDto } from './dto/create-customer.dto';
 import { CustomerActivity } from './entities/customer-activity.entity';
 import { Customer } from './entities/customer.entity';
-import { CustomerCoupon } from './entities/customer-coupon.entity';
 import { GvrEarnBurnWithEventsDto } from 'src/customers/dto/gvr_earn_burn_with_event.dto';
 import { Tier } from 'src/tiers/entities/tier.entity';
 import { isValidUrl } from 'src/helpers/helper';
@@ -100,9 +99,6 @@ export class CustomerService {
 
     @InjectRepository(UserCoupon)
     private userCouponRepo: Repository<UserCoupon>,
-
-    @InjectRepository(CustomerCoupon)
-    private customerCouponRepo: Repository<CustomerCoupon>,
 
     @InjectRepository(Tier)
     private tierRepo: Repository<Tier>,
@@ -2908,7 +2904,14 @@ export class CustomerService {
       }
 
       const [earnedData, total] = await this.txRepo.findAndCount({
-        select: ['id', 'amount', 'description', 'invoice_no', 'created_at'],
+        select: [
+          'id',
+          'amount',
+          'point_balance',
+          'description',
+          'invoice_no',
+          'created_at',
+        ],
         where: {
           type: WalletTransactionType.EARN,
           status: WalletTransactionStatus.ACTIVE,
@@ -2981,7 +2984,14 @@ export class CustomerService {
       }
 
       const [burnData, total] = await this.txRepo.findAndCount({
-        select: ['id', 'amount', 'description', 'invoice_no', 'created_at'],
+        select: [
+          'id',
+          'amount',
+          'point_balance',
+          'description',
+          'invoice_no',
+          'created_at',
+        ],
         where: {
           type: WalletTransactionType.BURN,
           status: WalletTransactionStatus.ACTIVE,
@@ -3018,6 +3028,7 @@ export class CustomerService {
     }
   }
 
+  // Combine earn burn transaction
   async transactionHistory(body, pageNumber, pgsize) {
     const { customer_id } = body;
     const page = Number(pageNumber) || 1;
@@ -3057,6 +3068,7 @@ export class CustomerService {
           'id',
           'type',
           'amount',
+          'point_balance',
           'description',
           'invoice_no',
           'created_at',

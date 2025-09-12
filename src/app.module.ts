@@ -29,7 +29,6 @@ import { GateWayLogModule } from './gateway-logs/log.module';
 import { decrypt } from './utils/decrypt';
 import { ScheduleModule } from '@nestjs/schedule';
 import { SchedulerModule } from './schedule/schedule.module';
-import { CustomerCoupon } from './customers/entities/customer-coupon.entity';
 import { OpenaiModule } from './openai/openai.module';
 import { AuthModule } from 'src/petromin-it/auth/auth.module';
 import { AxiosLoggerInterceptor } from 'src/interceptos/axios-request-log.interceptor';
@@ -86,7 +85,6 @@ import { ReferralModule } from './petromin-it/referral/referral.module';
     CustomerSegmentsModule,
     QrCodesModule,
     SchedulerModule,
-    CustomerCoupon,
     OpenaiModule,
     AuthModule,
     ReferralModule,

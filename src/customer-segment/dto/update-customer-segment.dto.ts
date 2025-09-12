@@ -1,4 +1,4 @@
-import { IsOptional, IsString } from 'class-validator';
+import { IsArray, IsOptional, IsString } from 'class-validator';
 
 export class UpdateCustomerSegmentDto {
   @IsOptional()
@@ -8,4 +8,8 @@ export class UpdateCustomerSegmentDto {
   @IsOptional()
   @IsString()
   description?: string;
+
+  @IsOptional()
+  @IsArray()
+  selected_customer_ids?: number[];
 }

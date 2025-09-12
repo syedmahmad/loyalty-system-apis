@@ -46,7 +46,6 @@ import {
   WalletTransactionType,
 } from 'src/wallet/entities/wallet-transaction.entity';
 import { OciService } from 'src/oci/oci.service';
-import { CustomerCoupon } from 'src/customers/entities/customer-coupon.entity';
 
 @Injectable()
 export class CouponsService {
@@ -110,9 +109,6 @@ export class CouponsService {
     private readonly walletService: WalletService,
     private readonly customerService: CustomerService,
     private readonly ociService: OciService,
-
-    @InjectRepository(CustomerCoupon)
-    private customerCouponRepo: Repository<CustomerCoupon>,
   ) {}
 
   async create(dto: CreateCouponDto, user: string) {
@@ -124,6 +120,8 @@ export class CouponsService {
       queryRunner.data = { user };
       const repo = queryRunner.manager.getRepository(Coupon);
       const coupon = repo.create(dto);
+
+      coupon.benefits = dto.benefits;
       const savedCoupon = await repo.save(coupon);
 
       // Assign customer segments
@@ -186,7 +184,7 @@ export class CouponsService {
             userCoupons.push(userCoupon);
           }
 
-          // Save all the created customerCoupons in one go (bulk insert)
+          // Save all the created UserCoupon in one go (bulk insert)
           if (userCoupons.length) {
             await queryRunner.manager.save(UserCoupon, userCoupons);
           }
@@ -531,7 +529,7 @@ export class CouponsService {
             userCoupons.push(userCoupon);
           }
 
-          // Save all the created customerCoupons in one go (bulk insert)
+          // Save all the created UserCoupon in one go (bulk insert)
           if (userCoupons.length) {
             await queryRunner.manager.save(UserCoupon, userCoupons);
           }
@@ -557,8 +555,58 @@ export class CouponsService {
       queryRunner.data = { user };
       const repo = queryRunner.manager.getRepository(Coupon);
       const coupon = await repo.findOne({ where: { id } });
-
       if (!coupon) throw new Error(`Coupon with id ${id} not found`);
+
+      /**Step 1: Get all coupon_customer_segments
+       *  Step 2: with segment.id find all customers
+       * Step 3: remove user from UserCoupon
+       * Step 4: remove coupon_customer_segments
+       */
+
+      // Step 1: Get all coupon_customer_segments
+      const couponCustomerSegmentsArr = [];
+      const couponCustomerSegments = await this.couponSegmentRepository.find({
+        where: { coupon: { id } },
+        relations: ['segment'],
+      });
+      for (let index = 0; index <= couponCustomerSegments.length - 1; index++) {
+        const eachSegment = couponCustomerSegments[index];
+
+        // Step 2: with segment.id find all customers
+        const customerFromSegments =
+          await this.customerSegmentMemberRepository.find({
+            where: {
+              segment_id: eachSegment.segment.id,
+            },
+          });
+
+        const customerIds = customerFromSegments.map(
+          (singleSegment) => singleSegment.customer_id,
+        );
+        const customersToDelete = await queryRunner.manager.find(UserCoupon, {
+          where: { coupon_id: id, customer: In(customerIds) },
+        });
+
+        // Step 3: remove user from UserCoupon
+        if (customersToDelete.length) {
+          await queryRunner.manager.remove(UserCoupon, customersToDelete);
+        }
+        couponCustomerSegmentsArr.push(eachSegment.id);
+      }
+
+      // Step 4: remove coupon_customer_segments
+      const idsToDeleteCouponCustomerSegments = await queryRunner.manager.find(
+        CouponCustomerSegment,
+        {
+          where: { id: In(couponCustomerSegmentsArr) },
+        },
+      );
+      if (idsToDeleteCouponCustomerSegments.length) {
+        await queryRunner.manager.remove(
+          CouponCustomerSegment,
+          idsToDeleteCouponCustomerSegments,
+        );
+      }
 
       coupon.status = 2;
       await repo.save(coupon);
@@ -1586,18 +1634,23 @@ export class CouponsService {
 
             for (let index = 0; index <= matchedCoupons.length - 1; index++) {
               const eachMatchedCoupon = matchedCoupons[index];
-
-              const isAlreadyAssigned = await this.customerCouponRepo.findOne({
+              const isAlreadyAssigned = await this.userCouponRepo.findOne({
                 where: {
                   customer: { id: customer.id },
-                  coupon: { id: eachMatchedCoupon.id },
+                  coupon_id: eachMatchedCoupon.id,
+                  status: CouponStatus.ISSUED,
                 },
               });
 
               if (!isAlreadyAssigned) {
-                await this.customerCouponRepo.save({
+                await this.userCouponRepo.save({
+                  coupon_code: eachMatchedCoupon.code,
+                  status: CouponStatus.ISSUED,
                   customer: { id: customer.id },
-                  coupon: { id: eachMatchedCoupon.id },
+                  business_unit: { id: wallet.business_unit.id },
+                  issued_from_type: 'coupon',
+                  issued_from_id: eachMatchedCoupon.id,
+                  coupon_id: eachMatchedCoupon?.id,
                 });
               }
             }
@@ -1618,8 +1671,18 @@ export class CouponsService {
     });
 
     if (!customer) throw new NotFoundException('Customer not found');
-    if (customer && customer.status == 0) {
-      throw new NotFoundException('Customer is inactive');
+    if (
+      (customer && customer.status == 0) ||
+      customer?.is_delete_requested == 1 ||
+      customer?.deletion_status == 1
+    ) {
+      throw new NotFoundException(
+        'This customer is no longer active or has been removed',
+      );
+    }
+
+    if (customer.status === 3) {
+      throw new NotFoundException('Customer is deleted');
     }
 
     const userCoupons = await this.userCouponRepo.find({

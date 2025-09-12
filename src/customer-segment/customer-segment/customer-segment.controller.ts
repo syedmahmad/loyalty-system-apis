@@ -20,6 +20,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CreateCustomerSegmentDto } from '../dto/create.dto';
 import { CustomerSegmentsService } from './customer-segment.service';
+import { UpdateCustomerSegmentDto } from '../dto/update-customer-segment.dto';
 
 @Controller('customer-segments')
 export class CustomerSegmentsController {
@@ -119,5 +120,30 @@ export class CustomerSegmentsController {
       throw new BadRequestException('user not found against provided token');
 
     return this.service.remove(segmentId, user.uuid);
+  }
+
+  @Put(':id')
+  async update(
+    @Param('id') id: string,
+    @Headers('user-secret') userSecret: string,
+    @Body() dto: UpdateCustomerSegmentDto,
+  ) {
+    if (!userSecret) {
+      throw new BadRequestException('user-secret not found in headers');
+    }
+
+    const decodedUser: any = jwt.decode(userSecret);
+
+    const user = await this.userRepository.findOne({
+      where: {
+        id: decodedUser.UserId,
+      },
+    });
+
+    if (!user) {
+      throw new BadRequestException('user not found against provided token');
+    }
+
+    return await this.service.update(+id, dto, user.uuid);
   }
 }

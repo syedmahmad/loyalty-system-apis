@@ -201,8 +201,16 @@ export class CustomerSegmentsService {
 
       repo.merge(segment, dto);
       const updated = await repo.save(segment);
-
       await queryRunner.commitTransaction();
+
+      if (updated.id) {
+        const customerIds = dto.selected_customer_ids || [];
+        for (let index = 0; index <= customerIds.length - 1; index++) {
+          const eachCustomerId = customerIds[index];
+          await this.addCustomerToSegment(updated.id, eachCustomerId);
+        }
+      }
+
       return updated;
     } catch (error) {
       await queryRunner.rollbackTransaction();
