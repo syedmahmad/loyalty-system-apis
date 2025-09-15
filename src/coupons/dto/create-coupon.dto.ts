@@ -1,4 +1,42 @@
-import { IsInt, IsString, IsOptional, Min, IsArray } from 'class-validator';
+import { Type } from 'class-transformer';
+import {
+  IsInt,
+  IsString,
+  IsOptional,
+  Min,
+  IsArray,
+  ValidateNested,
+} from 'class-validator';
+
+export class ConditionDto {
+  @IsInt()
+  id: number;
+
+  @IsString()
+  type: string;
+
+  @IsString()
+  operator: string;
+
+  @IsString()
+  value: string;
+
+  @IsOptional()
+  @IsInt()
+  tier?: number;
+
+  @IsOptional()
+  @IsInt()
+  make?: number;
+
+  @IsOptional()
+  @IsInt()
+  model?: number;
+
+  @IsOptional()
+  @IsInt()
+  variant?: number;
+}
 
 export class CreateCouponDto {
   @IsInt()
@@ -51,4 +89,9 @@ export class CreateCouponDto {
 
   @IsInt()
   all_users: number;
+
+  @IsOptional()
+  @ValidateNested({ each: true })
+  @Type(() => ConditionDto)
+  conditions?: ConditionDto[];
 }

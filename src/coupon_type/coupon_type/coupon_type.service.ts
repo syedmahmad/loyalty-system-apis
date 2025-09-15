@@ -19,9 +19,13 @@ export class CouponTypeService {
     return savedTier;
   }
 
-  async findAll() {
+  async findAll(id?: number) {
+    const whereClouse = { is_active: ActiveStatus.ACTIVE };
+    if (id) {
+      whereClouse['id'] = id;
+    }
     const couponTypes = await this.couponTypeRepository.find({
-      where: { is_active: ActiveStatus.ACTIVE },
+      where: whereClouse,
       order: { created_at: 'DESC' },
     });
 

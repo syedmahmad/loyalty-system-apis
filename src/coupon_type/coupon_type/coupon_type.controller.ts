@@ -6,6 +6,7 @@ import {
   Param,
   Delete,
   Put,
+  Query,
 } from '@nestjs/common';
 import { CouponTypeService } from './coupon_type.service';
 import { CreateCouponTypeDto } from '../dto/create-coupon-type.dto';
@@ -21,8 +22,8 @@ export class CouponTypeController {
   }
 
   @Get()
-  async findAll() {
-    return await this.service.findAll();
+  async findAll(@Query('id') id?: number) {
+    return await this.service.findAll(id);
   }
 
   @Get(':id')

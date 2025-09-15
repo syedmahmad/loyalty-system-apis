@@ -9,18 +9,23 @@ import {
   Post,
   Put,
   Query,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as jwt from 'jsonwebtoken';
+import { diskStorage } from 'multer';
+import { extname } from 'path';
 import { User } from 'src/users/entities/user.entity';
 import { AuthTokenGuard } from 'src/users/guards/authTokenGuard';
 import { Repository } from 'typeorm';
+import { CouponSyncDto } from '../dto/coupon-sync.dto';
 import { CreateCouponDto } from '../dto/create-coupon.dto';
+import { CustomerCouponsDto } from '../dto/customer-coupon.dto';
 import { UpdateCouponDto } from '../dto/update-coupon.dto';
 import { CouponsService } from './coupons.service';
-import { CustomerCouponsDto } from '../dto/customer-coupon.dto';
-import { CouponSyncDto } from '../dto/coupon-sync.dto';
 
 @Controller('coupons')
 export class CouponsController {
@@ -194,5 +199,45 @@ export class CouponsController {
   @Post('sync')
   async syncCoupons(@Body() body: CouponSyncDto) {
     return await this.service.syncCoupons(body);
+  }
+
+  @UseGuards(AuthTokenGuard)
+  @Post('upload')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: diskStorage({
+        destination: './uploads', // make sure folder exists
+        filename: (req, file, cb) => {
+          const uniqueSuffix =
+            Date.now() + '-' + Math.round(Math.random() * 1e9);
+          cb(
+            null,
+            file.fieldname + '-' + uniqueSuffix + extname(file.originalname),
+          );
+        },
+      }),
+    }),
+  )
+  async uploadFile(
+    @UploadedFile() file: any,
+    @Body('') body: CreateCouponDto,
+    @Headers('user-secret') userSecret: string,
+  ) {
+    if (!userSecret) {
+      throw new BadRequestException('user-secret not found in headers');
+    }
+    const decodedUser: any = jwt.decode(userSecret);
+
+    const user = await this.userRepository.findOne({
+      where: {
+        id: decodedUser.UserId,
+      },
+    });
+
+    if (!user) {
+      throw new BadRequestException('user not found against provided token');
+    }
+
+    return this.service.importFromCsv(file.path, body, user.uuid);
   }
 }

@@ -7,6 +7,9 @@ import {
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import axios from 'axios';
 import * as dayjs from 'dayjs';
+import * as fs from 'fs';
+import * as fastcsv from 'fast-csv';
+import { v4 as uuidv4 } from 'uuid';
 import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
 import { CouponTypeService } from 'src/coupon_type/coupon_type/coupon_type.service';
 import { CustomerSegment } from 'src/customer-segment/entities/customer-segment.entity';
@@ -1776,5 +1779,167 @@ export class CouponsService {
       result: coupons,
       errors: [],
     };
+  }
+
+  async importFromCsv(filePath: string, body: any, user: string) {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    queryRunner.data = { user };
+    const repo = queryRunner.manager.getRepository(Coupon);
+
+    return new Promise((resolve, reject) => {
+      const coupons = [];
+
+      fs.createReadStream(filePath)
+        .pipe(fastcsv.parse({ headers: true }))
+        .on('data', (row) => {
+          try {
+            // Create a fresh coupon for each row
+            const singleCoupon = repo.create({
+              ...body,
+              code: row.coupon_code,
+              conditions: body.conditions ? JSON.parse(body.conditions) : [],
+              errors: body.errors ? JSON.parse(body.errors) : {},
+              benefits: body.benefits ? JSON.parse(body.benefits) : [],
+            });
+
+            coupons.push(singleCoupon);
+          } catch (err) {
+            console.error('Invalid row:', row, err);
+          }
+        })
+        .on('end', async () => {
+          try {
+            if (coupons.length > 0) {
+              // Save all coupons at once
+              const uploadedCoupons = await repo.save(coupons);
+
+              if (uploadedCoupons.length) {
+                const customerSegmentIds = JSON.parse(
+                  body.customer_segment_ids,
+                );
+
+                if (customerSegmentIds?.length && body.all_users == 0) {
+                  // Fetch all customers that belong to the given customer segments
+                  const customerFromSegments =
+                    await this.customerSegmentMemberRepository.find({
+                      where: { segment_id: In(customerSegmentIds) },
+                    });
+
+                  if (!customerFromSegments.length) {
+                    throw new BadRequestException(
+                      'No customers found in the given segments',
+                    );
+                  }
+
+                  // Validate segments once
+                  const segments = await this.segmentRepository.findBy({
+                    id: In(customerSegmentIds),
+                  });
+
+                  if (segments.length !== customerSegmentIds.length) {
+                    throw new BadRequestException(
+                      'Some customer segments not found',
+                    );
+                  }
+
+                  const allUserCoupons: UserCoupon[] = [];
+
+                  // 👉 assign coupons based on the smaller length
+                  const loopCount = Math.min(
+                    uploadedCoupons.length,
+                    customerFromSegments.length,
+                  );
+
+                  for (let i = 0; i < loopCount; i++) {
+                    const eachCoupon = uploadedCoupons[i];
+                    const eachCustomer = customerFromSegments[i];
+
+                    // Save coupon-segment mapping
+                    const couponSegmentEntities = segments.map((segment) =>
+                      this.couponSegmentRepository.create({
+                        coupon: eachCoupon,
+                        segment,
+                      }),
+                    );
+
+                    await queryRunner.manager.save(
+                      CouponCustomerSegment,
+                      couponSegmentEntities,
+                    );
+
+                    // Ensure the customer exists in the customer table
+                    const customer = await this.customerRepo.findOne({
+                      where: { id: eachCustomer.customer_id },
+                      relations: ['business_unit'],
+                    });
+
+                    if (!customer) {
+                      continue;
+                    }
+
+                    const userCoupon = this.userCouponRepo.create({
+                      coupon_code: eachCoupon.code,
+                      status: CouponStatus.ISSUED,
+                      customer: { id: customer.id },
+                      business_unit: { id: customer.business_unit.id },
+                      issued_from_type: 'coupon',
+                      issued_from_id: eachCoupon.id,
+                      coupon_id: eachCoupon?.id,
+                    });
+
+                    allUserCoupons.push(userCoupon);
+                  }
+
+                  // Save all coupons for all customers in one go
+                  if (allUserCoupons.length) {
+                    await queryRunner.manager.save(UserCoupon, allUserCoupons);
+                  }
+                }
+              }
+
+              await queryRunner.commitTransaction();
+
+              resolve({
+                success: true,
+                message: 'Data uploaded successfully',
+                total: uploadedCoupons.length,
+              });
+            } else {
+              await queryRunner.rollbackTransaction();
+              resolve({
+                success: false,
+                message: 'No valid coupons found in CSV',
+                total: 0,
+              });
+            }
+          } catch (err) {
+            await queryRunner.rollbackTransaction();
+            reject(err);
+          } finally {
+            await queryRunner.release();
+            // ✅ Always remove uploaded file after finishing
+            try {
+              fs.unlinkSync(filePath);
+            } catch (unlinkErr) {
+              console.error('Failed to delete file:', unlinkErr);
+            }
+          }
+        })
+        .on('error', async (err) => {
+          await queryRunner.rollbackTransaction();
+          await queryRunner.release();
+
+          try {
+            fs.unlinkSync(filePath);
+          } catch (unlinkErr) {
+            console.error('Failed to delete file:', unlinkErr);
+          }
+
+          reject(err);
+        });
+    });
   }
 }
