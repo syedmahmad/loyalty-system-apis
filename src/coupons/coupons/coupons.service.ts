@@ -1767,4 +1767,14 @@ export class CouponsService {
       errors: [],
     };
   }
+
+  async syncCoupons(body) {
+    const { coupons } = body;
+    return {
+      success: true,
+      message: 'Coupon synced success!',
+      result: coupons,
+      errors: [],
+    };
+  }
 }

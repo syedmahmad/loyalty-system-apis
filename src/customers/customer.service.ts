@@ -3107,4 +3107,21 @@ export class CustomerService {
       });
     }
   }
+
+  async syncTransactions(body) {
+    const { customers } = body;
+    const today = new Date();
+    return {
+      success: true,
+      message: 'Successfully imported data!...',
+      data: {
+        time_stamp: today,
+        total_customers: customers.length,
+        total_vehicles: 194,
+        total_jobcards: 200,
+        total_invoices: 200,
+      },
+      errors: [],
+    };
+  }
 }

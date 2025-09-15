@@ -20,6 +20,7 @@ import { CreateCouponDto } from '../dto/create-coupon.dto';
 import { UpdateCouponDto } from '../dto/update-coupon.dto';
 import { CouponsService } from './coupons.service';
 import { CustomerCouponsDto } from '../dto/customer-coupon.dto';
+import { CouponSyncDto } from '../dto/coupon-sync.dto';
 
 @Controller('coupons')
 export class CouponsController {
@@ -188,5 +189,10 @@ export class CouponsController {
   @Post('customer')
   async getCustomerCoupons(@Body() body: CustomerCouponsDto) {
     return await this.service.getCustomerCoupons(body);
+  }
+
+  @Post('sync')
+  async syncCoupons(@Body() body: CouponSyncDto) {
+    return await this.service.syncCoupons(body);
   }
 }
