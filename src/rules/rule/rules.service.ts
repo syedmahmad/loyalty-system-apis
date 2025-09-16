@@ -5,6 +5,7 @@ import { Rule } from '../entities/rules.entity';
 import { CreateRuleDto } from '../dto/create-rule.dto';
 import { UpdateRuleDto } from '../dto/update-rule.dto';
 import { Tenant } from 'src/tenants/entities/tenant.entity';
+import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
 
 @Injectable()
 export class RulesService {
@@ -14,6 +15,9 @@ export class RulesService {
 
     @InjectRepository(Tenant)
     private readonly tenantRepository: Repository<Tenant>,
+
+    @InjectRepository(BusinessUnit)
+    private readonly businessUnitRepository: Repository<BusinessUnit>,
 
     @InjectDataSource()
     private readonly dataSource: DataSource,
@@ -67,6 +71,42 @@ export class RulesService {
     } finally {
       await queryRunner.release();
     }
+  }
+
+  async allEventBased(tenant_id: string, business_unit_id: string) {
+    const tenant = await this.tenantRepository.findOne({
+      where: {
+        uuid: tenant_id,
+      },
+    });
+
+    if (!tenant) {
+      throw new Error('Tenant not found');
+    }
+
+    const businessUnit = await this.businessUnitRepository.findOne({
+      where: {
+        uuid: business_unit_id,
+        tenant: { id: (await tenant).id },
+      },
+    });
+    return this.ruleRepository.find({
+      select: [
+        'uuid',
+        'name',
+        'reward_points',
+        'event_triggerer',
+        'description',
+        'validity_after_assignment',
+        'status',
+      ],
+      where: {
+        tenant: { id: tenant.id },
+        business_unit: { id: businessUnit.id },
+        rule_type: 'event based earn',
+        status: 1,
+      },
+    });
   }
 
   findAll(client_id: number, name: string, bu: number) {
