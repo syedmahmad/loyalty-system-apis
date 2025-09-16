@@ -49,6 +49,8 @@ import {
   WalletTransactionType,
 } from 'src/wallet/entities/wallet-transaction.entity';
 import { OciService } from 'src/oci/oci.service';
+import { CouponSyncLog } from '../entities/coupon-sync-logs.entity';
+import { CouponUsage } from '../entities/coupon-usages.entity';
 
 @Injectable()
 export class CouponsService {
@@ -112,6 +114,12 @@ export class CouponsService {
     private readonly walletService: WalletService,
     private readonly customerService: CustomerService,
     private readonly ociService: OciService,
+
+    @InjectRepository(CouponSyncLog)
+    private couponSyncLogRepo: Repository<CouponSyncLog>,
+
+    @InjectRepository(CouponUsage)
+    private couponUsagegRepo: Repository<CouponUsage>,
   ) {}
 
   async create(dto: CreateCouponDto, user: string) {
@@ -1773,12 +1781,103 @@ export class CouponsService {
 
   async syncCoupons(body) {
     const { coupons } = body;
-    return {
-      success: true,
-      message: 'Coupon synced success!',
-      result: coupons,
-      errors: [],
-    };
+
+    const failedCoupons = [];
+    const successCoupons = [];
+    const couponUsageArr = [];
+
+    try {
+      for (let index = 0; index <= coupons.length - 1; index++) {
+        const eachCoupon = coupons[index];
+        const coupon = await this.couponsRepository.findOne({
+          where: { code: eachCoupon.code },
+        });
+        if (coupon) {
+          successCoupons.push(eachCoupon);
+          const phoneNumber = eachCoupon.customer_phone;
+          const customer = await this.findCustomerByFullPhone(phoneNumber);
+          if (customer) {
+            const couponUsageObj = {
+              invoice_no: eachCoupon.invoice_no,
+              customer: customer.id,
+              used_at: eachCoupon.used_time,
+              created_at: new Date(),
+              coupon_id: coupon.id,
+            };
+            couponUsageArr.push(couponUsageObj);
+          }
+        } else {
+          failedCoupons.push(eachCoupon);
+        }
+      }
+
+      // ✅ decide status
+      let status: 'success' | 'failed' | 'partial';
+      if (successCoupons.length === coupons.length) {
+        status = 'success';
+      } else if (failedCoupons.length === coupons.length) {
+        status = 'failed';
+      } else {
+        status = 'partial';
+      }
+
+      await this.couponSyncLogRepo.save({
+        status,
+        total_count: coupons.length,
+        success_count: successCoupons.length,
+        failed_count: failedCoupons.length,
+        created_at: new Date(),
+        success_coupons: successCoupons,
+        failed_coupons: failedCoupons,
+      });
+
+      if (couponUsageArr.length && successCoupons.length) {
+        await this.couponUsagegRepo.save(couponUsageArr);
+      }
+
+      return {
+        success: true,
+        message: 'Coupon synced success!',
+        result: coupons,
+        errors: [],
+      };
+    } catch (error) {
+      console.error('Error while syncing coupons:', error);
+      return {
+        success: false,
+        message: 'Coupon sync failed!',
+        result: null,
+        errors: [error.message || error],
+      };
+    }
+  }
+
+  async findCustomerByFullPhone(fullPhone: string) {
+    if (!fullPhone.startsWith('+')) {
+      throw new Error('Invalid phone number format');
+    }
+
+    // remove the "+"
+    const digits = fullPhone.slice(1);
+
+    // possible country code lengths: 1, 2, 3
+    for (let len = 1; len <= 3; len++) {
+      const countryCode = '+' + digits.slice(0, len);
+      const phone = digits.slice(len);
+
+      const customer = await this.customerRepo.findOne({
+        where: {
+          country_code: countryCode,
+          phone: phone,
+        },
+      });
+
+      if (customer) {
+        return customer; // ✅ found
+      }
+    }
+
+    return null; // not found
   }
 
   async importFromCsv(filePath: string, body: any, user: string) {

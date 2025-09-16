@@ -33,6 +33,8 @@ import { CampaignCoupons } from 'src/campaigns/entities/campaign-coupon.entity';
 import { CustomerSegmentMember } from 'src/customer-segment/entities/customer-segment-member.entity';
 import { Campaign } from 'src/campaigns/entities/campaign.entity';
 import { CampaignTier } from 'src/campaigns/entities/campaign-tier.entity';
+import { CouponSyncLog } from './entities/coupon-sync-logs.entity';
+import { CouponUsage } from './entities/coupon-usages.entity';
 @Module({
   imports: [
     TypeOrmModule.forFeature([
@@ -60,6 +62,8 @@ import { CampaignTier } from 'src/campaigns/entities/campaign-tier.entity';
       CustomerSegmentMember,
       Campaign,
       CampaignTier,
+      CouponSyncLog,
+      CouponUsage
     ]),
   ],
   controllers: [CouponsController],
