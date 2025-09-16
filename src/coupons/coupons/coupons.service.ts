@@ -119,7 +119,7 @@ export class CouponsService {
     private couponSyncLogRepo: Repository<CouponSyncLog>,
 
     @InjectRepository(CouponUsage)
-    private couponUsagegRepo: Repository<CouponUsage>,
+    private couponUsageRepo: Repository<CouponUsage>,
   ) {}
 
   async create(dto: CreateCouponDto, user: string) {
@@ -857,7 +857,7 @@ export class CouponsService {
         ],
       });
 
-      if (!isUserAssignedTothisCoupon || coupon.all_users == 0) {
+      if (!isUserAssignedTothisCoupon && coupon.all_users == 0) {
         throw new NotFoundException('Customer is not eligible for this coupon');
       }
     }
@@ -904,14 +904,14 @@ export class CouponsService {
     );
 
     if (
-      coupon.discount_type === 'percentage_discount' &&
+      coupon.discount_type === 'percentage' &&
       (amount === undefined || amount === null || amount === '')
     ) {
       throw new BadRequestException(`Amount is required`);
     }
 
     const earnPoints =
-      coupon.discount_type === 'fixed_discount'
+      coupon.discount_type === 'fixed'
         ? (coupon.discount_price ?? 0)
         : (amount * Number(coupon.discount_price)) / 100;
 
@@ -946,6 +946,16 @@ export class CouponsService {
 
     coupon.number_of_times_used = Number(coupon.number_of_times_used + 1);
     await this.couponRepo.save(coupon);
+
+    await this.couponUsageRepo.save({
+      invoice_no: metadata?.invoice_no || null,
+      customer: { id: wallet.customer.id },
+      used_at: new Date(),
+      created_at: new Date(),
+      coupon_id: coupon.id,
+      product: metadata?.products ? metadata?.products : [],
+      amount: amount,
+    });
 
     return {
       message: 'Coupon redeemed successfully',
@@ -1839,7 +1849,7 @@ export class CouponsService {
       });
 
       if (couponUsageArr.length && successCoupons.length) {
-        await this.couponUsagegRepo.save(couponUsageArr);
+        await this.couponUsageRepo.save(couponUsageArr);
       }
 
       return {
@@ -2047,5 +2057,181 @@ export class CouponsService {
           reject(err);
         });
     });
+  }
+
+  async getCustomerAssignedCoupons(body, search) {
+    const { customerId, bUId, page = 1, limit = 10 } = body;
+
+    const customer = await this.customerRepo.findOne({
+      where: { uuid: customerId, business_unit: { id: parseInt(bUId) } },
+    });
+
+    if (!customer) throw new NotFoundException('Customer not found');
+    if (
+      customer.status === 0 ||
+      customer.is_delete_requested === 1 ||
+      customer.deletion_status === 1
+    ) {
+      throw new NotFoundException(
+        'This customer is no longer active or has been removed',
+      );
+    }
+    if (customer.status === 3) {
+      throw new NotFoundException('Customer is deleted');
+    }
+
+    const userCouponsWhereClouse = {
+      customer: { id: customer.id },
+      status: In([CouponStatus.EXPIRED, CouponStatus.ISSUED]),
+    };
+
+    if (search && search != undefined) {
+      userCouponsWhereClouse['coupon_code'] = ILike(`%${search}%`);
+    }
+
+    const userCoupons = await this.userCouponRepo.find({
+      where: userCouponsWhereClouse,
+      order: { redeemed_at: 'DESC' },
+    });
+
+    const coupons: any[] = [];
+    const today = new Date();
+
+    for (const eachUserCoupon of userCoupons) {
+      const singleCoupon = await this.couponsRepository.findOne({
+        where: [
+          { id: eachUserCoupon.coupon_id },
+          { id: eachUserCoupon.issued_from_id },
+        ],
+      });
+
+      if (!singleCoupon) continue;
+
+      coupons.push({
+        uuid: singleCoupon.uuid,
+        code: singleCoupon.code,
+        title: singleCoupon.coupon_title,
+        title_ar: singleCoupon.coupon_title_ar,
+        expiry_date: singleCoupon.date_to,
+        status:
+          singleCoupon.date_to && singleCoupon.date_to < today
+            ? 'expired'
+            : 'available',
+      });
+    }
+
+    let where: any = [{ all_users: 1, status: 1 }];
+    if (search) {
+      where = [
+        { all_users: 1, status: 1, code: ILike(`%${search}%`) },
+        { all_users: 1, status: 1, coupon_title: ILike(`%${search}%`) },
+      ];
+    }
+
+    const couponsForAllUser = await this.couponsRepository.find({ where });
+
+    for (const singleCoupon of couponsForAllUser) {
+      coupons.push({
+        uuid: singleCoupon.uuid,
+        code: singleCoupon.code,
+        title: singleCoupon.coupon_title,
+        title_ar: singleCoupon.coupon_title_ar,
+        expiry_date: singleCoupon.date_to,
+        status:
+          singleCoupon.date_to && singleCoupon.date_to < today
+            ? 'expired'
+            : 'available',
+      });
+    }
+
+    // ✅ Pagination helper
+    const total = coupons.length;
+    const totalPages = Math.ceil(total / limit);
+    const start = (page - 1) * limit;
+    const end = start + limit;
+
+    const paginatedData = coupons.slice(start, end);
+
+    return {
+      success: true,
+      message: 'Successfully fetched the data!',
+      result: {
+        data: paginatedData,
+        total,
+        page,
+        limit,
+        totalPages,
+      },
+      errors: [],
+    };
+  }
+
+  async getCouponUsedHistory(body, search) {
+    const { customerId, bUId, page = 1, limit = 10 } = body;
+
+    const customer = await this.customerRepo.findOne({
+      where: { uuid: customerId, business_unit: { id: parseInt(bUId) } },
+    });
+
+    if (!customer) throw new NotFoundException('Customer not found');
+    if (
+      customer.status === 0 ||
+      customer.is_delete_requested === 1 ||
+      customer.deletion_status === 1
+    ) {
+      throw new NotFoundException(
+        'This customer is no longer active or has been removed',
+      );
+    }
+    if (customer.status === 3) {
+      throw new NotFoundException('Customer is deleted');
+    }
+
+    const whereClouse = {
+      customer: { id: customer.id },
+    };
+
+    if (search && search != undefined) {
+      whereClouse['invoice_no'] = ILike(`%${search}%`);
+    }
+
+    const usageCoupons = await this.couponUsageRepo.find({
+      where: whereClouse,
+    });
+
+    console.log('usageCoupons::::', usageCoupons);
+
+    const coupons = [];
+    for (let index = 0; index <= usageCoupons.length - 1; index++) {
+      const eachUsageCoupon = usageCoupons[index];
+      const coupon = await this.couponRepo.findOne({
+        where: { id: eachUsageCoupon.coupon_id },
+      });
+      coupons.push({
+        ...eachUsageCoupon,
+        code: coupon.code,
+      });
+    }
+
+    // ✅ Pagination helper
+    const total = coupons.length;
+    const totalPages = Math.ceil(total / limit);
+    const start = (page - 1) * limit;
+    const end = start + limit;
+
+    const paginatedData = coupons.slice(start, end);
+
+    return {
+      success: true,
+      message: 'Successfully fetched the data!',
+      result: {
+        data: paginatedData,
+        total,
+        page,
+        limit,
+        totalPages,
+      },
+      errors: [],
+    };
   }
 }

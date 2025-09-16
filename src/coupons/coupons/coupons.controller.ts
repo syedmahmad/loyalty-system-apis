@@ -240,4 +240,20 @@ export class CouponsController {
 
     return this.service.importFromCsv(file.path, body, user.uuid);
   }
+
+  @Post('assigned-coupons')
+  async getCustomerAssignedCoupons(
+    @Body() body: CustomerCouponsDto,
+    @Query('search') search?: string,
+  ) {
+    return await this.service.getCustomerAssignedCoupons(body, search);
+  }
+
+  @Post('used-history')
+  async getCouponUsedHistory(
+    @Body() body: any,
+    @Query('search') search?: string,
+  ) {
+    return await this.service.getCouponUsedHistory(body, search);
+  }
 }

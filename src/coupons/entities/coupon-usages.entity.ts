@@ -33,4 +33,10 @@ export class CouponUsage {
   @ManyToOne(() => Customer, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'customer_id' })
   customer: Customer;
+
+  @Column({ type: 'simple-json', nullable: true })
+  product: any;
+
+  @Column({ type: 'decimal', nullable: false, default: 0 })
+  amount: number;
 }
