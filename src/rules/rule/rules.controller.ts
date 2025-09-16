@@ -75,6 +75,14 @@ export class RulesController {
     return this.rulesService.findOne(uuid);
   }
 
+  @Get('/event-based/:tenant_id/:business_unit_id')
+  allEventBased(
+    @Param('tenant_id') tenant_id: string,
+    @Param('business_unit_id') business_unit_id: string,
+  ) {
+    return this.rulesService.allEventBased(tenant_id, business_unit_id);
+  }
+
   @Put(':uuid')
   async update(
     @Headers('user-secret') userSecret: string,
