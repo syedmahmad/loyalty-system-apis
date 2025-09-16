@@ -9,7 +9,7 @@ import axios from 'axios';
 import * as dayjs from 'dayjs';
 import * as fs from 'fs';
 import * as fastcsv from 'fast-csv';
-import { v4 as uuidv4 } from 'uuid';
+// import { v4 as uuidv4 } from 'uuid';
 import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
 import { CouponTypeService } from 'src/coupon_type/coupon_type/coupon_type.service';
 import { CustomerSegment } from 'src/customer-segment/entities/customer-segment.entity';
@@ -1682,14 +1682,9 @@ export class CouponsService {
     });
 
     if (!customer) throw new NotFoundException('Customer not found');
-    if (
-      (customer && customer.status == 0) ||
-      customer?.is_delete_requested == 1 ||
-      customer?.deletion_status == 1
-    ) {
-      throw new NotFoundException(
-        'This customer is no longer active or has been removed',
-      );
+
+    if (customer && customer.status == 0) {
+      throw new NotFoundException('This customer is no longer active.');
     }
 
     if (customer.status === 3) {
@@ -1727,6 +1722,9 @@ export class CouponsService {
             code: singleCoupon.code,
             title: singleCoupon.coupon_title,
             title_ar: singleCoupon.coupon_title_ar,
+            discount: `${singleCoupon.discount_price}${singleCoupon.discount_type === 'fixed' ? ' SAR' : '% Off'}`,
+            description_en: singleCoupon.description_en,
+            description_ar: singleCoupon.description_ar,
             expiry_date: singleCoupon.date_to,
           });
         } else {
@@ -1735,6 +1733,9 @@ export class CouponsService {
             code: singleCoupon.code,
             title: singleCoupon.coupon_title,
             title_ar: singleCoupon.coupon_title_ar,
+            discount: `${singleCoupon.discount_price}${singleCoupon.discount_type === 'fixed' ? ' SAR' : '% Off'}`,
+            description_en: singleCoupon.description_en,
+            description_ar: singleCoupon.description_ar,
             expiry_date: singleCoupon.date_to,
           });
         }
@@ -1754,6 +1755,9 @@ export class CouponsService {
             code: singleCoupon.code,
             title: singleCoupon.coupon_title,
             title_ar: singleCoupon.coupon_title_ar,
+            discount: `${singleCoupon.discount_price}${singleCoupon.discount_type === 'fixed' ? ' SAR' : '% Off'}`,
+            description_en: singleCoupon.description_en,
+            description_ar: singleCoupon.description_ar,
             expiry_date: singleCoupon.date_to,
           });
         } else {
@@ -1762,6 +1766,9 @@ export class CouponsService {
             code: singleCoupon.code,
             title: singleCoupon.coupon_title,
             title_ar: singleCoupon.coupon_title_ar,
+            discount: `${singleCoupon.discount_price}${singleCoupon.discount_type === 'fixed' ? ' SAR' : '% Off'}`,
+            description_en: singleCoupon.description_en,
+            description_ar: singleCoupon.description_ar,
             expiry_date: singleCoupon.date_to,
           });
         }
