@@ -3,6 +3,10 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import * as fs from 'fs';
+import * as fastcsv from 'fast-csv';
+import { v4 as uuidv4 } from 'uuid';
+import { nanoid } from 'nanoid';
 import { InjectRepository, InjectDataSource } from '@nestjs/typeorm';
 import { Repository, DataSource, ILike, FindOptionsWhere } from 'typeorm';
 import { CustomerSegment } from '../entities/customer-segment.entity';
@@ -10,12 +14,11 @@ import { CreateCustomerSegmentDto } from '../dto/create.dto';
 import { UpdateCustomerSegmentDto } from '../dto/update-customer-segment.dto';
 import { Customer } from 'src/customers/entities/customer.entity';
 import { CustomerSegmentMember } from '../entities/customer-segment-member.entity';
-
-type SegmentFilter = {
-  tenant_id: number;
-  status: number;
-  nameOrDescription?: string;
-};
+import { encrypt } from 'src/helpers/encryption';
+import { QrCode } from 'src/qr_codes/entities/qr_code.entity';
+import { CustomerService } from 'src/customers/customer.service';
+import { OciService } from 'src/oci/oci.service';
+import { WalletService } from 'src/wallet/wallet/wallet.service';
 
 @Injectable()
 export class CustomerSegmentsService {
@@ -31,6 +34,13 @@ export class CustomerSegmentsService {
 
     @InjectDataSource()
     private readonly dataSource: DataSource,
+
+    @InjectRepository(QrCode)
+    private readonly qrCodeRepo: Repository<QrCode>,
+
+    private readonly ociService: OciService,
+    private readonly customerService: CustomerService,
+    private readonly walletService: WalletService,
   ) {}
 
   async create(dto: CreateCustomerSegmentDto, user: string) {
@@ -245,5 +255,128 @@ export class CustomerSegmentsService {
     } finally {
       await queryRunner.release();
     }
+  }
+
+  async bulkUpload(
+    filePath: string,
+    body: CreateCustomerSegmentDto,
+    user: string,
+  ) {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      // ✅ Check segment existence
+      const existing = await this.segmentRepository.findOne({
+        where: { name: body.name, status: 1 },
+      });
+      if (existing)
+        throw new BadRequestException('Segment already exists with same name.');
+
+      queryRunner.data = { user };
+      const repo = queryRunner.manager.getRepository(CustomerSegment);
+
+      // ✅ Create segment
+      const segment = repo.create({
+        ...body,
+        status: 1,
+      });
+
+      const savedSegment = await repo.save(segment);
+      await queryRunner.commitTransaction();
+
+      const customers: any[] = [];
+
+      await new Promise<void>((resolve, reject) => {
+        fs.createReadStream(filePath)
+          .pipe(fastcsv.parse({ headers: true }))
+          .on('data', (row) => customers.push(row))
+          .on('end', () => resolve())
+          .on('error', (err) => reject(err));
+      });
+
+      for (const row of customers) {
+        try {
+          const customer = await this.findOrCreateCustomer(row, body);
+          if (customer) {
+            await this.addCustomerToSegment(savedSegment.id, customer.id);
+          }
+        } catch (err) {
+          console.error('Row failed:', row, err.message);
+        }
+      }
+
+      return {
+        success: true,
+        message: 'Bulk upload complete',
+        segmentId: savedSegment.id,
+        customersAdded: customers.length,
+      };
+    } catch (err) {
+      await queryRunner.rollbackTransaction();
+      throw err;
+    } finally {
+      await queryRunner.release();
+      try {
+        fs.unlinkSync(filePath); // cleanup
+      } catch {}
+    }
+  }
+
+  private async findOrCreateCustomer(row: any, body: any) {
+    const plainMobile = `+${row.country_code}${row.phone_no}`;
+    const encryptedPhone = await this.ociService.encryptData(plainMobile);
+    const hashedPhone = encrypt(plainMobile);
+
+    let customer = await this.customerRepository.findOne({
+      where: {
+        hashed_number: hashedPhone,
+        business_unit: { id: Number(body.business_unit_id) },
+        tenant: { id: Number(body.tenant_id) },
+      },
+      relations: ['business_unit', 'tenant'],
+    });
+
+    if (!customer) {
+      customer = this.customerRepository.create({
+        phone: encryptedPhone,
+        hashed_number: hashedPhone,
+        business_unit: { id: Number(body.business_unit_id) },
+        tenant: { id: Number(body.tenant_id) },
+        uuid: uuidv4(),
+        status: 0,
+        is_new_user: 1,
+        referral_code: nanoid(6).toUpperCase(),
+        otp_code: Math.floor(1000 + Math.random() * 9000).toString(),
+        otp_expires_at: new Date(Date.now() + 5 * 60 * 1000),
+      });
+      customer = await this.customerRepository.save(customer);
+
+      if (
+        !(await this.qrCodeRepo.findOne({
+          where: { customer: { id: customer.id } },
+        }))
+      ) {
+        await this.customerService.createAndSaveCustomerQrCode(
+          customer.uuid,
+          customer.id,
+        );
+      }
+
+      if (
+        !(await this.walletService.getSingleCustomerWalletInfo(
+          customer.id,
+          Number(body.business_unit_id),
+        ))
+      ) {
+        await this.walletService.createWallet({
+          customer_id: customer.id,
+          business_unit_id: Number(body.business_unit_id),
+          tenant_id: Number(body.tenant_id),
+        });
+      }
+    }
+    return customer;
   }
 }

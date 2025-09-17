@@ -13,6 +13,7 @@ import { CustomerSegmentMember } from './customer-segment-member.entity';
 import { Tenant } from 'src/tenants/entities/tenant.entity';
 import { CampaignCustomerSegment } from 'src/campaigns/entities/campaign-customer-segments.entity';
 import { CouponCustomerSegment } from 'src/coupons/entities/coupon-customer-segments.entity';
+import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
 
 @Entity('customer_segments')
 export class CustomerSegment {
@@ -37,6 +38,13 @@ export class CustomerSegment {
 
   @Column()
   tenant_id: number;
+
+  @ManyToOne(() => BusinessUnit, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'business_unit_id' })
+  business_unit: BusinessUnit;
+
+  @Column({ nullable: true })
+  business_unit_id: number;
 
   @Column({ type: 'int', default: 1 })
   status: number;

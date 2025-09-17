@@ -12,6 +12,8 @@ import {
   BadRequestException,
   Delete,
   Query,
+  UseInterceptors,
+  UploadedFile,
 } from '@nestjs/common';
 import { AuthTokenGuard } from 'src/users/guards/authTokenGuard';
 import * as jwt from 'jsonwebtoken';
@@ -21,6 +23,9 @@ import { Repository } from 'typeorm';
 import { CreateCustomerSegmentDto } from '../dto/create.dto';
 import { CustomerSegmentsService } from './customer-segment.service';
 import { UpdateCustomerSegmentDto } from '../dto/update-customer-segment.dto';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { extname } from 'path';
 
 @Controller('customer-segments')
 export class CustomerSegmentsController {
@@ -145,5 +150,49 @@ export class CustomerSegmentsController {
     }
 
     return await this.service.update(+id, dto, user.uuid);
+  }
+
+  @Post('bulk-upload')
+  // @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: diskStorage({
+        destination: './uploads', // make sure folder exists
+        filename: (req, file, cb) => {
+          const uniqueSuffix =
+            Date.now() + '-' + Math.round(Math.random() * 1e9);
+          cb(
+            null,
+            file.fieldname + '-' + uniqueSuffix + extname(file.originalname),
+          );
+        },
+      }),
+    }),
+  )
+  async bulkUpload(
+    @UploadedFile() file: Express.Multer.File,
+    @Body() body: any,
+    @Headers('user-secret') userSecret: string,
+  ) {
+    if (!userSecret) {
+      throw new BadRequestException('user-secret not found in headers');
+    }
+    const decodedUser: any = jwt.decode(userSecret);
+
+    const user = await this.userRepository.findOne({
+      where: {
+        id: decodedUser.UserId,
+      },
+    });
+
+    if (!user) {
+      throw new BadRequestException('user not found against provided token');
+    }
+
+    if (!file) {
+      throw new BadRequestException('File not uploaded');
+    }
+
+    return this.service.bulkUpload(file.path, body, user.uuid);
   }
 }
