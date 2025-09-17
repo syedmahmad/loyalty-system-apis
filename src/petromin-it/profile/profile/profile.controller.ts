@@ -28,6 +28,11 @@ export class CustomerProfileController {
     return await this.profileService.requestAccountDeletion(id, dto);
   }
 
+  @Post('refer-by')
+  async referBy(@Body() dto: ReferByDto) {
+    return await this.profileService.UpdateReferralInfo(dto);
+  }
+
   @Post()
   async confirmDeletion(
     @Param('id') id: string,
@@ -39,10 +44,5 @@ export class CustomerProfileController {
   @Patch('restore')
   async restoreAccount(@Param('id') id: string) {
     return await this.profileService.restoreAccount(id);
-  }
-
-  @Post('refer-by')
-  async referBy(@Body() dto: ReferByDto) {
-    return await this.profileService.UpdateReferralInfo(dto);
   }
 }
