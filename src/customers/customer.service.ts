@@ -2649,8 +2649,8 @@ export class CustomerService {
 
       const customer = await this.customerRepo.findOne({
         where: [
-          { uuid: custom_customer_unique_id },
           { phone: customer_phone_number },
+          { uuid: custom_customer_unique_id },
         ],
       });
 

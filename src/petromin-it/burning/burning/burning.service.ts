@@ -45,8 +45,8 @@ export class BurningService {
     // Step 2: Find customer (by uuid or phone hash)
     const customer = await this.customerRepo.findOne({
       where: [
-        { uuid: dto.custom_customer_unique_id },
         { hashed_number: hashedPhone },
+        { uuid: dto.custom_customer_unique_id },
       ],
     });
 
@@ -145,7 +145,7 @@ export class BurningService {
     try {
       //#region Step 2: Find customer
       const customer = await this.customerRepo.findOne({
-        where: [{ uuid: customer_id }, { hashed_number: hashedPhone }],
+        where: [{ hashed_number: hashedPhone }, { uuid: customer_id }],
         relations: ['tenant', 'business_unit'],
       });
 
