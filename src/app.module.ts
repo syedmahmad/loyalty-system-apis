@@ -35,6 +35,7 @@ import { AxiosLoggerInterceptor } from 'src/interceptos/axios-request-log.interc
 import { HttpModule } from '@nestjs/axios';
 import { CustomerProfileModule } from './petromin-it/profile/profile.module';
 import { ReferralModule } from './petromin-it/referral/referral.module';
+import { BurningModule } from './petromin-it/burning/burning.module';
 
 @Module({
   imports: [
@@ -88,6 +89,7 @@ import { ReferralModule } from './petromin-it/referral/referral.module';
     OpenaiModule,
     AuthModule,
     ReferralModule,
+    BurningModule,
   ],
   controllers: [AppController],
   providers: [AppService, AxiosLoggerInterceptor],
