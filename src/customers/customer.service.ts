@@ -12,7 +12,6 @@ import * as QRCode from 'qrcode';
 import * as os from 'os';
 import * as path from 'path';
 import * as fs from 'fs';
-import { CampaignsService } from 'src/campaigns/campaigns/campaigns.service';
 import { CampaignCoupons } from 'src/campaigns/entities/campaign-coupon.entity';
 import { CampaignCustomerSegment } from 'src/campaigns/entities/campaign-customer-segments.entity';
 import { CampaignRule } from 'src/campaigns/entities/campaign-rule.entity';
@@ -3123,5 +3122,30 @@ export class CustomerService {
       },
       errors: [],
     };
+  }
+
+  async uploadProfileImage(customer_id, buffer, bucketName, objectName) {
+    const customer = await this.customerRepo.findOne({
+      where: { uuid: customer_id },
+      relations: ['tenant', 'business_unit'],
+    });
+
+    if (!customer) {
+      throw new NotFoundException(`Customer not found`);
+    }
+
+    if (customer.status == 0) {
+      throw new BadRequestException(`Customer is inactive`);
+    }
+
+    if (customer.status === 3) {
+      throw new NotFoundException('Customer is deleted');
+    }
+
+    return await this.ociService.uploadBufferToOci(
+      buffer,
+      bucketName,
+      objectName,
+    );
   }
 }

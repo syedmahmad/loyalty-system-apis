@@ -2199,8 +2199,6 @@ export class CouponsService {
       where: whereClouse,
     });
 
-    console.log('usageCoupons::::', usageCoupons);
-
     const coupons = [];
     for (let index = 0; index <= usageCoupons.length - 1; index++) {
       const eachUsageCoupon = usageCoupons[index];

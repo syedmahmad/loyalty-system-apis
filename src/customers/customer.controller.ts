@@ -8,6 +8,8 @@ import {
   Post,
   Query,
   Req,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Request } from 'express';
@@ -22,6 +24,7 @@ import { BurnWithEvent } from 'src/customers/dto/burn-with-event.dto';
 import { GvrEarnBurnWithEventsDto } from 'src/customers/dto/gvr_earn_burn_with_event.dto';
 import { CustomerDto } from './dto/customer.dto';
 import { CustomerEarnHistoryDto } from './dto/customer-earn-history.dto';
+import { FileInterceptor } from '@nestjs/platform-express';
 
 @Controller('customers')
 export class CustomerController {
@@ -165,5 +168,43 @@ export class CustomerController {
   @Post('/sync-transactions')
   async syncTransactions(@Body() body: any) {
     return this.customerService.syncTransactions(body);
+  }
+
+  @Post('upload-profile-image/:customerId')
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadProfileImage(
+    @Param('customerId') customerId: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    try {
+      const bucketName = process.env.OCI_BUCKET;
+      const objectName = file.originalname;
+      const buffer = file.buffer;
+
+      const response = await this.customerService.uploadProfileImage(
+        customerId,
+        buffer,
+        bucketName,
+        objectName,
+      );
+
+      if (response) {
+        return {
+          success: true,
+          message: 'Profile image uploaded successfully',
+          uploaded_url: `${process.env.OCI_URL}/${objectName}`,
+        };
+      }
+
+      return {
+        success: false,
+        message: 'Failed to upload file',
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: error.message,
+      };
+    }
   }
 }
