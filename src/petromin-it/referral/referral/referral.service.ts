@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { Customer } from 'src/customers/entities/customer.entity';
 import { Referral } from 'src/wallet/entities/referrals.entity';
+import { decrypt } from 'src/helpers/encryption';
 
 @Injectable()
 export class ReferralService {
@@ -50,8 +51,7 @@ export class ReferralService {
     const refereeIds = Array.from(new Set(referrals.map((r) => r.referee_id)));
     const referees = await this.customerRepo.find({
       where: { id: In(refereeIds) },
-      // select: ['id', 'name', 'email', 'phone'],
-      select: ['id', 'name'],
+      select: ['id', 'name', 'hashed_number'],
     });
 
     // Build a map for quick lookup
@@ -64,6 +64,8 @@ export class ReferralService {
         referral_code: customer.referral_code,
         history: referrals.map((ref) => ({
           referee_name: refereeMap.get(ref.referee_id)?.name || null,
+          referee_phone:
+            decrypt(refereeMap.get(ref.referee_id)?.hashed_number) || null,
           referrer_points: ref.referrer_points,
           referee_points: ref.referee_points,
           created_at: ref.created_at,
