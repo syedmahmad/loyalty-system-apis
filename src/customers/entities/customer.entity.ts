@@ -158,4 +158,7 @@ export class Customer {
 
   @Column({ type: 'tinyint', default: 0 })
   is_new_user: number;
+
+  @Column({ type: 'int', default: 0 })
+  login_count: number;
 }

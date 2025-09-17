@@ -504,6 +504,9 @@ export class CustomerService {
           // event_triggerer: 'event based earn',
         },
       });
+      if (rule.reward_points === 0) {
+        return;
+      }
       if (!rule)
         throw new NotFoundException('Earning rule not found for this event');
     } else {

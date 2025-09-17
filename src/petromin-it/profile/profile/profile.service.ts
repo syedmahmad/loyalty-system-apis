@@ -1,14 +1,20 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import {
   UpdateProfileDto,
   RequestDeletionDto,
+  ReferByDto,
 } from '../dto/update-profile.dto';
 import { Customer } from 'src/customers/entities/customer.entity';
 import { OciService } from 'src/oci/oci.service';
 import { CustomerService } from 'src/customers/customer.service';
 import { Log } from 'src/logs/entities/log.entity';
+import { Referral } from 'src/wallet/entities/referrals.entity';
 
 @Injectable()
 export class CustomerProfileService {
@@ -19,6 +25,8 @@ export class CustomerProfileService {
     private readonly customerService: CustomerService,
     @InjectRepository(Log)
     private readonly logRepo: Repository<Log>,
+    @InjectRepository(Referral)
+    private readonly refRepo: Repository<Referral>,
   ) {}
 
   async getProfile(customerId: string) {
@@ -40,6 +48,7 @@ export class CustomerProfileService {
       where: { id: customerInfo.id },
       select: [
         'uuid',
+        'is_new_user',
         'first_name',
         'last_name',
         // 'name',
@@ -123,6 +132,7 @@ export class CustomerProfileService {
       where: { id: customer.id },
       select: [
         'uuid',
+        'is_new_user',
         'first_name',
         'last_name',
         // 'name',
@@ -317,6 +327,113 @@ export class CustomerProfileService {
       message: 'Account restored successfully',
       result: {},
       errors: [],
+    };
+  }
+
+  async UpdateReferralInfo(body: ReferByDto) {
+    const businessUnitId = process.env.NCMC_PETROMIN_BU;
+    const tenantId = process.env.NCMC_PETROMIN_TENANT;
+    const { customer_id, referral_code } = body;
+
+    let referrer_user = null;
+    if (referral_code) {
+      referrer_user = await this.customerRepo.findOne({
+        where: {
+          referral_code: referral_code,
+          business_unit: { id: Number(businessUnitId) },
+          tenant: { id: Number(tenantId) },
+        },
+      });
+      if (!referrer_user) {
+        throw new BadRequestException('referral code does not belongs to us');
+      }
+    }
+
+    const customer = await this.customerRepo.findOne({
+      where: {
+        uuid: customer_id,
+      },
+      relations: ['business_unit', 'tenant'],
+    });
+
+    customer.referrer_id = referrer_user.id;
+    customer.is_new_user = 0;
+    // rewards points to referrer
+    const earnReferrerPoints = {
+      customer_id: referrer_user.uuid, // need to give points to referrer
+      event: 'Referrer Reward Points', // this is important what if someone changes this event name form Frontend
+      tenantId: String(referrer_user.tenant.id),
+      BUId: String(referrer_user.business_unit.id),
+    };
+    try {
+      const earnedPoints =
+        await this.customerService.earnWithEvent(earnReferrerPoints);
+      // log the external call
+      const logs = await this.logRepo.create({
+        requestBody: JSON.stringify(earnReferrerPoints),
+        responseBody: JSON.stringify(earnedPoints),
+        url: earnReferrerPoints.event,
+        method: 'POST',
+        statusCode: 200,
+      } as Log);
+      await this.logRepo.save(logs);
+      // insert ion referral table.
+      const refRst = await this.refRepo.create({
+        referrer_id: referrer_user.id,
+        referee_id: customer.id,
+        referrer_points: earnedPoints.points,
+        referee_points: 0,
+        business_unit: { id: customer.business_unit.id },
+      } as Referral);
+      await this.refRepo.save(refRst);
+    } catch (err) {
+      const logs = await this.logRepo.create({
+        requestBody: JSON.stringify(earnReferrerPoints),
+        responseBody: JSON.stringify(err),
+        url: earnReferrerPoints.event,
+        method: 'POST',
+        statusCode: 200,
+      } as Log);
+      await this.logRepo.save(logs);
+    }
+
+    // rewards points to referrer
+    const earnRefereePoints = {
+      customer_id: customer.uuid, // need to give points to referrer
+      event: 'Referee Reward Points', // this is important what if someone changes this event name form Frontend
+      tenantId: String(customer.tenant.id),
+      BUId: String(customer.business_unit.id),
+    };
+    try {
+      const earnedPoints =
+        await this.customerService.earnWithEvent(earnRefereePoints);
+      // log the external call
+      const logs = await this.logRepo.create({
+        requestBody: JSON.stringify(earnRefereePoints),
+        responseBody: JSON.stringify(earnedPoints),
+        url: earnRefereePoints.event,
+        method: 'POST',
+        statusCode: 200,
+      } as Log);
+      await this.logRepo.save(logs);
+    } catch (err) {
+      const logs = await this.logRepo.create({
+        requestBody: JSON.stringify(earnRefereePoints),
+        responseBody: JSON.stringify(err),
+        url: earnRefereePoints.event,
+        method: 'POST',
+        statusCode: 200,
+      } as Log);
+      await this.logRepo.save(logs);
+    }
+
+    await this.customerRepo.save(customer);
+    return {
+      success: true,
+      message: 'Success',
+      result: {
+        customer_id: customer.uuid,
+      },
     };
   }
 }

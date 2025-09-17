@@ -6,10 +6,11 @@ import { Customer } from 'src/customers/entities/customer.entity';
 import { Log } from 'src/logs/entities/log.entity';
 import { CustomerModule } from 'src/customers/customer.module';
 import { OciModule } from 'src/oci/oci.module';
+import { Referral } from 'src/wallet/entities/referrals.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Customer, Log]),
+    TypeOrmModule.forFeature([Customer, Log, Referral]),
     CustomerModule,
     OciModule,
   ],

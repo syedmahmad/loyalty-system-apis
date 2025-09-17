@@ -17,7 +17,7 @@ import { TriggerWhatsapp } from 'src/helpers/triggerWhatsapp';
 import { Log } from 'src/logs/entities/log.entity';
 import { WalletService } from 'src/wallet/wallet/wallet.service';
 import { nanoid } from 'nanoid';
-import { Referral } from 'src/wallet/entities/referrals.entity';
+// import { Referral } from 'src/wallet/entities/referrals.entity';
 @Injectable()
 export class AuthService {
   constructor(
@@ -30,8 +30,8 @@ export class AuthService {
     @InjectRepository(Log)
     private readonly logRepo: Repository<Log>,
     private readonly walletService: WalletService,
-    @InjectRepository(Referral)
-    private readonly refRepo: Repository<Referral>,
+    // @InjectRepository(Referral)
+    // private readonly refRepo: Repository<Referral>,
   ) {}
 
   // Generate and send OTP, upsert customer by mobileNumber, store OTP with 5-min expiry
@@ -45,18 +45,18 @@ export class AuthService {
         throw new BadRequestException('Missing tenant or business unit');
       }
 
-      if (body?.referral_code) {
-        const data = await this.customerRepo.findOne({
-          where: {
-            referral_code: body.referral_code,
-            business_unit: { id: Number(businessUnitId) },
-            tenant: { id: Number(tenantId) },
-          },
-        });
-        if (!data) {
-          throw new BadRequestException('referral code does not belongs to us');
-        }
-      }
+      // if (body?.referral_code) {
+      //   const data = await this.customerRepo.findOne({
+      //     where: {
+      //       referral_code: body.referral_code,
+      //       business_unit: { id: Number(businessUnitId) },
+      //       tenant: { id: Number(tenantId) },
+      //     },
+      //   });
+      //   if (!data) {
+      //     throw new BadRequestException('referral code does not belongs to us');
+      //   }
+      // }
       const encryptedPhone = await this.ociService.encryptData(plainMobile);
       const hashedPhone = encrypt(plainMobile);
 
@@ -150,7 +150,7 @@ export class AuthService {
         throw new BadRequestException('Missing tenant or business unit');
       }
 
-      const { otp, mobileNumber, referral_code } = body;
+      const { otp, mobileNumber } = body;
       if (!otp || !mobileNumber) {
         return {
           success: false,
@@ -183,8 +183,8 @@ export class AuthService {
         throw new BadRequestException('OTP Expired');
 
       // give him signup points
-      if (customer && customer.is_new_user) {
-        customer.is_new_user = 0;
+      if (customer && customer.login_count === 0) {
+        // customer.is_new_user = 0;
         customer.status = 1;
         // reward signup points
         const earnSignupPoints = {
@@ -244,61 +244,62 @@ export class AuthService {
           } as Log);
           await this.logRepo.save(logs);
         }
-        if (referral_code) {
-          const referrer_customer = await this.customerRepo.findOne({
-            where: {
-              referral_code: referral_code,
-              business_unit: { id: customer.business_unit.id },
-              tenant: { id: customer.tenant.id },
-            },
-            relations: ['business_unit', 'tenant'],
-          });
-          if (!referrer_customer) {
-            throw new BadRequestException(
-              'referral code does not belongs to us',
-            );
-          }
-          customer.referrer_id = referrer_customer.id;
-          // rewards points to referrer
-          const earnReferrerPoints = {
-            customer_id: referrer_customer.uuid, // need to give points to referrer
-            event: 'Referrer Reward Points', // this is important what if someone changes this event name form Frontend
-            tenantId: String(referrer_customer.tenant.id),
-            BUId: String(referrer_customer.business_unit.id),
-          };
-          try {
-            const earnedPoints =
-              await this.customerService.earnWithEvent(earnReferrerPoints);
-            // log the external call
-            const logs = await this.logRepo.create({
-              requestBody: JSON.stringify(earnReferrerPoints),
-              responseBody: JSON.stringify(earnedPoints),
-              url: earnReferrerPoints.event,
-              method: 'POST',
-              statusCode: 200,
-            } as Log);
-            await this.logRepo.save(logs);
-            // insert ion referral table.
-            const refRst = await this.refRepo.create({
-              referrer_id: referrer_customer.id,
-              referee_id: customer.id,
-              referrer_points: earnedPoints.points,
-              referee_points: 0,
-              business_unit: { id: customer.business_unit.id },
-            } as Referral);
-            await this.refRepo.save(refRst);
-          } catch (err) {
-            const logs = await this.logRepo.create({
-              requestBody: JSON.stringify(earnReferrerPoints),
-              responseBody: JSON.stringify(err),
-              url: earnReferrerPoints.event,
-              method: 'POST',
-              statusCode: 200,
-            } as Log);
-            await this.logRepo.save(logs);
-          }
-        }
+        // if (referral_code) {
+        //   const referrer_customer = await this.customerRepo.findOne({
+        //     where: {
+        //       referral_code: referral_code,
+        //       business_unit: { id: customer.business_unit.id },
+        //       tenant: { id: customer.tenant.id },
+        //     },
+        //     relations: ['business_unit', 'tenant'],
+        //   });
+        //   if (!referrer_customer) {
+        //     throw new BadRequestException(
+        //       'referral code does not belongs to us',
+        //     );
+        //   }
+        //   customer.referrer_id = referrer_customer.id;
+        //   // rewards points to referrer
+        //   const earnReferrerPoints = {
+        //     customer_id: referrer_customer.uuid, // need to give points to referrer
+        //     event: 'Referrer Reward Points', // this is important what if someone changes this event name form Frontend
+        //     tenantId: String(referrer_customer.tenant.id),
+        //     BUId: String(referrer_customer.business_unit.id),
+        //   };
+        //   try {
+        //     const earnedPoints =
+        //       await this.customerService.earnWithEvent(earnReferrerPoints);
+        //     // log the external call
+        //     const logs = await this.logRepo.create({
+        //       requestBody: JSON.stringify(earnReferrerPoints),
+        //       responseBody: JSON.stringify(earnedPoints),
+        //       url: earnReferrerPoints.event,
+        //       method: 'POST',
+        //       statusCode: 200,
+        //     } as Log);
+        //     await this.logRepo.save(logs);
+        //     // insert ion referral table.
+        //     const refRst = await this.refRepo.create({
+        //       referrer_id: referrer_customer.id,
+        //       referee_id: customer.id,
+        //       referrer_points: earnedPoints.points,
+        //       referee_points: 0,
+        //       business_unit: { id: customer.business_unit.id },
+        //     } as Referral);
+        //     await this.refRepo.save(refRst);
+        //   } catch (err) {
+        //     const logs = await this.logRepo.create({
+        //       requestBody: JSON.stringify(earnReferrerPoints),
+        //       responseBody: JSON.stringify(err),
+        //       url: earnReferrerPoints.event,
+        //       method: 'POST',
+        //       statusCode: 200,
+        //     } as Log);
+        //     await this.logRepo.save(logs);
+        //   }
+        // }
       }
+      customer.login_count += 1;
       customer.otp_code = null;
       customer.otp_expires_at = null;
       await this.customerRepo.save(customer);

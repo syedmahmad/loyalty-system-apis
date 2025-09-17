@@ -4,6 +4,7 @@ import {
   IsString,
   IsDateString,
   IsUrl,
+  IsNotEmpty,
 } from 'class-validator';
 
 export class UpdateProfileDto {
@@ -67,4 +68,14 @@ export class RequestDeletionDto {
   @IsOptional()
   @IsString()
   reason_for_deletion_other?: string;
+}
+
+export class ReferByDto {
+  @IsNotEmpty()
+  @IsString()
+  customer_id: string;
+
+  @IsNotEmpty()
+  @IsString()
+  referral_code: string;
 }

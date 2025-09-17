@@ -2,6 +2,7 @@ import { Controller, Get, Param, Put, Body, Post, Patch } from '@nestjs/common';
 import {
   UpdateProfileDto,
   RequestDeletionDto,
+  ReferByDto,
 } from '../dto/update-profile.dto';
 import { CustomerProfileService } from './profile.service';
 
@@ -38,5 +39,10 @@ export class CustomerProfileController {
   @Patch('restore')
   async restoreAccount(@Param('id') id: string) {
     return await this.profileService.restoreAccount(id);
+  }
+
+  @Post('refer-by')
+  async referBy(@Body() dto: ReferByDto) {
+    return await this.profileService.UpdateReferralInfo(dto);
   }
 }
