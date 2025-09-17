@@ -29,6 +29,10 @@ export class CreateCustomerSegmentDto {
   @IsOptional()
   @IsArray()
   selected_customer_ids?: number[];
+
+  @IsNumber()
+  @IsOptional()
+  business_unit_id: number;
 }
 
 export class AddCustomerToSegmentDto {
