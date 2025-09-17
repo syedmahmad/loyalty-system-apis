@@ -21,6 +21,15 @@ class DynamicConditionDto {
   condition_value: string;
 }
 
+class RuleTierDto {
+  @IsNumber()
+  tier_id: number;
+
+  @IsNumber()
+  @IsOptional()
+  point_conversion_rate?: number = 1;
+}
+
 export class CreateRuleDto {
   @IsString()
   @IsNotEmpty()
@@ -114,4 +123,10 @@ export class CreateRuleDto {
 
   @IsNumber()
   created_by: number;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => RuleTierDto)
+  tiers?: RuleTierDto[];
 }

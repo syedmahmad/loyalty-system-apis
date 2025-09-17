@@ -6,6 +6,7 @@ import { CreateRuleDto } from '../dto/create-rule.dto';
 import { UpdateRuleDto } from '../dto/update-rule.dto';
 import { Tenant } from 'src/tenants/entities/tenant.entity';
 import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
+import { RuleTier } from '../entities/rules-tier';
 
 @Injectable()
 export class RulesService {
@@ -18,6 +19,9 @@ export class RulesService {
 
     @InjectRepository(BusinessUnit)
     private readonly businessUnitRepository: Repository<BusinessUnit>,
+
+    @InjectRepository(RuleTier)
+    private readonly ruleTierRepository: Repository<RuleTier>,
 
     @InjectDataSource()
     private readonly dataSource: DataSource,
@@ -63,6 +67,19 @@ export class RulesService {
       });
 
       const savedRule = await queryRunner.manager.save(rule);
+
+      // Handle rule_tiers
+      if (dto.tiers && dto.tiers.length > 0) {
+        const ruleTiers = dto.tiers.map((t) =>
+          queryRunner.manager.create(RuleTier, {
+            rule: savedRule,
+            tier: { id: t.tier_id },
+            point_conversion_rate: t.point_conversion_rate ?? 1,
+          }),
+        );
+
+        await queryRunner.manager.save(ruleTiers);
+      }
       await queryRunner.commitTransaction();
       return savedRule;
     } catch (err) {
@@ -120,6 +137,7 @@ export class RulesService {
     }
 
     return this.ruleRepository.find({
+      relations: { business_unit: true, tiers: true },
       select: [
         'id',
         'name',
@@ -213,8 +231,9 @@ export class RulesService {
   }
 
   async findOne(uuid: string) {
-    return this.ruleRepository.findOne({
+    const rule = await this.ruleRepository.findOne({
       select: [
+        'id',
         'name',
         'slug',
         'rule_type',
@@ -237,8 +256,16 @@ export class RulesService {
         'is_priority',
         'business_unit_id',
       ],
+      relations: { business_unit: true, tiers: true },
       where: { uuid },
     });
+
+    // 👇 remove `id` before sending back
+    if (rule) {
+      delete (rule as any).id;
+    }
+
+    return rule;
   }
 
   async update(uuid: string, dto: UpdateRuleDto, user: string): Promise<Rule> {
@@ -282,6 +309,30 @@ export class RulesService {
         : 0;
 
       await manager.save(rule);
+      // Replace tiers if provided
+      if (dto.tiers) {
+        for (const t of dto.tiers) {
+          const existing = await manager.findOne(RuleTier, {
+            where: { rule: { id: rule.id }, tier: { id: t.tier_id } },
+          });
+
+          if (existing) {
+            // update existing
+            existing.point_conversion_rate =
+              t.point_conversion_rate ?? existing.point_conversion_rate;
+            await manager.save(existing);
+          } else {
+            // create new
+            const newRuleTier = manager.create(RuleTier, {
+              rule,
+              tier: { id: t.tier_id },
+              point_conversion_rate: t.point_conversion_rate ?? 1,
+            });
+            await manager.save(newRuleTier);
+          }
+        }
+      }
+
       await queryRunner.commitTransaction();
 
       return await this.findOne(uuid); // from your service
