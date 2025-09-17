@@ -343,6 +343,7 @@ export class CustomerProfileService {
           business_unit: { id: Number(businessUnitId) },
           tenant: { id: Number(tenantId) },
         },
+        relations: ['business_unit', 'tenant'],
       });
       if (!referrer_user) {
         throw new BadRequestException('referral code does not belongs to us');
