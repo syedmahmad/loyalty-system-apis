@@ -317,6 +317,7 @@ export class AuthService {
           business_unit_id:
             customer.business_unit?.uuid || customer.business_unit.uuid,
           qr_code_url: qrUrl,
+          is_new_user: customer.is_new_user,
         },
       };
     } catch (error) {
