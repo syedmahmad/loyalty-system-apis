@@ -13,6 +13,7 @@ import { RuleTarget } from './rule-target.entity';
 import { Tenant } from 'src/tenants/entities/tenant.entity';
 import { v4 as uuidv4 } from 'uuid';
 import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
+import { RuleTier } from './rules-tier';
 
 @Entity({ name: 'rules' })
 export class Rule {
@@ -126,4 +127,7 @@ export class Rule {
     cascade: true,
   })
   targets: RuleTarget[];
+
+  @OneToMany(() => RuleTier, (rt) => rt.rule, { cascade: true })
+  tiers: RuleTier[];
 }
