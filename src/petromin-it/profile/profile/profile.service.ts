@@ -37,6 +37,7 @@ export class CustomerProfileService {
   async getProfile(customerId: string) {
     const customerInfo = await this.customerRepo.findOne({
       where: { uuid: customerId },
+      relations: ['business_unit', 'tenant'],
     });
 
     if (!customerInfo) throw new NotFoundException('Customer not found');
@@ -68,7 +69,7 @@ export class CustomerProfileService {
         'city',
         // 'custom_city',
         'country',
-        'business_unit',
+        'external_customer_id',
         // 'notify_tier',
       ],
     });
@@ -76,16 +77,24 @@ export class CustomerProfileService {
     if (!customer) throw new NotFoundException('Customer not found');
 
     if (!customer.external_customer_id) {
-      const decryptedEmail = await this.ociService.decryptData(customer.email);
-      customer.email = decryptedEmail;
+      try {
+        const decryptedEmail = await this.ociService.decryptData(
+          customer.email,
+        );
+        customer.email = decryptedEmail;
 
-      const decryptedPhone = await this.ociService.decryptData(customer.phone);
-      customer.phone = decryptedPhone;
+        const decryptedPhone = await this.ociService.decryptData(
+          customer.phone,
+        );
+        customer.phone = decryptedPhone;
+      } catch (err) {
+        console.error('Decryption failed:', err);
+      }
     }
 
     const customerCoupons = await this.couponsService.getCustomerCoupons({
-      custcustomerId: customer.uuid,
-      bUId: customer.business_unit.id,
+      customerId: customer.uuid,
+      bUId: customerInfo.business_unit.id,
     });
 
     const userWallet = await this.walletRepo.findOne({
