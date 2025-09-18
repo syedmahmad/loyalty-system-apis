@@ -15,18 +15,23 @@ import { OciService } from 'src/oci/oci.service';
 import { CustomerService } from 'src/customers/customer.service';
 import { Log } from 'src/logs/entities/log.entity';
 import { Referral } from 'src/wallet/entities/referrals.entity';
+import { CouponsService } from 'src/coupons/coupons/coupons.service';
+import { Wallet } from 'src/wallet/entities/wallet.entity';
 
 @Injectable()
 export class CustomerProfileService {
   constructor(
     @InjectRepository(Customer)
     private readonly customerRepo: Repository<Customer>,
+    @InjectRepository(Wallet)
+    private readonly walletRepo: Repository<Wallet>,
     private readonly ociService: OciService,
     private readonly customerService: CustomerService,
     @InjectRepository(Log)
     private readonly logRepo: Repository<Log>,
     @InjectRepository(Referral)
     private readonly refRepo: Repository<Referral>,
+    private readonly couponsService: CouponsService,
   ) {}
 
   async getProfile(customerId: string) {
@@ -76,10 +81,24 @@ export class CustomerProfileService {
       const decryptedPhone = await this.ociService.decryptData(customer.phone);
       customer.phone = decryptedPhone;
     }
+
+    const customerCoupons = await this.couponsService.getCustomerCoupons({
+      custcustomerId: customer.uuid,
+      bUId: customer.business_unit.id,
+    });
+
+    const userWallet = await this.walletRepo.findOne({
+      where: { customer: { id: customerInfo.id } },
+    });
+
     return {
       success: true,
       message: 'This is the requested profile information',
-      result: customer,
+      result: {
+        customer: customer,
+        total_points: userWallet ? userWallet.total_balance : 0,
+        coupons_count: customerCoupons.result.available.length,
+      },
       errors: [],
     };
   }
