@@ -1916,7 +1916,10 @@ export class CouponsService {
             const singleCoupon = repo.create({
               ...body,
               code: row.coupon_code,
-              conditions: body.conditions ? JSON.parse(body.conditions) : [],
+              conditions: body.conditions ? JSON.parse(body.conditions) : null,
+              complex_coupon: body.complex_coupon
+                ? JSON.parse(body.complex_coupon)
+                : null,
               errors: body.errors ? JSON.parse(body.errors) : {},
               benefits: body.benefits ? JSON.parse(body.benefits) : [],
             });
