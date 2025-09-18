@@ -179,6 +179,7 @@ export class BurningService {
         where: {
           rule_type: 'burn',
           tenant: { id: customer.tenant.id },
+          business_unit: { id: customer.business_unit.id },
         },
       });
 
@@ -260,7 +261,7 @@ export class BurningService {
         result: {
           customer_id: customer.uuid,
           customer_phone_number,
-          transaction_id: tx.id,
+          transaction_id: tx.uuid,
           transaction_amount: tx.amount,
           max_burn_point: matchedRule.max_redeemption_points_limit,
           max_burn_amount: discountAmount,
