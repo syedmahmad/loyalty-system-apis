@@ -312,7 +312,7 @@ export class BurningService {
         throw new NotFoundException(`Transaction not found`);
       }
 
-      if (transaction.status !== WalletTransactionStatus.PENDING) {
+      if (transaction.status !== WalletTransactionStatus.NOT_CONFIRMED) {
         throw new BadRequestException(`Transaction already processed`);
       }
       //#endregion
