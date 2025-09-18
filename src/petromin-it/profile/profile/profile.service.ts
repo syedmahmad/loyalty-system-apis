@@ -68,6 +68,7 @@ export class CustomerProfileService {
         'city',
         // 'custom_city',
         'country',
+        'business_unit',
         // 'notify_tier',
       ],
     });
