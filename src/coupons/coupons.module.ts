@@ -63,7 +63,7 @@ import { CouponUsage } from './entities/coupon-usages.entity';
       Campaign,
       CampaignTier,
       CouponSyncLog,
-      CouponUsage
+      CouponUsage,
     ]),
   ],
   controllers: [CouponsController],
@@ -77,5 +77,6 @@ import { CouponUsage } from './entities/coupon-usages.entity';
     QrcodesService,
     CampaignsService,
   ],
+  exports: [CouponsService],
 })
 export class CouponsModule {}
