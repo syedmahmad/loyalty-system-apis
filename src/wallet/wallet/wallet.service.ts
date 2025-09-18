@@ -160,6 +160,7 @@ export class WalletService {
 
     const transactionPayload = {
       ...dto,
+      customer: { id: wallet.customer.id } as any,
       business_unit: { id: dto.business_unit_id } as any,
       point_balance: wallet.available_balance,
       wallet: { id: dto.wallet_id } as any,

@@ -232,7 +232,8 @@ export class BurningService {
         business_unit_id: customer.business_unit.id,
         wallet_id: wallet.id,
         type: WalletTransactionType.BURN,
-        amount: pointsToBurn,
+        amount: transaction_amount,
+        point_balance: pointsToBurn,
         status: WalletTransactionStatus.PENDING,
         source_type: matchedRule.name,
         source_id: matchedRule.id,
@@ -257,13 +258,13 @@ export class BurningService {
       //#region Step 7: Build and return response
       return {
         success: true,
-        message: `Burn successful: ${pointsToBurn} points burned for discount of ${discountAmount}`,
+        message: `You can burn ${pointsToBurn} points for discount of ${discountAmount}`,
         result: {
           customer_id: customer.uuid,
           customer_phone_number,
           transaction_id: tx.uuid,
           transaction_amount: tx.amount,
-          max_burn_point: matchedRule.max_redeemption_points_limit,
+          max_burn_point: pointsToBurn,
           max_burn_amount: discountAmount,
           redemption_factor: matchedRule.points_conversion_factor,
         },
@@ -317,6 +318,9 @@ export class BurningService {
       //#endregion
 
       //#region Step 3: Find customer & wallet
+
+      console.log(' transaction', transaction.customer);
+
       const customer = await this.customerRepo.findOne({
         where: { id: transaction.customer.id },
         relations: ['tenant', 'business_unit'],
