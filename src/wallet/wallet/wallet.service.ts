@@ -198,6 +198,8 @@ export class WalletService {
       wallet.total_balance += amount;
       wallet.locked_balance += amount;
       await this.walletRepo.save(wallet);
+    } else if (dto.status === 'not_confirmed') {
+      // do nothing to balances
     }
 
     return savedTx;

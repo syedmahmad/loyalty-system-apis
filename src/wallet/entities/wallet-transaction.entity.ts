@@ -25,6 +25,7 @@ export enum WalletTransactionStatus {
   PENDING = 'pending',
   ACTIVE = 'active',
   EXPIRED = 'expired',
+  NOT_CONFIRMED = 'not_confirmed',
 }
 
 @Entity()

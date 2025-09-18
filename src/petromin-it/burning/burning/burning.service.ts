@@ -234,7 +234,7 @@ export class BurningService {
         type: WalletTransactionType.BURN,
         amount: transaction_amount,
         point_balance: pointsToBurn,
-        status: WalletTransactionStatus.PENDING,
+        status: WalletTransactionStatus.NOT_CONFIRMED,
         source_type: matchedRule.name,
         source_id: matchedRule.id,
         description: remarks
@@ -411,6 +411,9 @@ export class BurningService {
         transaction.external_program_type ?? null;
 
       const updatedTx = await this.walletTxnRepo.save(transaction);
+
+      wallet.available_balance -= appliedBurnPoints;
+      await this.walletRepo.save(wallet);
       //#endregion
 
       //#region Step 6: Build and return response
