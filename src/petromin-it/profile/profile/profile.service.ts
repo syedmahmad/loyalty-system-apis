@@ -106,7 +106,7 @@ export class CustomerProfileService {
       message: 'This is the requested profile information',
       result: {
         customer: customer,
-        total_points: userWallet ? userWallet.total_balance : 0,
+        total_points: userWallet ? userWallet.available_balance : 0,
         coupons_count: customerCoupons.result.available.length,
       },
       errors: [],
