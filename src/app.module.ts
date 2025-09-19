@@ -36,6 +36,10 @@ import { HttpModule } from '@nestjs/axios';
 import { CustomerProfileModule } from './petromin-it/profile/profile.module';
 import { ReferralModule } from './petromin-it/referral/referral.module';
 import { BurningModule } from './petromin-it/burning/burning.module';
+import { VehicleModule } from './vehicles/vehicles.module';
+import { MakeModule } from './make/make.module';
+import { ModelModule } from './model/model.module';
+import { VariantModule } from './variant/variant.module';
 
 @Module({
   imports: [
@@ -90,6 +94,10 @@ import { BurningModule } from './petromin-it/burning/burning.module';
     AuthModule,
     ReferralModule,
     BurningModule,
+    VehicleModule,
+    MakeModule,
+    ModelModule,
+    VariantModule,
   ],
   controllers: [AppController],
   providers: [AppService, AxiosLoggerInterceptor],
