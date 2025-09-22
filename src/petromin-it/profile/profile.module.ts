@@ -9,6 +9,7 @@ import { OciModule } from 'src/oci/oci.module';
 import { Referral } from 'src/wallet/entities/referrals.entity';
 import { Wallet } from 'src/wallet/entities/wallet.entity';
 import { CouponsModule } from 'src/coupons/coupons.module';
+import { TiersModule } from 'src/tiers/tiers.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { CouponsModule } from 'src/coupons/coupons.module';
     CustomerModule,
     OciModule,
     CouponsModule,
+    TiersModule,
   ],
   controllers: [CustomerProfileController],
   providers: [CustomerProfileService],

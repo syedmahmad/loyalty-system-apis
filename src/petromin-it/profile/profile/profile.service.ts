@@ -17,6 +17,7 @@ import { Log } from 'src/logs/entities/log.entity';
 import { Referral } from 'src/wallet/entities/referrals.entity';
 import { CouponsService } from 'src/coupons/coupons/coupons.service';
 import { Wallet } from 'src/wallet/entities/wallet.entity';
+import { TiersService } from 'src/tiers/tiers/tiers.service';
 
 @Injectable()
 export class CustomerProfileService {
@@ -32,6 +33,7 @@ export class CustomerProfileService {
     @InjectRepository(Referral)
     private readonly refRepo: Repository<Referral>,
     private readonly couponsService: CouponsService,
+    private readonly tierService: TiersService,
   ) {}
 
   async getProfile(customerId: string) {
@@ -69,6 +71,7 @@ export class CustomerProfileService {
         'city',
         // 'custom_city',
         'country',
+        'created_at',
         'external_customer_id',
         // 'notify_tier',
       ],
@@ -101,6 +104,10 @@ export class CustomerProfileService {
       where: { customer: { id: customerInfo.id } },
     });
 
+    const currentCustomerTier = await this.tierService.getCurrentCustomerTier(
+      customer?.id,
+    );
+
     return {
       success: true,
       message: 'This is the requested profile information',
@@ -108,6 +115,7 @@ export class CustomerProfileService {
         customer: customer,
         total_points: userWallet ? userWallet.available_balance : 0,
         coupons_count: customerCoupons.result.available.length,
+        customer_tier: currentCustomerTier.tier,
       },
       errors: [],
     };
@@ -174,6 +182,7 @@ export class CustomerProfileService {
         // 'nationality',
         'address',
         'city',
+        'created_at',
         // 'custom_city',
         'country',
         // 'notify_tier',
