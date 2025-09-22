@@ -1,4 +1,4 @@
-import { Controller, Get, Headers, Param } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Param, Post } from '@nestjs/common';
 import { VehiclesService } from './vehicles.service';
 
 @Controller('vehicles')
@@ -17,5 +17,10 @@ export class VehiclesController {
       tenantId,
       businessUnitId,
     });
+  }
+
+  @Post('add')
+  async addCustomerVehicle(@Body() bodyPayload: any) {
+    return await this.service.addCustomerVehicle(bodyPayload);
   }
 }

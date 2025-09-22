@@ -104,7 +104,13 @@ export class VariantService {
         message: 'Variants synced successfully',
       };
     } catch (error) {
-      console.log('Errro:::', error);
+      console.error('fetchVariantAndSave Error:', error);
+      return {
+        success: false,
+        message: 'Failed to sync variants',
+        result: {},
+        errors: [error?.message || error],
+      };
     }
   }
 
@@ -150,7 +156,13 @@ export class VariantService {
         variants,
       };
     } catch (error) {
-      console.log('Errro:::', error);
+      console.error('getAll variants Error:', error);
+      return {
+        success: false,
+        message: 'Failed to getAll variants',
+        result: {},
+        errors: [error?.message || error],
+      };
     }
   }
 }

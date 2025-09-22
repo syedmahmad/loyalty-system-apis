@@ -82,7 +82,13 @@ export class MakeService {
         message: 'Makes synced successfully',
       };
     } catch (error) {
-      console.log('error::::', error);
+      console.error('fetchMakesAndSave Error:', error);
+      return {
+        success: false,
+        message: 'Failed to sync makes',
+        result: {},
+        errors: [error?.message || error],
+      };
     }
   }
 
@@ -102,7 +108,13 @@ export class MakeService {
         makes,
       };
     } catch (error) {
-      console.log('error::::', error);
+      console.error('getAll Makes Error:', error);
+      return {
+        success: false,
+        message: 'Failed to fetch makes',
+        result: {},
+        errors: [error?.message || error],
+      };
     }
   }
 }

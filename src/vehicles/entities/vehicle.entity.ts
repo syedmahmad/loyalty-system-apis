@@ -17,8 +17,8 @@ export class Vehicle {
   @Column({ type: 'varchar', length: 255, nullable: true })
   make: string;
 
-  @Column({ type: 'varchar', length: 36, nullable: true })
-  make_id: string;
+  @Column({ type: 'integer', nullable: true })
+  make_id: number;
 
   @Column({ type: 'varchar', length: 255, nullable: true })
   model: string;

@@ -102,7 +102,13 @@ export class ModelService {
         message: 'Models synced successfully',
       };
     } catch (error) {
-      console.log('Error:::', error);
+      console.error('fetchMakesAndSave Error:', error);
+      return {
+        success: false,
+        message: 'Failed to sync models',
+        result: {},
+        errors: [error?.message || error],
+      };
     }
   }
 
@@ -130,7 +136,13 @@ export class ModelService {
         makeIds: data.makeIds,
       };
     } catch (error) {
-      console.log('Error:::', error);
+      console.error('getAllYears Error:', error);
+      return {
+        success: false,
+        message: 'Failed to fetch years',
+        result: {},
+        errors: [error?.message || error],
+      };
     }
   }
 
@@ -165,7 +177,13 @@ export class ModelService {
         models,
       };
     } catch (error) {
-      console.log('Error:::', error);
+      console.error('getAll Models Error:', error);
+      return {
+        success: false,
+        message: 'Failed to fetch models',
+        result: {},
+        errors: [error?.message || error],
+      };
     }
   }
 }
