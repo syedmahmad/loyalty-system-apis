@@ -29,6 +29,7 @@ import { Tier } from 'src/tiers/entities/tier.entity';
 import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
 import { Tenant } from 'src/tenants/entities/tenant.entity';
 import { CouponType } from 'src/coupon_type/entities/coupon_type.entity';
+import { TransactionSyncLog } from 'src/customers/entities/transaction-sync-logs.entity';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { CouponType } from 'src/coupon_type/entities/coupon_type.entity';
       WalletTransaction,
       Wallet,
       WalletOrder,
+      TransactionSyncLog,
       WalletSettings,
       CampaignCustomerSegment,
       CampaignRule,

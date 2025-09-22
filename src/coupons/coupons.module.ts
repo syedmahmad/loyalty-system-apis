@@ -35,6 +35,7 @@ import { Campaign } from 'src/campaigns/entities/campaign.entity';
 import { CampaignTier } from 'src/campaigns/entities/campaign-tier.entity';
 import { CouponSyncLog } from './entities/coupon-sync-logs.entity';
 import { CouponUsage } from './entities/coupon-usages.entity';
+import { TransactionSyncLog } from 'src/customers/entities/transaction-sync-logs.entity';
 @Module({
   imports: [
     TypeOrmModule.forFeature([
@@ -60,6 +61,7 @@ import { CouponUsage } from './entities/coupon-usages.entity';
       CampaignRule,
       CampaignCoupons,
       CustomerSegmentMember,
+      TransactionSyncLog,
       Campaign,
       CampaignTier,
       CouponSyncLog,
