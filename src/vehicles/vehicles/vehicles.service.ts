@@ -97,23 +97,30 @@ export class VehiclesService {
         };
       }
 
-      const vehiclePayload = {
-        customer_id: customer?.uuid,
-        make: makeInfo?.name || null,
-        model: makeInfo?.name || null,
-        model_year: bodyPayload.model_year,
-        plate_no: bodyPayload.plate_no,
-        vin: bodyPayload.vin,
-      };
-
-      const manageVehicleData = await this.manageVehicleInResty({
-        vehiclePayload,
+      const customerInfoFromResty = await this.getCustomerInfoFromResty({
+        customer,
         loginInfo,
       });
 
+      if (customerInfoFromResty.length) {
+        const vehiclePayload = {
+          customer_id: customer?.uuid,
+          make: makeInfo?.name || null,
+          model: makeInfo?.name || null,
+          model_year: bodyPayload.model_year,
+          plate_no: bodyPayload.plate_no,
+          vin: bodyPayload.vin,
+        };
+
+        await this.manageVehicleInResty({
+          vehiclePayload,
+          loginInfo,
+        });
+      }
+
       return {
         success: true,
-        message: manageVehicleData?.msg || 'Vehicle synced successfully',
+        message: 'Vehicle added successfully',
         result: { vehicle },
         errors: [],
       };
@@ -126,6 +133,91 @@ export class VehiclesService {
         result: {},
         errors: error?.response?.data || [error],
       };
+    }
+  }
+
+  async getServiceList(bodyPayload) {
+    const { customerId, businessUnitId, tenantId } = bodyPayload;
+    try {
+      // Step 1: Find customer
+      const customer = await this.customerRepo.findOne({
+        where: [
+          {
+            uuid: customerId,
+            business_unit: { id: parseInt(businessUnitId) },
+            tenant: { id: parseInt(tenantId) },
+          },
+          {
+            hashed_number: encrypt(customerId),
+            business_unit: { id: parseInt(businessUnitId) },
+            tenant: { id: parseInt(tenantId) },
+          },
+        ],
+      });
+
+      if (!customer) throw new NotFoundException('Customer not found');
+
+      if (customer && customer.status == 0) {
+        throw new NotFoundException('Customer is inactive');
+      }
+
+      if (customer.status === 3) {
+        throw new NotFoundException('Customer is deleted');
+      }
+
+      const loginInfo = await this.customerLoginInResty();
+      if (!loginInfo.access_token) {
+        return {
+          success: false,
+          message: 'Authentication with Resty failed',
+          result: {},
+          errors: [loginInfo],
+        };
+      }
+
+      const customerInfoFromResty = await this.getCustomerInfoFromResty({
+        customer,
+        loginInfo,
+      });
+
+      if (!customerInfoFromResty.length) {
+        return {
+          success: false,
+          message: 'Customer not found in Resty',
+          result: {},
+          errors: [],
+        };
+      }
+
+      const customerVehicles = await this.getVehicleInfoFromResty({
+        customer_id: customerInfoFromResty[0].customer_id,
+        loginInfo,
+      });
+
+      if (!customerVehicles.length) {
+        return {
+          success: true,
+          message: 'No vehicles found in Resty',
+          result: { vehicles: [] },
+          errors: [],
+        };
+      }
+
+      const vehicleServices = await this.getVehicleServiceListFromResty({
+        customer_id: customerInfoFromResty[0].customer_id,
+        vehicle_id: customerVehicles[0].vehicle_id,
+        loginInfo,
+      });
+
+      return {
+        success: true,
+        message: 'Successfully fetched the data!',
+        result: { vehicleServices },
+        errors: [],
+      };
+    } catch (error: any) {
+      const errResponse = error?.response?.data;
+      return errResponse;
     }
   }
 
@@ -280,6 +372,7 @@ export class VehiclesService {
   }
 
   async getCustomerInfoFromResty({ customer, loginInfo }) {
+    // const customerPhone = '0569845873'; for testing it is hardcoded
     const customerPhone = `+${customer.country_code}${customer.phone}`;
     try {
       const response = await axios.get(
@@ -323,6 +416,25 @@ export class VehiclesService {
       const response = await axios.post(
         `${process.env.RESTY_BASE_URL}/api/vehicle/manage`,
         vehiclePayload,
+        {
+          headers: {
+            Authorization: `Bearer ${loginInfo.access_token}`,
+            'Content-Type': 'application/json',
+          },
+        },
+      );
+
+      return response.data;
+    } catch (error: any) {
+      const errResponse = error?.response?.data;
+      return errResponse;
+    }
+  }
+
+  async getVehicleServiceListFromResty({ customer_id, vehicle_id, loginInfo }) {
+    try {
+      const response = await axios.get(
+        `${process.env.RESTY_BASE_URL}/api/vehicle/${customer_id}/${vehicle_id}`,
         {
           headers: {
             Authorization: `Bearer ${loginInfo.access_token}`,

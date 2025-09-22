@@ -17,6 +17,16 @@ import { v4 as uuidv4 } from 'uuid';
 import { ActiveStatus } from '../type/types';
 import { CouponCustomerSegment } from './coupon-customer-segments.entity';
 
+class ImageLang {
+  en?: string;
+  ar?: string;
+}
+
+class Images {
+  desktop?: ImageLang;
+  mobile?: ImageLang;
+}
+
 @Entity('coupons')
 export class Coupon {
   @PrimaryGeneratedColumn()
@@ -198,4 +208,7 @@ export class Coupon {
 
   @UpdateDateColumn()
   updated_at: Date;
+
+  @Column({ type: 'simple-json', nullable: true })
+  images?: Images;
 }

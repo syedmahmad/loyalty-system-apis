@@ -51,6 +51,7 @@ import {
 import { OciService } from 'src/oci/oci.service';
 import { CouponSyncLog } from '../entities/coupon-sync-logs.entity';
 import { CouponUsage } from '../entities/coupon-usages.entity';
+import { CouponTypeName } from '../type/types';
 
 @Injectable()
 export class CouponsService {
@@ -1726,6 +1727,44 @@ export class CouponsService {
           continue;
         }
 
+        const services = [];
+        const products = [];
+
+        // if it is a simple coupon
+        if (
+          singleCoupon.coupon_type_id &&
+          [
+            CouponTypeName.SERVICE_BASED,
+            CouponTypeName.PRODUCT_SPECIFIC,
+          ].includes(singleCoupon.coupon_type_id)
+        ) {
+          const conditionTypes = singleCoupon.conditions.map((c) => c.type);
+          if (singleCoupon.coupon_type_id == CouponTypeName.PRODUCT_SPECIFIC) {
+            products.push(conditionTypes);
+          }
+          if (singleCoupon.coupon_type_id == CouponTypeName.SERVICE_BASED) {
+            services.push(conditionTypes);
+          }
+        }
+
+        // if it is a complex coupon
+        if (
+          singleCoupon.coupon_type_id == null &&
+          singleCoupon.complex_coupon.length
+        ) {
+          singleCoupon.complex_coupon.forEach((c) => {
+            const types = c.dynamicRows.map((row) => row.type);
+
+            if (c.coupon_type === CouponTypeName.SERVICE_BASED) {
+              services.push(...types);
+            }
+
+            if (c.coupon_type === CouponTypeName.PRODUCT_SPECIFIC) {
+              products.push(...types);
+            }
+          });
+        }
+
         if (singleCoupon.date_to && singleCoupon.date_to < today) {
           expired.push({
             uuid: singleCoupon.uuid,
@@ -1736,6 +1775,8 @@ export class CouponsService {
             description_en: singleCoupon.description_en,
             description_ar: singleCoupon.description_ar,
             expiry_date: singleCoupon.date_to,
+            services,
+            products,
           });
         } else {
           available.push({
@@ -1747,6 +1788,8 @@ export class CouponsService {
             description_en: singleCoupon.description_en,
             description_ar: singleCoupon.description_ar,
             expiry_date: singleCoupon.date_to,
+            services,
+            products,
           });
         }
       }
@@ -1759,6 +1802,50 @@ export class CouponsService {
     if (couponsForAllUser.length) {
       for (let index = 0; index <= couponsForAllUser.length - 1; index++) {
         const singleCoupon = couponsForAllUser[index];
+
+        const exists = available.some((c) => c.code === singleCoupon.code);
+        if (exists) {
+          continue;
+        }
+
+        const services = [];
+        const products = [];
+
+        // if it is a simple coupon
+        if (
+          singleCoupon.coupon_type_id &&
+          [
+            CouponTypeName.SERVICE_BASED,
+            CouponTypeName.PRODUCT_SPECIFIC,
+          ].includes(singleCoupon.coupon_type_id)
+        ) {
+          const conditionTypes = singleCoupon.conditions.map((c) => c.type);
+          if (singleCoupon.coupon_type_id == CouponTypeName.PRODUCT_SPECIFIC) {
+            products.push(conditionTypes);
+          }
+          if (singleCoupon.coupon_type_id == CouponTypeName.SERVICE_BASED) {
+            services.push(conditionTypes);
+          }
+        }
+
+        // if it is a complex coupon
+        if (
+          singleCoupon.coupon_type_id == null &&
+          singleCoupon.complex_coupon.length
+        ) {
+          singleCoupon.complex_coupon.forEach((c) => {
+            const types = c.dynamicRows.map((row) => row.type);
+
+            if (c.coupon_type === CouponTypeName.SERVICE_BASED) {
+              services.push(...types);
+            }
+
+            if (c.coupon_type === CouponTypeName.PRODUCT_SPECIFIC) {
+              products.push(...types);
+            }
+          });
+        }
+
         if (singleCoupon.date_to && singleCoupon.date_to < today) {
           expired.push({
             uuid: singleCoupon.uuid,
@@ -1769,6 +1856,8 @@ export class CouponsService {
             description_en: singleCoupon.description_en,
             description_ar: singleCoupon.description_ar,
             expiry_date: singleCoupon.date_to,
+            services,
+            products,
           });
         } else {
           available.push({
@@ -1780,6 +1869,8 @@ export class CouponsService {
             description_en: singleCoupon.description_en,
             description_ar: singleCoupon.description_ar,
             expiry_date: singleCoupon.date_to,
+            services,
+            products,
           });
         }
       }
@@ -2234,5 +2325,13 @@ export class CouponsService {
       },
       errors: [],
     };
+  }
+
+  async uploadFileToBucket(buffer, bucketName, objectName) {
+    return await this.ociService.uploadBufferToOci(
+      buffer,
+      bucketName,
+      objectName,
+    );
   }
 }

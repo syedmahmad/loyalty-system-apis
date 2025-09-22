@@ -38,6 +38,26 @@ export class ConditionDto {
   variant?: number;
 }
 
+class ImageLangDto {
+  @IsOptional()
+  @IsString()
+  en?: string;
+
+  @IsOptional()
+  @IsString()
+  ar?: string;
+}
+
+export class ImagesDto {
+  @ValidateNested()
+  @Type(() => ImageLangDto)
+  desktop: ImageLangDto;
+
+  @ValidateNested()
+  @Type(() => ImageLangDto)
+  mobile: ImageLangDto;
+}
+
 export class CreateCouponDto {
   @IsInt()
   tenant_id: number;
@@ -94,4 +114,7 @@ export class CreateCouponDto {
   @ValidateNested({ each: true })
   @Type(() => ConditionDto)
   conditions?: ConditionDto[];
+
+  @IsOptional()
+  images: ImagesDto;
 }

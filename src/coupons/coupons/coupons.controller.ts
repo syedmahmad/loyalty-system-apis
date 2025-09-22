@@ -256,4 +256,31 @@ export class CouponsController {
   ) {
     return await this.service.getCouponUsedHistory(body, search);
   }
+
+  @Post('upload-image-to-bucket')
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadFileToBucket(@UploadedFile() file: any) {
+    const bucketName = process.env.OCI_BUCKET;
+    const objectName = file.originalname;
+    const buffer = file.buffer;
+
+    const response = await this.service.uploadFileToBucket(
+      buffer,
+      bucketName,
+      objectName,
+    );
+
+    if (response) {
+      return {
+        success: true,
+        message: 'File uploaded successfully',
+        uploaded_url: `${process.env.OCI_URL}/${objectName}`,
+      };
+    }
+
+    return {
+      success: false,
+      message: 'Failed to upload file',
+    };
+  }
 }

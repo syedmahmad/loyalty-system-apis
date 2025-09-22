@@ -23,4 +23,18 @@ export class VehiclesController {
   async addCustomerVehicle(@Body() bodyPayload: any) {
     return await this.service.addCustomerVehicle(bodyPayload);
   }
+
+  @Get('/service-list/:customerId')
+  async getServiceList(
+    @Headers() headers: Record<string, string>,
+    @Param('customerId') customerId: string,
+  ) {
+    const tenantId = headers['x-tenant-id'];
+    const businessUnitId = headers['x-business-unit-id'];
+    return await this.service.getServiceList({
+      customerId,
+      tenantId,
+      businessUnitId,
+    });
+  }
 }
