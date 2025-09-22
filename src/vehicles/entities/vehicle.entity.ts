@@ -42,10 +42,10 @@ export class Vehicle {
   @JoinColumn({ name: 'customer_id' })
   customer: Customer;
 
-  @CreateDateColumn({ type: 'datetime', default: () => 'CURRENT_TIMESTAMP' })
+  @CreateDateColumn()
   created_at: Date;
 
-  @UpdateDateColumn({ type: 'datetime', default: () => 'CURRENT_TIMESTAMP' })
+  @UpdateDateColumn()
   updated_at: Date;
 
   @Column({ type: 'varchar', length: 32, nullable: true })
