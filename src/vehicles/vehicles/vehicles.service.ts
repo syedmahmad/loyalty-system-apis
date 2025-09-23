@@ -410,7 +410,7 @@ export class VehiclesService {
           username: `${process.env.RESTY_USERNAME}`,
           password: `${process.env.RESTY_PASSWORD}`,
         }),
-        responseBody: JSON.stringify(errResponse),
+        responseBody: JSON.stringify(error) || null,
         url: `${process.env.RESTY_BASE_URL}/api/login`,
         method: 'POST',
         statusCode: 500,
@@ -448,7 +448,7 @@ export class VehiclesService {
       const errResponse = error?.response?.data;
       const logs = await this.logRepo.create({
         requestBody: null,
-        responseBody: JSON.stringify(errResponse),
+        responseBody: JSON.stringify(error) || null,
         url: `${process.env.RESTY_BASE_URL}/api/customer/search?param=${customerPhone}`,
         method: 'GET',
         statusCode: 500,
@@ -484,7 +484,7 @@ export class VehiclesService {
       const errResponse = error?.response?.data;
       const logs = await this.logRepo.create({
         requestBody: null,
-        responseBody: JSON.stringify(errResponse),
+        responseBody: JSON.stringify(error) || null,
         url: `${process.env.RESTY_BASE_URL}/api/customer/${customer_id}/vehicles`,
         method: 'GET',
         statusCode: 500,
@@ -521,7 +521,7 @@ export class VehiclesService {
       const errResponse = error?.response?.data;
       const logs = await this.logRepo.create({
         requestBody: JSON.stringify(vehiclePayload),
-        responseBody: JSON.stringify(errResponse),
+        responseBody: JSON.stringify(error) || null,
         url: `${process.env.RESTY_BASE_URL}/api/vehicle/manage`,
         method: 'POST',
         statusCode: 500,
@@ -557,7 +557,7 @@ export class VehiclesService {
       const errResponse = error?.response?.data;
       const logs = await this.logRepo.create({
         requestBody: null,
-        responseBody: JSON.stringify(errResponse),
+        responseBody: JSON.stringify(error) || null,
         url: `${process.env.RESTY_BASE_URL}/api/vehicle/${customer_id}/${vehicle_id}`,
         method: 'GET',
         statusCode: 500,
