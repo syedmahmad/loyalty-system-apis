@@ -15,7 +15,7 @@ export class AuditTrail {
   table: string;
 
   @Column()
-  rowId: number;
+  rowId: string;
 
   @Column()
   action: string;

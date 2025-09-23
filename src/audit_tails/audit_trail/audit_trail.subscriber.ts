@@ -19,7 +19,7 @@ export class GlobalAuditSubscriber implements EntitySubscriberInterface {
     const repo = event.manager.getRepository(AuditTrail);
     await repo.save({
       table: event.metadata.name,
-      rowId: event.entity.id,
+      rowId: `${event.entity.id}`,
       action: 'create',
       current_data: event.entity,
       previous_data: null,
@@ -33,7 +33,7 @@ export class GlobalAuditSubscriber implements EntitySubscriberInterface {
     const repo = event.manager.getRepository(AuditTrail);
     await repo.save({
       table: event.metadata.name,
-      rowId: event.entity?.id,
+      rowId: `${event.entity?.id}`,
       action: 'update',
       current_data: event.entity,
       previous_data: event.databaseEntity,
@@ -47,7 +47,7 @@ export class GlobalAuditSubscriber implements EntitySubscriberInterface {
     const repo = event.manager.getRepository(AuditTrail);
     await repo.save({
       table: event.metadata.name,
-      rowId: event.entityId as number,
+      rowId: `${event.entityId}`,
       action: 'delete',
       current_data: null,
       previous_data: event.databaseEntity,

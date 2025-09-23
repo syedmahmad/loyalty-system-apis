@@ -40,6 +40,7 @@ import { VehicleModule } from './vehicles/vehicles.module';
 import { MakeModule } from './make/make.module';
 import { ModelModule } from './model/model.module';
 import { VariantModule } from './variant/variant.module';
+import { RustyModule } from './rusty/rusty.module';
 
 @Module({
   imports: [
@@ -96,6 +97,7 @@ import { VariantModule } from './variant/variant.module';
     BurningModule,
     VehicleModule,
     MakeModule,
+    RustyModule,
     ModelModule,
     VariantModule,
   ],
