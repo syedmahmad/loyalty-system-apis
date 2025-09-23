@@ -34,8 +34,6 @@ export class RustyService {
    * ✅ API 1: Save bulk data pushed from Datamart
    */
   async populateData(body: any) {
-    let latestTimestamp: string | null = null;
-
     const customers = body.customers || [];
     const workshops = body.workshops || [];
 
@@ -177,11 +175,6 @@ export class RustyService {
             await this.invoiceRepo.save(invoice);
             invoiceCount++;
 
-            latestTimestamp = invoice.updated_at
-              ?.toISOString()
-              .slice(0, 19)
-              .replace('T', ' ');
-
             // services
             for (const svc of inv['services'] || []) {
               const service = this.serviceRepo.create({
@@ -205,11 +198,20 @@ export class RustyService {
       }
     }
 
+    const lastInvoice = await this.invoiceRepo.findOne({
+      where: {},
+      order: { updated_at: 'DESC' },
+    });
+
+    const latestTimeStamp =
+      lastInvoice?.updated_at?.toISOString().slice(0, 19).replace('T', ' ') ||
+      null;
+
     return {
       success: true,
       message: 'Successfully imported data!...',
       data: {
-        time_stamp: latestTimestamp,
+        time_stamp: latestTimeStamp,
         total_customers: customerCount,
         total_vehicles: vehicleCount,
         total_jobcards: jobcardCount,
