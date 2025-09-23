@@ -39,6 +39,15 @@ export class RustyService {
     const customers = body.customers || [];
     const workshops = body.workshops || [];
 
+    if (customers.length > 200) {
+      return {
+        success: false,
+        message: 'Cannot import more than 200 customers at once',
+        data: null,
+        errors: ['Too many customers in one request'],
+      };
+    }
+
     let customerCount = 0;
     let vehicleCount = 0;
     let jobcardCount = 0;
@@ -107,11 +116,6 @@ export class RustyService {
       await this.customerRepo.save(customer);
       customerCount++;
 
-      latestTimestamp = customer.updated_at
-        ?.toISOString()
-        .slice(0, 19)
-        .replace('T', ' ');
-
       // vehicles
       for (const veh of cust['vehicles'] || []) {
         const vehicle = this.vehicleRepo.create({
@@ -172,6 +176,11 @@ export class RustyService {
             });
             await this.invoiceRepo.save(invoice);
             invoiceCount++;
+
+            latestTimestamp = invoice.updated_at
+              ?.toISOString()
+              .slice(0, 19)
+              .replace('T', ' ');
 
             // services
             for (const svc of inv['services'] || []) {
