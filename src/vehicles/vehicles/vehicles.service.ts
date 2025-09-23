@@ -3,10 +3,10 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Vehicle } from '../entities/vehicle.entity';
 import { Customer } from 'src/customers/entities/customer.entity';
-import { encrypt } from 'src/helpers/encryption';
 import axios from 'axios';
 import { MakeEntity } from 'src/make/entities/make.entity';
 import { ModelEntity } from 'src/model/entities/model.entity';
+import { Log } from 'src/logs/entities/log.entity';
 
 @Injectable()
 export class VehiclesService {
@@ -16,6 +16,9 @@ export class VehiclesService {
 
     @InjectRepository(Customer)
     private readonly customerRepo: Repository<Customer>,
+
+    @InjectRepository(Log)
+    private readonly logRepo: Repository<Log>,
 
     @InjectRepository(MakeEntity)
     private readonly makeRepository: Repository<MakeEntity>,
@@ -30,21 +33,22 @@ export class VehiclesService {
 
       // Step 1: Find customer
       const customer = await this.customerRepo.findOne({
-        where: [
-          {
-            uuid: customer_id,
-            business_unit: { id: parseInt(bUId) },
-            tenant: { id: parseInt(tenantId) },
-          },
-          {
-            hashed_number: encrypt(customer_id),
-            business_unit: { id: parseInt(bUId) },
-            tenant: { id: parseInt(tenantId) },
-          },
-        ],
+        where: {
+          uuid: customer_id,
+          business_unit: { id: parseInt(bUId) },
+          tenant: { id: parseInt(tenantId) },
+        },
       });
 
       if (!customer) throw new NotFoundException('Customer not found');
+
+      if (customer && customer.status == 0) {
+        throw new NotFoundException('Customer is inactive');
+      }
+
+      if (customer.status === 3) {
+        throw new NotFoundException('Customer is deleted');
+      }
 
       const makeInfo = await this.makeRepository.findOne({
         where: { makeId: bodyPayload.make_id },
@@ -61,6 +65,11 @@ export class VehiclesService {
           registration_number: bodyPayload.plate_no,
         },
       });
+
+      if (vehicle && vehicle.status === 0) {
+        // Reactivate the vehicle if it was inactive
+        vehicle.status = 1;
+      }
 
       if (vehicle) {
         // Update existing vehicle
@@ -141,18 +150,11 @@ export class VehiclesService {
     try {
       // Step 1: Find customer
       const customer = await this.customerRepo.findOne({
-        where: [
-          {
-            uuid: customerId,
-            business_unit: { id: parseInt(businessUnitId) },
-            tenant: { id: parseInt(tenantId) },
-          },
-          {
-            hashed_number: encrypt(customerId),
-            business_unit: { id: parseInt(businessUnitId) },
-            tenant: { id: parseInt(tenantId) },
-          },
-        ],
+        where: {
+          uuid: customerId,
+          business_unit: { id: parseInt(businessUnitId) },
+          tenant: { id: parseInt(tenantId) },
+        },
       });
 
       if (!customer) throw new NotFoundException('Customer not found');
@@ -203,11 +205,23 @@ export class VehiclesService {
         };
       }
 
-      const vehicleServices = await this.getVehicleServiceListFromResty({
-        customer_id: customerInfoFromResty[0].customer_id,
-        vehicle_id: customerVehicles[0].vehicle_id,
-        loginInfo,
-      });
+      // 7. Get services for all vehicles from Resty
+      const vehicleServices: any[] = [];
+
+      for (const vehicle of customerVehicles) {
+        const serviceList = await this.getVehicleServiceListFromResty({
+          customer_id: customerInfoFromResty[0].customer_id,
+          vehicle_id: vehicle.vehicle_id,
+          loginInfo,
+        });
+
+        vehicleServices.push({
+          vehicle_id: vehicle.vehicle_id,
+          vin: vehicle.vin,
+          plate_no: vehicle.plate_no,
+          services: serviceList || [],
+        });
+      }
 
       return {
         success: true,
@@ -225,53 +239,29 @@ export class VehiclesService {
     try {
       // 1. Validate Customer
       const customer = await this.customerRepo.findOne({
-        where: [
-          {
-            uuid: customerId,
-            business_unit: { id: parseInt(businessUnitId) },
-            tenant: { id: parseInt(tenantId) },
-          },
-          {
-            hashed_number: encrypt(customerId),
-            business_unit: { id: parseInt(businessUnitId) },
-            tenant: { id: parseInt(tenantId) },
-          },
-        ],
+        where: {
+          uuid: customerId,
+          business_unit: { id: parseInt(businessUnitId) },
+          tenant: { id: parseInt(tenantId) },
+        },
       });
 
       if (!customer) throw new NotFoundException('Customer not found');
 
-      // 2. Look for vehicles in local DB
-      const vehicles = await this.vehiclesRepository.find({
-        where: {
-          customer: { id: customer.id },
-        },
-      });
-
-      if (vehicles.length) {
-        const vehicleArr = [];
-        for (let index = 0; index <= vehicles.length - 1; index++) {
-          const singleVehicle = vehicles[index];
-          vehicleArr.push({
-            make: singleVehicle.make || null,
-            model: singleVehicle.model || null,
-            model_year: singleVehicle.year || null,
-            plate_no: singleVehicle.registration_number || null,
-            vin: singleVehicle.vin_number || null,
-          });
-        }
-
-        return {
-          success: true,
-          message: 'Successfully fetched the data!',
-          result: {
-            vehicles: vehicleArr,
-          },
-          errors: [],
-        };
+      if (customer && customer.status == 0) {
+        throw new NotFoundException('Customer is inactive');
       }
 
-      // 3. Login to Resty if no local vehicles
+      if (customer.status === 3) {
+        throw new NotFoundException('Customer is deleted');
+      }
+
+      // 2. Get local vehicles
+      const localVehicles = await this.vehiclesRepository.find({
+        where: { customer: { id: customer.id }, status: 1 },
+      });
+
+      // 3. Login to Resty
       const loginInfo = await this.customerLoginInResty();
       if (!loginInfo.access_token) {
         return {
@@ -298,12 +288,12 @@ export class VehiclesService {
       }
 
       // 5. Get Vehicles from Resty
-      const customerVehicles = await this.getVehicleInfoFromResty({
+      const restyVehicles = await this.getVehicleInfoFromResty({
         customer_id: customerInfoFromResty[0].customer_id,
         loginInfo,
       });
 
-      if (!customerVehicles.length) {
+      if (!restyVehicles.length) {
         return {
           success: true,
           message: 'No vehicles found in Resty',
@@ -312,29 +302,65 @@ export class VehiclesService {
         };
       }
 
-      // 6. Save vehicles in local DB
-      for (const eachVehicle of customerVehicles) {
-        const makeInfo = await this.makeRepository.findOne({
-          where: { name: eachVehicle.make },
-        });
+      // 6. Compare and sync
+      const localVinSet = new Set(
+        localVehicles.map((v) => v.registration_number),
+      );
+      const newVehicles: any[] = [];
 
-        await this.vehiclesRepository.save({
-          make: eachVehicle.make,
-          make_id: makeInfo?.makeId || null,
-          model: eachVehicle.model,
-          year: eachVehicle.model_year,
-          registration_number: eachVehicle.plate_no,
-          vin_number: eachVehicle.vin,
-          customer: { id: customer.id },
-          last_mileage: eachVehicle.last_mileage || null,
-          last_service_date: eachVehicle.last_service_date || null,
-        });
+      for (const eachVehicle of restyVehicles) {
+        if (!localVinSet.has(eachVehicle.plate_no)) {
+          const makeInfo = await this.makeRepository.findOne({
+            where: { name: eachVehicle.make },
+          });
+
+          const deactivatedVehicle = await this.vehiclesRepository.findOne({
+            where: {
+              customer: { id: customer.id },
+              registration_number: eachVehicle.plate_no,
+              status: 0, // only look for deactivated vehicles
+            },
+          });
+
+          if (deactivatedVehicle) {
+            continue; // Skip adding this vehicle as it's deactivated
+          }
+
+          const savedVehicle = await this.vehiclesRepository.save({
+            make: eachVehicle.make,
+            make_id: makeInfo?.makeId || null,
+            model: eachVehicle.model,
+            year: eachVehicle.model_year,
+            registration_number: eachVehicle.plate_no,
+            vin_number: eachVehicle.vin,
+            customer: { id: customer.id },
+            last_mileage: eachVehicle.last_mileage || null,
+            last_service_date: eachVehicle.last_service_date || null,
+          });
+
+          newVehicles.push(savedVehicle);
+        }
       }
+
+      // 7. Prepare response list (union of local + newResty)
+      const mergedVehicles =
+        localVehicles.length === restyVehicles.length
+          ? localVehicles
+          : [...localVehicles, ...newVehicles];
+
+      // map to consistent response format
+      const vehicleArr = mergedVehicles.map((singleVehicle) => ({
+        make: singleVehicle.make || null,
+        model: singleVehicle.model || null,
+        model_year: singleVehicle.year || null,
+        plate_no: singleVehicle.registration_number || null,
+        vin: singleVehicle.vin_number || null,
+      }));
 
       return {
         success: true,
         message: 'Successfully fetched the data!',
-        result: { vehicles: customerVehicles },
+        result: { vehicles: vehicleArr },
         errors: [],
       };
     } catch (error) {
@@ -364,9 +390,32 @@ export class VehiclesService {
         },
       );
 
+      const logs = await this.logRepo.create({
+        requestBody: JSON.stringify({
+          username: `${process.env.RESTY_USERNAME}`,
+          password: `${process.env.RESTY_PASSWORD}`,
+        }),
+        responseBody: JSON.stringify(response),
+        url: `${process.env.RESTY_BASE_URL}/api/login`,
+        method: 'POST',
+        statusCode: 200,
+      } as Log);
+      await this.logRepo.save(logs);
+
       return response.data;
     } catch (error: any) {
       const errResponse = error?.response?.data;
+      const logs = await this.logRepo.create({
+        requestBody: JSON.stringify({
+          username: `${process.env.RESTY_USERNAME}`,
+          password: `${process.env.RESTY_PASSWORD}`,
+        }),
+        responseBody: JSON.stringify(errResponse),
+        url: `${process.env.RESTY_BASE_URL}/api/login`,
+        method: 'POST',
+        statusCode: 500,
+      } as Log);
+      await this.logRepo.save(logs);
       return errResponse;
     }
   }
@@ -385,9 +434,26 @@ export class VehiclesService {
         },
       );
 
+      const logs = await this.logRepo.create({
+        requestBody: null,
+        responseBody: JSON.stringify(response),
+        url: `${process.env.RESTY_BASE_URL}/api/customer/search?param=${customerPhone}`,
+        method: 'GET',
+        statusCode: 200,
+      } as Log);
+      await this.logRepo.save(logs);
+
       return response.data;
     } catch (error: any) {
       const errResponse = error?.response?.data;
+      const logs = await this.logRepo.create({
+        requestBody: null,
+        responseBody: JSON.stringify(errResponse),
+        url: `${process.env.RESTY_BASE_URL}/api/customer/search?param=${customerPhone}`,
+        method: 'GET',
+        statusCode: 500,
+      } as Log);
+      await this.logRepo.save(logs);
       return errResponse;
     }
   }
@@ -404,9 +470,26 @@ export class VehiclesService {
         },
       );
 
+      const logs = await this.logRepo.create({
+        requestBody: null,
+        responseBody: JSON.stringify(response),
+        url: `${process.env.RESTY_BASE_URL}/api/customer/${customer_id}/vehicles`,
+        method: 'GET',
+        statusCode: 200,
+      } as Log);
+      await this.logRepo.save(logs);
+
       return response.data;
     } catch (error: any) {
       const errResponse = error?.response?.data;
+      const logs = await this.logRepo.create({
+        requestBody: null,
+        responseBody: JSON.stringify(errResponse),
+        url: `${process.env.RESTY_BASE_URL}/api/customer/${customer_id}/vehicles`,
+        method: 'GET',
+        statusCode: 500,
+      } as Log);
+      await this.logRepo.save(logs);
       return errResponse;
     }
   }
@@ -424,9 +507,26 @@ export class VehiclesService {
         },
       );
 
+      const logs = await this.logRepo.create({
+        requestBody: JSON.stringify(vehiclePayload),
+        responseBody: JSON.stringify(response),
+        url: `${process.env.RESTY_BASE_URL}/api/vehicle/manage`,
+        method: 'POST',
+        statusCode: 200,
+      } as Log);
+      await this.logRepo.save(logs);
+
       return response.data;
     } catch (error: any) {
       const errResponse = error?.response?.data;
+      const logs = await this.logRepo.create({
+        requestBody: JSON.stringify(vehiclePayload),
+        responseBody: JSON.stringify(errResponse),
+        url: `${process.env.RESTY_BASE_URL}/api/vehicle/manage`,
+        method: 'POST',
+        statusCode: 500,
+      } as Log);
+      await this.logRepo.save(logs);
       return errResponse;
     }
   }
@@ -443,10 +543,64 @@ export class VehiclesService {
         },
       );
 
+      const logs = await this.logRepo.create({
+        requestBody: null,
+        responseBody: JSON.stringify(response),
+        url: `${process.env.RESTY_BASE_URL}/api/vehicle/${customer_id}/${vehicle_id}`,
+        method: 'GET',
+        statusCode: 200,
+      } as Log);
+      await this.logRepo.save(logs);
+
       return response.data;
     } catch (error: any) {
       const errResponse = error?.response?.data;
+      const logs = await this.logRepo.create({
+        requestBody: null,
+        responseBody: JSON.stringify(errResponse),
+        url: `${process.env.RESTY_BASE_URL}/api/vehicle/${customer_id}/${vehicle_id}`,
+        method: 'GET',
+        statusCode: 500,
+      } as Log);
+      await this.logRepo.save(logs);
       return errResponse;
+    }
+  }
+
+  async softDeleteVehicle(vehicleId: string, customerId: string) {
+    try {
+      const vehicle = await this.vehiclesRepository.findOne({
+        where: {
+          id: parseInt(vehicleId),
+          customer: {
+            id: parseInt(customerId),
+            status: 1, // Ensure customer is active
+          },
+          status: 1, // Ensure vehicle is active
+        },
+      });
+
+      if (!vehicle) {
+        throw new NotFoundException('Vehicle not found');
+      }
+
+      vehicle.status = 0; // Set status to inactive
+      await this.vehiclesRepository.save(vehicle);
+
+      return {
+        success: true,
+        message: 'Vehicle deactivated successfully',
+        result: {},
+        errors: [],
+      };
+    } catch (error) {
+      console.error('softDeleteVehicle Error:', error);
+      return {
+        success: false,
+        message: error.message || 'Something went wrong',
+        result: {},
+        errors: [error],
+      };
     }
   }
 }

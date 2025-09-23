@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Headers, Param, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Headers,
+  Param,
+  Post,
+} from '@nestjs/common';
 import { VehiclesService } from './vehicles.service';
 
 @Controller('vehicles')
@@ -22,6 +30,14 @@ export class VehiclesController {
   @Post('add')
   async addCustomerVehicle(@Body() bodyPayload: any) {
     return await this.service.addCustomerVehicle(bodyPayload);
+  }
+
+  @Delete(':vehicleId/:customerId')
+  async deleteCustomerVehicle(
+    @Param('vehicleId') vehicleId: string,
+    @Param('customerId') customerId: string,
+  ) {
+    return await this.service.softDeleteVehicle(vehicleId, customerId);
   }
 
   @Get('/service-list/:customerId')
