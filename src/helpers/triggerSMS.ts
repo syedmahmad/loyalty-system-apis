@@ -25,6 +25,8 @@ export async function TriggerSMS(
     ],
   };
 
+  console.log('hello world', body);
+
   try {
     const res = await axios.post(endpoint, body, {
       headers: {
@@ -43,6 +45,7 @@ export async function TriggerSMS(
     } as Log);
     await logRepo.save(logs);
   } catch (err) {
+    console.log('res////////////err', err);
     // maintain external logs
     // log the external call
     const logs = await logRepo.create({
