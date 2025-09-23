@@ -5,6 +5,10 @@ import * as bodyParser from 'body-parser';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
+  // TODO: need to remvoe timeout after syncing.
+  // Increase timeout
+  const server = app.getHttpServer();
+  server.setTimeout(30 * 60 * 1000); // 30 minutes in ms
   const allowedOrigins = process.env.ALLOWED_CORS_URLS?.split(',') || [];
 
   app.use(bodyParser.json({ limit: '50mb' }));
