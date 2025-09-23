@@ -376,19 +376,32 @@ export class VehiclesService {
 
   async customerLoginInResty() {
     try {
-      const response = await axios.post(
-        `${process.env.RESTY_BASE_URL}/api/login`,
-        {
-          username: `${process.env.RESTY_USERNAME}`,
-          password: `${process.env.RESTY_PASSWORD}`,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${process.env.RESTY_TOKEN}`,
-            'Content-Type': 'application/json',
-          },
-        },
-      );
+      // Prepare request data
+      const loginUrl = `${process.env.RESTY_BASE_URL.replace(/\/$/, '')}/api/login`;
+      const loginPayload = {
+        username: process.env.RESTY_USERNAME,
+        password: process.env.RESTY_PASSWORD,
+      };
+      const loginHeaders = {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${process.env.RESTY_TOKEN || '5aa664e22cf91a1642b7c6aa65a7d13a5a5f386c23afa57c'}`,
+      };
+
+      // Log the axios.post call and equivalent curl command
+      console.log('axios.post:', loginUrl, loginPayload, {
+        headers: loginHeaders,
+      });
+      const curlCommand = [
+        `curl -X POST "${loginUrl}"`,
+        `-H "Content-Type: application/json"`,
+        `-H "Authorization: Bearer ${process.env.RESTY_TOKEN || '5aa664e22cf91a1642b7c6aa65a7d13a5a5f386c23afa57c'}"`,
+        `-d '${JSON.stringify(loginPayload)}'`,
+      ].join(' ');
+      console.log('Equivalent curl command:', curlCommand);
+
+      const response = await axios.post(loginUrl, loginPayload, {
+        headers: loginHeaders,
+      });
 
       const logs = await this.logRepo.create({
         requestBody: JSON.stringify({
