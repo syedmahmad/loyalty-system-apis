@@ -41,6 +41,7 @@ import { MakeModule } from './make/make.module';
 import { ModelModule } from './model/model.module';
 import { VariantModule } from './variant/variant.module';
 import { RustyModule } from './rusty/rusty.module';
+import { PreferencesModule } from './petromin-it/preferences/preferences.module';
 
 @Module({
   imports: [
@@ -104,6 +105,7 @@ import { RustyModule } from './rusty/rusty.module';
     RustyModule,
     ModelModule,
     VariantModule,
+    PreferencesModule,
   ],
   controllers: [AppController],
   providers: [AppService, AxiosLoggerInterceptor],
