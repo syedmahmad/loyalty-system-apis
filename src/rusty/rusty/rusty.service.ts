@@ -224,6 +224,7 @@ export class RustyService {
    */
   async getLatestTimestamp(): Promise<string | null> {
     const lastInvoice = await this.invoiceRepo.findOne({
+      where: {},
       order: { updated_at: 'DESC' },
     });
     return (
