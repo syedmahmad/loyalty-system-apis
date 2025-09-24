@@ -565,6 +565,7 @@ export class TiersService {
             ? {
                 uuid: next.uuid,
                 name: next.name,
+                name_ar: next.name_ar,
                 level: next.level,
                 min_points: next.min_points,
               }
