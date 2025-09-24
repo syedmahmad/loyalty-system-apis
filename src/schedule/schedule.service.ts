@@ -76,19 +76,19 @@ export class ScheduleService {
 
   @Cron(CronExpression.EVERY_HOUR)
   async markExpiredCoupons() {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
     console.log('Running coupon expiry check...');
+    // const today = new Date();
+    // today.setHours(0, 0, 0, 0);
 
-    const expiredCoupons = await this.couponsRepository.find({
-      where: { date_to: LessThanOrEqual(today), status: 1 },
-    });
+    // const expiredCoupons = await this.couponsRepository.find({
+    //   where: { date_to: LessThanOrEqual(today), status: 1 },
+    // });
 
-    for (const coupon of expiredCoupons) {
-      coupon.status = 0;
-      await this.couponsRepository.save(coupon);
-      console.log(`Deactivated coupon: ${coupon.coupon_title}`);
-    }
+    // for (const coupon of expiredCoupons) {
+    //   coupon.status = 0;
+    //   await this.couponsRepository.save(coupon);
+    //   console.log(`Deactivated coupon: ${coupon.coupon_title}`);
+    // }
   }
 
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
@@ -123,8 +123,6 @@ export class ScheduleService {
       // Update wallet balances
       wallet.locked_balance = Number(wallet.locked_balance) - amount;
       wallet.available_balance = Number(wallet.available_balance) + amount;
-
-      console.log('/////////////////////////////', wallet);
       // Update transaction status to 'active'
       tx.status = WalletTransactionStatus.ACTIVE;
 
