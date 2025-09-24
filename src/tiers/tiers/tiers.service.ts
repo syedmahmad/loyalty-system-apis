@@ -17,6 +17,7 @@ import { OciService } from 'src/oci/oci.service';
 import { tierBenefitsDto } from '../dto/tier-benefits.dto';
 import { Customer } from 'src/customers/entities/customer.entity';
 import { WalletService } from 'src/wallet/wallet/wallet.service';
+import { Rule } from 'src/rules/entities/rules.entity';
 
 @Injectable()
 export class TiersService {
@@ -34,6 +35,9 @@ export class TiersService {
 
     @InjectRepository(User)
     private userRepository: Repository<User>,
+
+    @InjectRepository(Rule)
+    private rulesRepository: Repository<Rule>,
 
     @InjectRepository(Tenant)
     private tenantRepository: Repository<Tenant>,
@@ -502,6 +506,16 @@ export class TiersService {
       const customer = await this.customerRepo.findOne({
         where: { uuid: customerId, business_unit: { id: parseInt(BUId) } },
       });
+
+      const burningRule = await this.rulesRepository.findOne({
+        where: {
+          business_unit_id: parseInt(BUId),
+          tenant_id: tenantId,
+          rule_type: 'burn',
+          status: 1,
+        },
+      });
+
       if (!customer) throw new NotFoundException('Customer not found');
       if (customer && customer.status == 0) {
         throw new NotFoundException('Customer is inactive');
@@ -562,6 +576,7 @@ export class TiersService {
           if (typeof eachBenefit === 'object' && eachBenefit !== null) {
             benefits.push({
               tierId: eachTier.uuid,
+              isUsed: false,
               ...(eachBenefit as {
                 name_en: string;
                 name_ar: string;
@@ -572,6 +587,7 @@ export class TiersService {
             benefits.push({
               tierId: eachTier.uuid,
               name_en: String(eachBenefit),
+              isUsed: false,
               name_ar: '',
               icon: '',
             });
@@ -586,7 +602,7 @@ export class TiersService {
           uuid: firstTier.uuid,
           name: firstTier.name,
           level: firstTier.level,
-          min_points: firstTier.min_points,
+          min_points: firstTier?.min_points,
         };
       }
 
@@ -599,7 +615,7 @@ export class TiersService {
             currentTier: null,
             nextTier,
             pointsToNextTier: nextTier
-              ? nextTier.min_points - wallet.total_balance
+              ? nextTier?.min_points - wallet.total_balance
               : 0,
             tiers: tiersArr,
             benefits,
@@ -615,6 +631,10 @@ export class TiersService {
         message: 'Successfully fetched the data!',
         result: {
           points: customerTierInfo.points,
+          converted_amount:
+            (burningRule?.points_conversion_factor
+              ? burningRule.points_conversion_factor
+              : 0.01) * customerTierInfo.points,
           currentTier: currentTier,
           nextTier,
           pointsToNextTier: nextTier
