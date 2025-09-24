@@ -262,6 +262,7 @@ export class TiersService {
       select: [
         'uuid',
         'name',
+        'name_ar',
         'benefits',
         'status',
         // add any other fields you actually need here

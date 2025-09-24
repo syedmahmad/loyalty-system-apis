@@ -34,6 +34,9 @@ export class Tier {
   @Column()
   name: string; // e.g., Bronze, Silver, Gold
 
+  @Column()
+  name_ar: string; // e.g., Bronze, Silver, Gold
+
   @Column('int', { default: 1 })
   level: number; // Order or rank
 
@@ -82,6 +85,9 @@ export class Tier {
 
   @Column({ nullable: true })
   description: string;
+
+  @Column({ nullable: true })
+  description_ar: string;
 
   @Column('int')
   created_by: number;

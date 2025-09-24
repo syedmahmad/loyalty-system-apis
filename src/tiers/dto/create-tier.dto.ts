@@ -7,6 +7,9 @@ export class CreateTierDto {
   @IsString()
   name: string;
 
+  @IsString()
+  name_ar: string;
+
   @IsInt()
   @Min(0)
   min_points: number;
@@ -27,6 +30,10 @@ export class CreateTierDto {
   @IsString()
   @IsOptional()
   description?: string;
+
+  @IsString()
+  @IsOptional()
+  description_ar?: string;
 
   created_by?: number;
 
