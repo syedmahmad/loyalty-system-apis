@@ -39,6 +39,7 @@ export class RulesService {
 
       const rule = this.ruleRepository.create({
         name: dto.name,
+        name_ar: dto.name_ar,
         slug: dto.slug,
         rule_type: dto.rule_type,
         tenant_id: dto.client_id,
@@ -49,6 +50,7 @@ export class RulesService {
         points_conversion_factor: dto.points_conversion_factor,
         max_burn_percent_on_invoice: dto.max_burn_percent_on_invoice,
         description: dto.description,
+        description_ar: dto.description,
         validity_after_assignment: dto.validity_after_assignment
           ? dto.validity_after_assignment
           : 0,
@@ -111,9 +113,11 @@ export class RulesService {
       select: [
         'uuid',
         'name',
+        'name_ar',
         'reward_points',
         'event_triggerer',
         'description',
+        'description_ar',
         'validity_after_assignment',
         'status',
       ],
@@ -141,6 +145,7 @@ export class RulesService {
       select: [
         'id',
         'name',
+        'name_ar',
         'slug',
         'rule_type',
         'condition_type',
@@ -153,6 +158,7 @@ export class RulesService {
         'points_conversion_factor',
         'max_burn_percent_on_invoice',
         'description',
+        'description_ar',
         'validity_after_assignment',
         'frequency',
         'burn_type',
@@ -201,6 +207,7 @@ export class RulesService {
       select: [
         'uuid',
         'name',
+        'name_ar',
         'slug',
         'rule_type',
         'condition_type',
@@ -213,6 +220,7 @@ export class RulesService {
         'points_conversion_factor',
         'max_burn_percent_on_invoice',
         'description',
+        'description_ar',
         'validity_after_assignment',
         'frequency',
         'burn_type',
@@ -235,6 +243,7 @@ export class RulesService {
       select: [
         'id',
         'name',
+        'name_ar',
         'slug',
         'rule_type',
         'condition_type',
@@ -247,6 +256,7 @@ export class RulesService {
         'points_conversion_factor',
         'max_burn_percent_on_invoice',
         'description',
+        'description_ar',
         'validity_after_assignment',
         'frequency',
         'burn_type',
@@ -281,6 +291,7 @@ export class RulesService {
       if (!rule) throw new Error('Rule not found');
 
       rule.name = dto.name ?? rule.name;
+      rule.name_ar = dto.name_ar ?? rule.name_ar;
       rule.slug = dto.slug ?? rule.slug;
       rule.rule_type = dto.rule_type ?? rule.rule_type;
       rule.min_amount_spent = dto.min_amount_spent ?? rule.min_amount_spent;
@@ -293,6 +304,7 @@ export class RulesService {
       rule.max_burn_percent_on_invoice =
         dto.max_burn_percent_on_invoice ?? rule.max_burn_percent_on_invoice;
       rule.description = dto.description ?? rule.description;
+      rule.description_ar = dto.description_ar ?? rule.description_ar;
       rule.condition_type = dto.condition_type ?? rule.condition_type;
       rule.condition_operator =
         dto.condition_operator ?? rule.condition_operator;
