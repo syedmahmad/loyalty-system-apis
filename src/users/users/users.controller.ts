@@ -8,6 +8,7 @@ export class UsersController {
 
   @Post('validateToken')
   async validateToken(@Body() body: { token: string }): Promise<User> {
+    console.log('inside controller validate/////////////////');
     return await this.userService.validateToken(body);
   }
 }

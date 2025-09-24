@@ -20,6 +20,7 @@ export class UsersService {
   ) {}
 
   async validateToken({ token }: { token: string }): Promise<any> {
+    console.log('inside service validate/////////////////');
     let decodedUser: any = {};
     try {
       decodedUser = jwt.decode(token);
