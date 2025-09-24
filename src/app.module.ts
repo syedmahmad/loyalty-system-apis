@@ -80,10 +80,6 @@ import { PreferencesModule } from './petromin-it/preferences/preferences.module'
     LogModule,
     CustomerProfileModule,
     HttpModule,
-    HttpModule.register({
-      timeout: 30 * 60 * 1000, // 30 minutes
-      maxRedirects: 5,
-    }),
     AuditTrailModule,
     TenantsModule,
     ReportsModule,

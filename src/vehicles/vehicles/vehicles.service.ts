@@ -7,6 +7,7 @@ import axios from 'axios';
 import { MakeEntity } from 'src/make/entities/make.entity';
 import { ModelEntity } from 'src/model/entities/model.entity';
 import { Log } from 'src/logs/entities/log.entity';
+// import { decrypt } from 'src/helpers/encryption';
 
 @Injectable()
 export class VehiclesService {
@@ -159,16 +160,16 @@ export class VehiclesService {
 
       if (!customer) throw new NotFoundException('Customer not found');
 
-      if (customer && customer.status == 0) {
+      if (customer && customer?.status == 0) {
         throw new NotFoundException('Customer is inactive');
       }
 
-      if (customer.status === 3) {
+      if (customer?.status === 3) {
         throw new NotFoundException('Customer is deleted');
       }
 
       const loginInfo = await this.customerLoginInResty();
-      if (!loginInfo.access_token) {
+      if (!loginInfo?.access_token) {
         return {
           success: false,
           message: 'Authentication with Resty failed',
@@ -191,6 +192,11 @@ export class VehiclesService {
         };
       }
 
+      console.log(
+        '///////////////customerInfoFromResty id',
+        customerInfoFromResty[0].customer_id,
+      );
+
       const customerVehicles = await this.getVehicleInfoFromResty({
         customer_id: customerInfoFromResty[0].customer_id,
         loginInfo,
@@ -205,6 +211,11 @@ export class VehiclesService {
         };
       }
 
+      console.log(
+        '///////////////customerVehicles id',
+        customerVehicles[0].vehicle_id,
+      );
+
       // 7. Get services for all vehicles from Resty
       const vehicleServices: any[] = [];
 
@@ -217,6 +228,11 @@ export class VehiclesService {
 
         vehicleServices.push({
           vehicle_id: vehicle.vehicle_id,
+          make: vehicle?.make,
+          model: vehicle?.model,
+          year: vehicle?.model_year,
+          last_mileage: vehicle?.last_mileage,
+          last_service_date: vehicle?.last_service_date,
           vin: vehicle.vin,
           plate_no: vehicle.plate_no,
           services: serviceList || [],
@@ -230,7 +246,7 @@ export class VehiclesService {
         errors: [],
       };
     } catch (error: any) {
-      const errResponse = error?.response?.data;
+      const errResponse = error?.response;
       return errResponse;
     }
   }
@@ -263,7 +279,8 @@ export class VehiclesService {
 
       // 3. Login to Resty
       const loginInfo = await this.customerLoginInResty();
-      if (!loginInfo.access_token) {
+
+      if (!loginInfo?.access_token) {
         return {
           success: false,
           message: 'Authentication with Resty failed',
@@ -272,6 +289,8 @@ export class VehiclesService {
         };
       }
 
+      //TODO: it could return multiple customers profile, so we need to take decision here.
+      // but for now, we are only getting first profile.
       // 4. Get Customer Info from Resty
       const customerInfoFromResty = await this.getCustomerInfoFromResty({
         customer,
@@ -375,6 +394,7 @@ export class VehiclesService {
   }
 
   async customerLoginInResty() {
+    console.log('////////////////////////////inside resty logedIn function');
     try {
       // Prepare request data
       const loginUrl = `${process.env.RESTY_BASE_URL.replace(/\/$/, '')}/api/login`;
@@ -386,38 +406,32 @@ export class VehiclesService {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${process.env.RESTY_TOKEN || '5aa664e22cf91a1642b7c6aa65a7d13a5a5f386c23afa57c'}`,
       };
-
-      // Log the axios.post call and equivalent curl command
-      console.log('axios.post:', loginUrl, loginPayload, {
-        headers: loginHeaders,
-      });
-      const curlCommand = [
-        `curl -X POST "${loginUrl}"`,
-        `-H "Content-Type: application/json"`,
-        `-H "Authorization: Bearer ${process.env.RESTY_TOKEN || '5aa664e22cf91a1642b7c6aa65a7d13a5a5f386c23afa57c'}"`,
-        `-d '${JSON.stringify(loginPayload)}'`,
-      ].join(' ');
-      console.log('Equivalent curl command:', curlCommand);
+      console.log({ loginUrl, loginPayload, loginHeaders });
 
       const response = await axios.post(loginUrl, loginPayload, {
         headers: loginHeaders,
       });
 
+      const restyRespose = response.data;
+
+      console.log('///////////////fixed', restyRespose);
       const logs = await this.logRepo.create({
         requestBody: JSON.stringify({
           username: `${process.env.RESTY_USERNAME}`,
           password: `${process.env.RESTY_PASSWORD}`,
         }),
-        responseBody: JSON.stringify(response),
+        responseBody: JSON.stringify(restyRespose),
         url: `${process.env.RESTY_BASE_URL}/api/login`,
         method: 'POST',
         statusCode: 200,
       } as Log);
       await this.logRepo.save(logs);
 
-      return response.data;
+      console.log('///////////////fixed/////////', restyRespose);
+
+      return restyRespose;
     } catch (error: any) {
-      const errResponse = error?.response?.data;
+      const errResponse = error?.response;
       const logs = await this.logRepo.create({
         requestBody: JSON.stringify({
           username: `${process.env.RESTY_USERNAME}`,
@@ -434,8 +448,11 @@ export class VehiclesService {
   }
 
   async getCustomerInfoFromResty({ customer, loginInfo }) {
+    console.log('customer', customer.email);
     // const customerPhone = '0569845873'; for testing it is hardcoded
-    const customerPhone = `+${customer.country_code}${customer.phone}`;
+    // const customerPhone = `+${customer.country_code}${customer.phone}`;
+    // const customerPhone = decrypt(customer.hashed_number);
+    const customerPhone = '+966532537561';
     try {
       const response = await axios.get(
         `${process.env.RESTY_BASE_URL}/api/customer/search?param=${customerPhone}`,
@@ -446,10 +463,11 @@ export class VehiclesService {
           },
         },
       );
-
       const logs = await this.logRepo.create({
-        requestBody: null,
-        responseBody: JSON.stringify(response),
+        requestBody: JSON.stringify({
+          param: customerPhone,
+        }),
+        responseBody: JSON.stringify(response.data),
         url: `${process.env.RESTY_BASE_URL}/api/customer/search?param=${customerPhone}`,
         method: 'GET',
         statusCode: 200,
@@ -458,9 +476,11 @@ export class VehiclesService {
 
       return response.data;
     } catch (error: any) {
-      const errResponse = error?.response?.data;
+      const errResponse = error?.response;
       const logs = await this.logRepo.create({
-        requestBody: null,
+        requestBody: JSON.stringify({
+          param: customerPhone,
+        }),
         responseBody: JSON.stringify(error) || null,
         url: `${process.env.RESTY_BASE_URL}/api/customer/search?param=${customerPhone}`,
         method: 'GET',
@@ -484,8 +504,10 @@ export class VehiclesService {
       );
 
       const logs = await this.logRepo.create({
-        requestBody: null,
-        responseBody: JSON.stringify(response),
+        requestBody: JSON.stringify({
+          param: customer_id,
+        }),
+        responseBody: JSON.stringify(response.data),
         url: `${process.env.RESTY_BASE_URL}/api/customer/${customer_id}/vehicles`,
         method: 'GET',
         statusCode: 200,
@@ -494,9 +516,11 @@ export class VehiclesService {
 
       return response.data;
     } catch (error: any) {
-      const errResponse = error?.response?.data;
+      const errResponse = error?.response;
       const logs = await this.logRepo.create({
-        requestBody: null,
+        requestBody: JSON.stringify({
+          param: customer_id,
+        }),
         responseBody: JSON.stringify(error) || null,
         url: `${process.env.RESTY_BASE_URL}/api/customer/${customer_id}/vehicles`,
         method: 'GET',
@@ -531,7 +555,7 @@ export class VehiclesService {
 
       return response.data;
     } catch (error: any) {
-      const errResponse = error?.response?.data;
+      const errResponse = error?.response;
       const logs = await this.logRepo.create({
         requestBody: JSON.stringify(vehiclePayload),
         responseBody: JSON.stringify(error) || null,
@@ -557,8 +581,11 @@ export class VehiclesService {
       );
 
       const logs = await this.logRepo.create({
-        requestBody: null,
-        responseBody: JSON.stringify(response),
+        requestBody: JSON.stringify({
+          customer_id: customer_id,
+          vehicle_id: vehicle_id,
+        }),
+        responseBody: JSON.stringify(response.data),
         url: `${process.env.RESTY_BASE_URL}/api/vehicle/${customer_id}/${vehicle_id}`,
         method: 'GET',
         statusCode: 200,
@@ -567,9 +594,12 @@ export class VehiclesService {
 
       return response.data;
     } catch (error: any) {
-      const errResponse = error?.response?.data;
+      const errResponse = error?.response;
       const logs = await this.logRepo.create({
-        requestBody: null,
+        requestBody: JSON.stringify({
+          customer_id: customer_id,
+          vehicle_id: vehicle_id,
+        }),
         responseBody: JSON.stringify(error) || null,
         url: `${process.env.RESTY_BASE_URL}/api/vehicle/${customer_id}/${vehicle_id}`,
         method: 'GET',
