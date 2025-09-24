@@ -32,6 +32,7 @@ import { Rule } from 'src/rules/entities/rules.entity';
       UserCoupon,
       WalletOrder,
       Rule,
+      WalletSettings,
     ]),
   ],
   controllers: [TiersController],

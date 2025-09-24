@@ -721,10 +721,13 @@ export class CustomerService {
       wallet: wallet, // pass the full Wallet entity instance
       orders: walletOrderRes,
       customer: customer,
+      uuid: uuidv4(),
       // wallet_order_id: walletOrderId,
       business_unit: wallet.business_unit, // pass the full BusinessUnit entity instance
       type: WalletTransactionType.EARN,
       source_type: event,
+      created_at: dayjs().toDate(),
+      updated_at: dayjs().toDate(),
       amount: Orderamount || 0,
       status:
         pendingDays > 0
@@ -750,7 +753,9 @@ export class CustomerService {
               .add(pendingDays + rule.validity_after_assignment, 'day')
               .toDate()
           : dayjs().add(rule.validity_after_assignment, 'day').toDate()
-        : null,
+        : dayjs()
+            .add(parseInt(walletSettings.expiration_value), 'day')
+            .toDate(),
     };
     // Save transaction
     const savedTx = await this.txRepo.save(walletTransaction);

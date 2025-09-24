@@ -18,6 +18,9 @@ import { tierBenefitsDto } from '../dto/tier-benefits.dto';
 import { Customer } from 'src/customers/entities/customer.entity';
 import { WalletService } from 'src/wallet/wallet/wallet.service';
 import { Rule } from 'src/rules/entities/rules.entity';
+import { WalletSettings } from 'src/wallet/entities/wallet-settings.entity';
+import { WalletTransaction } from 'src/wallet/entities/wallet-transaction.entity';
+import * as dayjs from 'dayjs';
 
 @Injectable()
 export class TiersService {
@@ -38,6 +41,12 @@ export class TiersService {
 
     @InjectRepository(Rule)
     private rulesRepository: Repository<Rule>,
+
+    @InjectRepository(WalletSettings)
+    private readonly walletSettings: Repository<WalletSettings>,
+
+    @InjectRepository(WalletTransaction)
+    private readonly txRepo: Repository<WalletTransaction>,
 
     @InjectRepository(Tenant)
     private tenantRepository: Repository<Tenant>,
@@ -626,11 +635,31 @@ export class TiersService {
 
       const { id, ...currentTier } = customerTierInfo?.tier;
 
+      const walletSettings = await this.walletSettings.findOne({
+        where: {
+          business_unit: { id: parseInt(BUId) },
+        },
+      });
+
+      const lastWalletTransactions = await this.txRepo.findOne({
+        where: {
+          customer: { id: customer.id },
+        },
+        order: {
+          created_at: 'DESC',
+        },
+      });
+
+      console.log('lastWalletTransactions.created_at', lastWalletTransactions);
+
       return {
         success: true,
         message: 'Successfully fetched the data!',
         result: {
           points: customerTierInfo.points,
+          points_expiry_date: dayjs(lastWalletTransactions.created_at)
+            .add(parseInt(walletSettings?.expiration_value ?? '365'), 'day')
+            .toDate(),
           converted_amount:
             (burningRule?.points_conversion_factor
               ? burningRule.points_conversion_factor

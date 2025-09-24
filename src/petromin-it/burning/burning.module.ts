@@ -13,6 +13,7 @@ import { Tenant } from 'src/tenants/entities/tenant.entity';
 import { OciModule } from 'src/oci/oci.module';
 import { WalletModule } from 'src/wallet/wallet.module';
 import { Rule } from 'src/rules/entities/rules.entity';
+import { WalletSettings } from 'src/wallet/entities/wallet-settings.entity';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { Rule } from 'src/rules/entities/rules.entity';
       Tier,
       BusinessUnit,
       User,
+      WalletSettings,
       Tenant,
       Rule,
     ]),
