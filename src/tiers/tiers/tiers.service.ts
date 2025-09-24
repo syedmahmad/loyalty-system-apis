@@ -496,6 +496,7 @@ export class TiersService {
         id: matchingTier.id,
         uuid: matchingTier.uuid,
         name: matchingTier.name,
+        name_ar: matchingTier.name_ar,
         level: matchingTier.level,
         min_points: matchingTier.min_points,
       },
@@ -573,6 +574,7 @@ export class TiersService {
         tiersArr.push({
           uuid: eachTier.uuid,
           name: eachTier.name,
+          name_ar: eachTier.name_ar,
           level: eachTier.level,
           min_points: eachTier.min_points,
         });
@@ -611,6 +613,7 @@ export class TiersService {
         nextTier = {
           uuid: firstTier.uuid,
           name: firstTier.name,
+          name_ar: firstTier.name_ar,
           level: firstTier.level,
           min_points: firstTier?.min_points,
         };
@@ -650,8 +653,6 @@ export class TiersService {
           created_at: 'DESC',
         },
       });
-
-      console.log('lastWalletTransactions.created_at', lastWalletTransactions);
 
       return {
         success: true,
