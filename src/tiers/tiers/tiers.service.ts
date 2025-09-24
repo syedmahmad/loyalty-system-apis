@@ -580,30 +580,36 @@ export class TiersService {
           min_points: eachTier.min_points,
         });
 
-        for (let bindex = 0; bindex <= eachTier.benefits.length - 1; bindex++) {
-          const eachBenefit = eachTier.benefits[bindex];
-          if (!eachBenefit) {
-            continue;
-          }
+        if (eachTier.name !== 'Bronze') {
+          for (
+            let bindex = 0;
+            bindex <= eachTier.benefits.length - 1;
+            bindex++
+          ) {
+            const eachBenefit = eachTier.benefits[bindex];
+            if (!eachBenefit) {
+              continue;
+            }
 
-          if (typeof eachBenefit === 'object' && eachBenefit !== null) {
-            benefits.push({
-              tierId: eachTier.uuid,
-              isUsed: false,
-              ...(eachBenefit as {
-                name_en: string;
-                name_ar: string;
-                icon: string;
-              }),
-            });
-          } else {
-            benefits.push({
-              tierId: eachTier.uuid,
-              name_en: String(eachBenefit),
-              isUsed: false,
-              name_ar: '',
-              icon: '',
-            });
+            if (typeof eachBenefit === 'object' && eachBenefit !== null) {
+              benefits.push({
+                tierId: eachTier.uuid,
+                isUsed: false,
+                ...(eachBenefit as {
+                  name_en: string;
+                  name_ar: string;
+                  icon: string;
+                }),
+              });
+            } else {
+              benefits.push({
+                tierId: eachTier.uuid,
+                name_en: String(eachBenefit),
+                isUsed: false,
+                name_ar: '',
+                icon: '',
+              });
+            }
           }
         }
       }
