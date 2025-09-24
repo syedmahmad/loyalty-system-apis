@@ -37,6 +37,9 @@ export class Rule {
   @Column({ type: 'varchar' })
   name: string;
 
+  @Column({ type: 'varchar' })
+  name_ar: string;
+
   @Column({ type: 'varchar', nullable: true })
   slug: string;
 
@@ -72,6 +75,9 @@ export class Rule {
 
   @Column({ type: 'text', nullable: true })
   description: string;
+
+  @Column({ type: 'text', nullable: true })
+  description_ar: string;
 
   @Column('int', { nullable: true })
   validity_after_assignment: number;
