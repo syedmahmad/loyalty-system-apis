@@ -42,6 +42,7 @@ import { ModelModule } from './model/model.module';
 import { VariantModule } from './variant/variant.module';
 import { RustyModule } from './rusty/rusty.module';
 import { PreferencesModule } from './petromin-it/preferences/preferences.module';
+import { NotificationsModule } from './customer_notification/customer_notification.module';
 
 @Module({
   imports: [
@@ -100,6 +101,7 @@ import { PreferencesModule } from './petromin-it/preferences/preferences.module'
     AuthModule,
     ReferralModule,
     BurningModule,
+    NotificationsModule,
     VehicleModule,
     MakeModule,
     RustyModule,
