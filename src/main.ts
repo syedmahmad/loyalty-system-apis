@@ -10,8 +10,8 @@ async function bootstrap() {
   // server.setTimeout(30 * 60 * 1000); // 30 minutes in ms
   const allowedOrigins = process.env.ALLOWED_CORS_URLS?.split(',') || [];
 
-  app.use(bodyParser.json({ limit: '50mb' }));
-  app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
+  app.use(bodyParser.json({ limit: '100mb' }));
+  app.use(bodyParser.urlencoded({ limit: '100mb', extended: true }));
 
   app.enableCors({
     // origin: process.env.ALLOWED_CORS_URL, // ✅ your frontend URL
