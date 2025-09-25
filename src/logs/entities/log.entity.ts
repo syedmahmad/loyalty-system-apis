@@ -11,7 +11,7 @@ export class Log {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column('text')
+  @Column('json')
   requestBody: string;
 
   @Column('text')
