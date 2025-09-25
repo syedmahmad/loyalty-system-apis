@@ -28,7 +28,7 @@ export class Vehicle {
     name: 'vehicle_category_id',
     type: 'varchar',
     length: 36,
-    nullable: false,
+    nullable: true,
   })
   vehicle_category_id: string;
 

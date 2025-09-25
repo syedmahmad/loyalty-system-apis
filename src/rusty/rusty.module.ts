@@ -8,6 +8,7 @@ import { RustyWorkshop } from './entities/rusty-workshops.entity';
 import { Service as RustyEntity } from './entities/rusty-services.entity';
 import { RustyController } from './rusty/rusty.controller';
 import { RustyService } from './rusty/rusty.service';
+import { RustyInvoiceItem } from './entities/rusty-invoice-items.entity';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { RustyService } from './rusty/rusty.service';
       RustyUser,
       JobcardsInvoice,
       RustyJobcard,
+      RustyInvoiceItem,
       Vehicle,
       RustyWorkshop,
       RustyEntity,
