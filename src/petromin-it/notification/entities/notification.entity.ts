@@ -6,14 +6,14 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 
-@Entity({ name: 'customer_notifications' })
-export class CustomerNotification {
+@Entity({ name: 'notifications' })
+export class Notification {
   @PrimaryGeneratedColumn()
   id: number;
 
   // The user who receives the notification. Nullable for broadcast notifications.
   @Column({ type: 'int', nullable: true })
-  user_id: number | null;
+  customer_id: number | null;
 
   @Column({ type: 'varchar', length: 50 })
   notification_type: string; // e.g., welcome, earn_points, burn_points
@@ -28,9 +28,8 @@ export class CustomerNotification {
   @Column({ type: 'datetime', nullable: true })
   read_at: Date | null;
 
-  // JSON for dynamic content (points, titles, extra metadata)
   @Column({ type: 'json', nullable: true })
-  notification_details: Record<string, any> | null;
+  notification_details: { title: string; body: string } | null;
 
   @CreateDateColumn({ type: 'datetime' })
   created_at: Date;

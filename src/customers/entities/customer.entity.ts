@@ -12,6 +12,7 @@ import {
 import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
 import { CustomerSegmentMember } from 'src/customer-segment/entities/customer-segment-member.entity';
 import { Tenant } from 'src/tenants/entities/tenant.entity';
+import { DeviceToken } from 'src/petromin-it/notification/entities/device-token.entity';
 
 @Entity()
 export class Customer {
@@ -161,4 +162,7 @@ export class Customer {
 
   @Column({ type: 'int', default: 0 })
   login_count: number;
+
+  @OneToMany(() => DeviceToken, (DeviceToken) => DeviceToken.customer)
+  firebaseTokens: DeviceToken[];
 }
