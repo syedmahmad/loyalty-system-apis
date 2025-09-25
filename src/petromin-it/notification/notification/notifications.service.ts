@@ -44,13 +44,26 @@ export class NotificationService {
     }
     // let deviceToken = await this.tokenRepo.findOne({ where: { token } });
 
-    const deviceToken = this.tokenRepo.create({
-      customer: { id: customer.id },
-      token,
-      platform,
-    });
+    try {
+      const deviceToken = this.tokenRepo.create({
+        customer: { id: customer.id },
+        token,
+        platform,
+      });
 
-    return this.tokenRepo.save(deviceToken);
+      await this.tokenRepo.save(deviceToken);
+
+      return {
+        success: true,
+        message: `success`,
+      };
+    } catch (error: any) {
+      console.log('///////error', error);
+      return {
+        success: true,
+        message: `Sorry! Not able to register your token`,
+      };
+    }
   }
 
   async sendToUser(data: SendNotification) {
