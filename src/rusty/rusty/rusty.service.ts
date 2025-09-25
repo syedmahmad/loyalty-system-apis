@@ -1,33 +1,33 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { RustyCustomer } from '../entities/rusty-customers.entity';
+import { RustyUser } from '../entities/rusty-users.entity';
 import { RustyWorkshop } from '../entities/rusty-workshops.entity';
-import { RustyInvoice } from '../entities/rusty-invoices.entity';
-import { RustyVehicle } from '../entities/rusty-vehicles.entity';
+import { JobcardsInvoice } from '../entities/rusty-invoices.entity';
+import { Vehicle } from '../entities/rusty-vehicles.entity';
 import { RustyJobcard } from '../entities/rusty-jobcards.entity';
-import { RustyService as RustyServiceEntity } from '../entities/rusty-services.entity';
+import { Service as RustyServiceEntity } from '../entities/rusty-services.entity';
 
 @Injectable()
 export class RustyService {
   constructor(
-    @InjectRepository(RustyCustomer)
-    private customerRepo: Repository<RustyCustomer>,
+    @InjectRepository(RustyUser)
+    private customerRepo: Repository<RustyUser>,
 
-    @InjectRepository(RustyVehicle)
-    private vehicleRepo: Repository<RustyVehicle>,
+    @InjectRepository(Vehicle)
+    private vehicleRepo: Repository<Vehicle>,
 
     @InjectRepository(RustyJobcard)
     private jobcardRepo: Repository<RustyJobcard>,
 
-    @InjectRepository(RustyInvoice)
-    private invoiceRepo: Repository<RustyInvoice>,
+    @InjectRepository(JobcardsInvoice)
+    private invoiceRepo: Repository<JobcardsInvoice>,
 
     @InjectRepository(RustyWorkshop)
     private workshopRepo: Repository<RustyWorkshop>,
 
     @InjectRepository(RustyServiceEntity)
-    private serviceRepo: Repository<RustyServiceEntity>,
+    private serviceRepo: Repository<RustyServiceEntity>, // still useful for master service definitions
   ) {}
 
   /**
@@ -52,8 +52,7 @@ export class RustyService {
     let invoiceCount = 0;
 
     /**
-     * ✅ Step 1: Extract all workshops from both body.workshops and jobcards
-     * to make sure referenced workshops exist before inserting jobcards.
+     * ✅ Step 1: Collect all workshops
      */
     const jobcardWorkshops = new Map<string, any>();
 
@@ -61,9 +60,7 @@ export class RustyService {
       for (const veh of cust['vehicles'] || []) {
         for (const jc of veh['jobcards'] || []) {
           if (jc['workshop_id']) {
-            jobcardWorkshops.set(jc['workshop_id'], {
-              id: jc['workshop_id'],
-            });
+            jobcardWorkshops.set(jc['workshop_id'], { id: jc['workshop_id'] });
           }
         }
       }
@@ -78,7 +75,7 @@ export class RustyService {
       ).values(),
     ];
 
-    // ✅ Step 2: Save workshops first
+    // ✅ Step 2: Save workshops
     for (const ws of allWorkshops) {
       const workshop = this.workshopRepo.create({
         id: ws['id'],
@@ -95,7 +92,7 @@ export class RustyService {
     }
 
     /**
-     * ✅ Step 3: Save customers, vehicles, jobcards, invoices, services
+     * ✅ Step 3: Save customers → vehicles → jobcards → invoices
      */
     for (const cust of customers) {
       const customer = this.customerRepo.create({
@@ -104,12 +101,12 @@ export class RustyService {
         type: cust['type'],
         phone_number: cust['phone_number'],
         email: cust['email'],
-        status: cust['status'] === true,
+        status: cust['status'] === true ? 1 : 0,
         country: cust['country'],
         dob: cust['dob'] ? String(cust['dob']) : null,
         address: cust['address'],
-        created_at: new Date(cust['created_at']),
-        updated_at: new Date(cust['updated_at']),
+        created_at: cust['created_at'] ? new Date(cust['created_at']) : null,
+        updated_at: cust['updated_at'] ? new Date(cust['updated_at']) : null,
       });
       await this.customerRepo.save(customer);
       customerCount++;
@@ -118,18 +115,18 @@ export class RustyService {
       for (const veh of cust['vehicles'] || []) {
         const vehicle = this.vehicleRepo.create({
           id: veh['id'],
-          customer,
+          dmid: veh['customer_id'], // optional mapping
           vehicle_number: veh['vehicle_number'],
           vehicle_category_id: veh['vehicle_category_id'] || null,
           vehicle_brand_id: veh['vehicle_brand']?.['id'] || null,
-          vehicle_brand_name: veh['vehicle_brand']?.['name'] || null,
           vehicle_variant_id: veh['vehicle_variant']?.['id'] || null,
-          vehicle_variant_name: veh['vehicle_variant']?.['name'] || null,
-          year_of_manufacture: veh['year_of_manufacture'],
+          year_of_manufacture: veh['year_of_manufacture']
+            ? Number(veh['year_of_manufacture'])
+            : null,
           transmission: veh['transmission'] || null,
           vin_number: veh['vin_number'],
-          created_at: new Date(veh['created_at']),
-          updated_at: new Date(veh['updated_at']),
+          created_at: veh['created_at'] ? new Date(veh['created_at']) : null,
+          updated_at: veh['updated_at'] ? new Date(veh['updated_at']) : null,
         });
         await this.vehicleRepo.save(vehicle);
         vehicleCount++;
@@ -138,20 +135,22 @@ export class RustyService {
         for (const jc of veh['jobcards'] || []) {
           const jobcard = this.jobcardRepo.create({
             id: jc['id'],
-            vehicle,
-            odometer_reading: jc['odometer_reading'],
+            vehicle_id: veh['id'],
+            odometer: jc['odometer_reading']
+              ? Number(jc['odometer_reading'])
+              : null,
             vehicle_complaints: jc['vehicle_complaints'] || null,
             delivery_date: jc['delivery_date']
               ? new Date(jc['delivery_date'])
               : null,
             status: jc['status'],
-            workshop: { id: jc['workshop_id'] }, // ✅ relation object
+            workshop_id: jc['workshop_id'] || null,
             customer_id: jc['customer_id'] || null,
             completed_date: jc['completed_date']
               ? new Date(jc['completed_date'])
               : null,
-            created_at: new Date(jc['created_at']),
-            updated_at: new Date(jc['updated_at']),
+            created_at: jc['created_at'] ? new Date(jc['created_at']) : null,
+            updated_at: jc['updated_at'] ? new Date(jc['updated_at']) : null,
             source_of_customer: jc['source_of_customer'] || null,
           });
           await this.jobcardRepo.save(jobcard);
@@ -162,37 +161,23 @@ export class RustyService {
             const inv = jc['invoice'];
             const invoice = this.invoiceRepo.create({
               id: inv['id'],
-              jobcard,
+              jobcard_id: jc['id'],
               invoice_no: inv['invoice_no'],
-              total_amount: inv['total_amount'],
-              sub_total: inv['sub_total'],
-              total_tax_amount: inv['total_tax_amount'],
-              total_discount_amount: inv['total_discount_amount'],
-              workshop_id: inv['workshop_id'],
-              created_at: new Date(inv['created_at']),
-              updated_at: new Date(inv['updated_at']),
+              total_amount: Number(inv['total_amount'] || 0),
+              sub_total: Number(inv['sub_total'] || 0),
+              total_tax_amount: Number(inv['total_tax_amount'] || 0),
+              total_discount_amount: Number(inv['total_discount_amount'] || 0),
+              workshop_id: inv['workshop_id'] || null,
+              services: inv['services'] || [], // ✅ store as JSON array
+              created_at: inv['created_at']
+                ? new Date(inv['created_at'])
+                : null,
+              updated_at: inv['updated_at']
+                ? new Date(inv['updated_at'])
+                : null,
             });
             await this.invoiceRepo.save(invoice);
             invoiceCount++;
-
-            // services
-            for (const svc of inv['services'] || []) {
-              const service = this.serviceRepo.create({
-                invoice,
-                invoice_service_id: svc['id'],
-                invoice_service_package_id: svc['invoice_service_package_id'],
-                serviceId: svc['service']?.['id'],
-                serviceGroupName: svc['service']?.['service_group_name'],
-                serviceName: svc['service']?.['service_name'],
-                price: svc['price'],
-                beforeDiscount: svc['before_discount'],
-                totalDiscount: svc['total_discount'],
-                beforeTax: svc['before_tax'],
-                taxAmount: svc['tax_amount'],
-                totalAmount: svc['total_amount'],
-              });
-              await this.serviceRepo.save(service);
-            }
           }
         }
       }
