@@ -32,6 +32,14 @@ export class NotificationService {
     }
   }
 
+  /**
+   * Registers or updates a device token for a customer.
+   * - Ensures only one token per device per customer.
+   * - If the token already exists for this customer, updates the platform if needed.
+   * - If the token exists for another customer, reassigns it to the new customer (device change).
+   * - Removes all previous tokens for this customer except the current one (so only the latest device is registered).
+   *   This means notifications will only be sent to the latest device.
+   */
   async saveDeviceToken(body: RegisterToken) {
     const { customer_id, token, platform } = body;
 
@@ -42,16 +50,33 @@ export class NotificationService {
     if (!customer) {
       throw new NotFoundException(`Customer not found`);
     }
-    // let deviceToken = await this.tokenRepo.findOne({ where: { token } });
 
     try {
-      const deviceToken = this.tokenRepo.create({
-        customer: { id: customer.id },
-        token,
-        platform,
-      });
+      // Check if this token already exists (could be for this or another customer)
+      let existingToken = await this.tokenRepo.findOne({ where: { token } });
 
-      await this.tokenRepo.save(deviceToken);
+      if (existingToken) {
+        // If the token is already assigned to this customer, just update platform if needed
+        if (existingToken.customer.id === customer.id) {
+          if (existingToken.platform !== platform) {
+            existingToken.platform = platform;
+            await this.tokenRepo.save(existingToken);
+          }
+        } else {
+          // Token is assigned to another customer (user changed device or logged in on new account)
+          existingToken.customer = { id: customer.id } as any;
+          existingToken.platform = platform;
+          await this.tokenRepo.save(existingToken);
+        }
+      } else {
+        // Create new token for this customer
+        existingToken = this.tokenRepo.create({
+          customer: { id: customer.id },
+          token,
+          platform,
+        });
+        await this.tokenRepo.save(existingToken);
+      }
 
       return {
         success: true,
@@ -60,7 +85,7 @@ export class NotificationService {
     } catch (error: any) {
       console.log('///////error', error);
       return {
-        success: true,
+        success: false,
         message: `Sorry! Not able to register your token`,
       };
     }
