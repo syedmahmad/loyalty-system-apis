@@ -27,8 +27,15 @@ export class RustyService {
     private workshopRepo: Repository<RustyWorkshop>,
 
     @InjectRepository(RustyServiceEntity)
-    private serviceRepo: Repository<RustyServiceEntity>, // still useful for master service definitions
+    private serviceRepo: Repository<RustyServiceEntity>,
   ) {}
+
+  // Helper to safely parse datetime values
+  private parseDate(value?: string | null) {
+    if (!value || value === '0000-00-00 00:00:00') return null;
+    const date = new Date(value);
+    return isNaN(date.getTime()) ? null : date;
+  }
 
   /**
    * ✅ API 1: Save bulk data pushed from Datamart
@@ -51,11 +58,8 @@ export class RustyService {
     let jobcardCount = 0;
     let invoiceCount = 0;
 
-    /**
-     * ✅ Step 1: Collect all workshops
-     */
+    // Step 1: Collect all workshops
     const jobcardWorkshops = new Map<string, any>();
-
     for (const cust of customers) {
       for (const veh of cust['vehicles'] || []) {
         for (const jc of veh['jobcards'] || []) {
@@ -75,7 +79,7 @@ export class RustyService {
       ).values(),
     ];
 
-    // ✅ Step 2: Save workshops
+    // Step 2: Save workshops
     for (const ws of allWorkshops) {
       const workshop = this.workshopRepo.create({
         id: ws['id'],
@@ -91,9 +95,7 @@ export class RustyService {
       await this.workshopRepo.save(workshop);
     }
 
-    /**
-     * ✅ Step 3: Save customers → vehicles → jobcards → invoices
-     */
+    // Step 3: Save customers → vehicles → jobcards → invoices
     for (const cust of customers) {
       const customer = this.customerRepo.create({
         id: cust['id'],
@@ -105,8 +107,8 @@ export class RustyService {
         country: cust['country'],
         dob: cust['dob'] ? String(cust['dob']) : null,
         address: cust['address'],
-        created_at: cust['created_at'] ? new Date(cust['created_at']) : null,
-        updated_at: cust['updated_at'] ? new Date(cust['updated_at']) : null,
+        created_at: this.parseDate(cust['created_at']),
+        updated_at: this.parseDate(cust['updated_at']),
       });
       await this.customerRepo.save(customer);
       customerCount++;
@@ -115,7 +117,7 @@ export class RustyService {
       for (const veh of cust['vehicles'] || []) {
         const vehicle = this.vehicleRepo.create({
           id: veh['id'],
-          dmid: veh['customer_id'], // optional mapping
+          dmid: veh['customer_id'],
           vehicle_number: veh['vehicle_number'],
           vehicle_category_id: veh['vehicle_category_id'] || null,
           vehicle_brand_id: veh['vehicle_brand']?.['id'] || null,
@@ -125,8 +127,8 @@ export class RustyService {
             : null,
           transmission: veh['transmission'] || null,
           vin_number: veh['vin_number'],
-          created_at: veh['created_at'] ? new Date(veh['created_at']) : null,
-          updated_at: veh['updated_at'] ? new Date(veh['updated_at']) : null,
+          created_at: this.parseDate(veh['created_at']),
+          updated_at: this.parseDate(veh['updated_at']),
         });
         await this.vehicleRepo.save(vehicle);
         vehicleCount++;
@@ -140,17 +142,13 @@ export class RustyService {
               ? Number(jc['odometer_reading'])
               : null,
             vehicle_complaints: jc['vehicle_complaints'] || null,
-            delivery_date: jc['delivery_date']
-              ? new Date(jc['delivery_date'])
-              : null,
+            delivery_date: this.parseDate(jc['delivery_date']),
             status: jc['status'],
             workshop_id: jc['workshop_id'] || null,
             customer_id: jc['customer_id'] || null,
-            completed_date: jc['completed_date']
-              ? new Date(jc['completed_date'])
-              : null,
-            created_at: jc['created_at'] ? new Date(jc['created_at']) : null,
-            updated_at: jc['updated_at'] ? new Date(jc['updated_at']) : null,
+            completed_date: this.parseDate(jc['completed_date']),
+            created_at: this.parseDate(jc['created_at']),
+            updated_at: this.parseDate(jc['updated_at']),
             source_of_customer: jc['source_of_customer'] || null,
           });
           await this.jobcardRepo.save(jobcard);
@@ -168,13 +166,9 @@ export class RustyService {
               total_tax_amount: Number(inv['total_tax_amount'] || 0),
               total_discount_amount: Number(inv['total_discount_amount'] || 0),
               workshop_id: inv['workshop_id'] || null,
-              services: inv['services'] || [], // ✅ store as JSON array
-              created_at: inv['created_at']
-                ? new Date(inv['created_at'])
-                : null,
-              updated_at: inv['updated_at']
-                ? new Date(inv['updated_at'])
-                : null,
+              services: inv['services'] || [],
+              created_at: this.parseDate(inv['created_at']),
+              updated_at: this.parseDate(inv['updated_at']),
             });
             await this.invoiceRepo.save(invoice);
             invoiceCount++;
