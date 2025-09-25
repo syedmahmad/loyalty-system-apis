@@ -7,6 +7,7 @@ import axios from 'axios';
 import { MakeEntity } from 'src/make/entities/make.entity';
 import { ModelEntity } from 'src/model/entities/model.entity';
 import { Log } from 'src/logs/entities/log.entity';
+import { decrypt } from 'src/helpers/encryption';
 // import { decrypt } from 'src/helpers/encryption';
 
 @Injectable()
@@ -451,8 +452,8 @@ export class VehiclesService {
     console.log('customer', customer.email);
     // const customerPhone = '0569845873'; for testing it is hardcoded
     // const customerPhone = `+${customer.country_code}${customer.phone}`;
-    // const customerPhone = decrypt(customer.hashed_number);
-    const customerPhone = '+966532537561';
+    const customerPhone = decrypt(customer.hashed_number);
+    // const customerPhone = '+966532537561';
     try {
       const response = await axios.get(
         `${process.env.RESTY_BASE_URL}/api/customer/search?param=${customerPhone}`,

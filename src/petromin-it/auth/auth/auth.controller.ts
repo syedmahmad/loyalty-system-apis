@@ -15,4 +15,13 @@ export class AuthController {
   async verifyOtp(@Body() body: VerifyOtpDto): Promise<any> {
     return await this.authService.verifyOtp(body);
   }
+
+  @Post('select-profile')
+  async selectProfile(@Body() body: any): Promise<any> {
+    const { phone_number, selected_customer } = body;
+    return await this.authService.saveSelectedProfile(
+      phone_number,
+      selected_customer,
+    );
+  }
 }

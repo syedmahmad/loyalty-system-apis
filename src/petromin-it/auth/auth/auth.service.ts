@@ -17,12 +17,19 @@ import { TriggerWhatsapp } from 'src/helpers/triggerWhatsapp';
 import { Log } from 'src/logs/entities/log.entity';
 import { WalletService } from 'src/wallet/wallet/wallet.service';
 import { nanoid } from 'nanoid';
+import { VehiclesService } from 'src/vehicles/vehicles/vehicles.service';
+import {
+  ProfileSelectionStatus,
+  RestyCustomerProfileSelection,
+} from 'src/customers/entities/resty_customer_profile_selection.entity';
 // import { Referral } from 'src/wallet/entities/referrals.entity';
 @Injectable()
 export class AuthService {
   constructor(
     @InjectRepository(Customer)
     private readonly customerRepo: Repository<Customer>,
+    @InjectRepository(RestyCustomerProfileSelection)
+    private readonly restyCustomerProfileSelectionRepo: Repository<RestyCustomerProfileSelection>,
     private readonly ociService: OciService,
     private readonly customerService: CustomerService,
     @InjectRepository(QrCode)
@@ -32,6 +39,7 @@ export class AuthService {
     private readonly walletService: WalletService,
     // @InjectRepository(Referral)
     // private readonly refRepo: Repository<Referral>,
+    private readonly vehicleService: VehiclesService,
   ) {}
 
   // Generate and send OTP, upsert customer by mobileNumber, store OTP with 5-min expiry
@@ -308,6 +316,99 @@ export class AuthService {
       });
       const qrUrl = qr.qr_code_url;
 
+      const localCustomerInRestyTable =
+        await this.restyCustomerProfileSelectionRepo.findOne({
+          where: { phone_number: hashedPhone },
+        });
+
+      // here we will integrate with resty if customer not exists in our resty_customer_profile_selection table
+      if (!localCustomerInRestyTable) {
+        // Login to Resty
+        const loginInfo = await this.vehicleService.customerLoginInResty();
+
+        if (!loginInfo?.access_token) {
+          return {
+            success: false,
+            message: 'Authentication with Resty failed',
+            result: {},
+            errors: [loginInfo],
+          };
+        }
+
+        // it could return multiple customers profile, so we need to take decision here.
+        // Get Customer Info from Resty
+        const customerInfoFromResty =
+          await this.vehicleService.getCustomerInfoFromResty({
+            customer,
+            loginInfo,
+          });
+
+        if (customerInfoFromResty.length > 1) {
+          const customersData =
+            await this.restyCustomerProfileSelectionRepo.create({
+              phone_number: hashedPhone,
+              all_profiles: customerInfoFromResty,
+              status: ProfileSelectionStatus.PENDING,
+              created_at: new Date(),
+              updated_at: new Date(),
+            });
+
+          await this.restyCustomerProfileSelectionRepo.save(customersData);
+
+          return {
+            success: true,
+            message: 'Success',
+            result: {
+              customers: customerInfoFromResty,
+            },
+          };
+        } else {
+          // if only one profile found in resty then we will save it as selected profile
+          const customersData =
+            await this.restyCustomerProfileSelectionRepo.create({
+              phone_number: hashedPhone,
+              all_profiles: customerInfoFromResty,
+              selected_profile: customerInfoFromResty[0],
+              status: ProfileSelectionStatus.SELECTED,
+              created_at: new Date(),
+              updated_at: new Date(),
+            });
+
+          await this.restyCustomerProfileSelectionRepo.save(customersData);
+
+          return {
+            success: true,
+            message: 'Success',
+            result: {
+              customer_id: customer.uuid,
+              tenant_id: customer.tenant?.uuid || customer.tenant.uuid,
+              business_unit_id:
+                customer.business_unit?.uuid || customer.business_unit.uuid,
+              qr_code_url: qrUrl,
+              is_new_user: customer.is_new_user,
+            },
+          };
+        }
+      } else {
+        // if customer exists in resty_customer_profile_selection table and status is selected
+        if (
+          localCustomerInRestyTable.status === ProfileSelectionStatus.SELECTED
+        ) {
+          return {
+            success: true,
+            message: 'Success',
+            result: {
+              customer_id: customer.uuid,
+              tenant_id: customer.tenant?.uuid || customer.tenant.uuid,
+              business_unit_id:
+                customer.business_unit?.uuid || customer.business_unit.uuid,
+              qr_code_url: qrUrl,
+              is_new_user: customer.is_new_user,
+            },
+          };
+        }
+      }
+
       return {
         success: true,
         message: 'Success',
@@ -324,6 +425,45 @@ export class AuthService {
       return {
         success: false,
         message: error?.message || 'Failed',
+        result: null,
+      };
+    }
+  }
+
+  async saveSelectedProfile(
+    phone_number: string,
+    selected_profile: Record<string, any>,
+  ): Promise<any> {
+    try {
+      const hashedPhone = encrypt(phone_number);
+      const localCustomerInRestyTable =
+        await this.restyCustomerProfileSelectionRepo.findOne({
+          where: { phone_number: hashedPhone },
+        });
+
+      if (!localCustomerInRestyTable) {
+        throw new NotFoundException(
+          'No profile selection request found for this phone number',
+        );
+      }
+
+      localCustomerInRestyTable.selected_profile = selected_profile;
+      localCustomerInRestyTable.status = ProfileSelectionStatus.SELECTED;
+      localCustomerInRestyTable.updated_at = new Date();
+
+      await this.restyCustomerProfileSelectionRepo.save(
+        localCustomerInRestyTable,
+      );
+
+      return {
+        success: true,
+        message: 'Profile selection saved successfully',
+        result: null,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: error?.message || 'Failed to save profile selection',
         result: null,
       };
     }
