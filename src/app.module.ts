@@ -43,6 +43,7 @@ import { VariantModule } from './variant/variant.module';
 import { RustyModule } from './rusty/rusty.module';
 import { PreferencesModule } from './petromin-it/preferences/preferences.module';
 import { NotificationModule } from 'src/petromin-it/notification/notification.module';
+import { RestyInvoicesInfoModule } from './petromin-it/resty-invoice-info/resty_invoices_info.module';
 
 @Module({
   imports: [
@@ -94,6 +95,7 @@ import { NotificationModule } from 'src/petromin-it/notification/notification.mo
     QrCodesModule,
     SchedulerModule,
     OpenaiModule,
+    RestyInvoicesInfoModule,
     AuthModule,
     ReferralModule,
     BurningModule,
