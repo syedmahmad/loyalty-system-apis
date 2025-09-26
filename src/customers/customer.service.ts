@@ -58,7 +58,6 @@ import { GvrEarnBurnWithEventsDto } from 'src/customers/dto/gvr_earn_burn_with_e
 import { Tier } from 'src/tiers/entities/tier.entity';
 import { isValidUrl } from 'src/helpers/helper';
 import { CustomerDto } from './dto/customer.dto';
-import { TransactionSyncLog } from './entities/transaction-sync-logs.entity';
 
 @Injectable()
 export class CustomerService {
@@ -69,8 +68,6 @@ export class CustomerService {
     private readonly ociService: OciService,
     @InjectRepository(QrCode)
     private readonly qrCodeRepo: Repository<QrCode>,
-    @InjectRepository(TransactionSyncLog)
-    private readonly transactionSyncLogRepo: Repository<TransactionSyncLog>,
     private readonly qrService: QrcodesService,
     private readonly tiersService: TiersService,
     @InjectRepository(Rule)
@@ -3116,37 +3113,6 @@ export class CustomerService {
         errors: error.message,
       });
     }
-  }
-
-  async syncTransactions(body) {
-    const { customers } = body;
-
-    if (customers.length > 10) {
-      throw new BadRequestException('Maximum 10 customers allowed per request');
-    }
-
-    const transactionSyncLogs = await this.transactionSyncLogRepo.create({
-      total_customer_count: customers.length,
-      status: 'pending',
-      request_body: JSON.stringify(body),
-      created_at: new Date(),
-    } as any);
-
-    await this.transactionSyncLogRepo.save(transactionSyncLogs);
-
-    const today = new Date();
-    return {
-      success: true,
-      message: 'Successfully imported data!...',
-      data: {
-        time_stamp: today,
-        total_customers: customers.length,
-        total_vehicles: 194,
-        total_jobcards: 200,
-        total_invoices: 200,
-      },
-      errors: [],
-    };
   }
 
   async uploadProfileImage(customer_id, buffer, bucketName, objectName) {

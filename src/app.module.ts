@@ -40,9 +40,10 @@ import { VehicleModule } from './vehicles/vehicles.module';
 import { MakeModule } from './make/make.module';
 import { ModelModule } from './model/model.module';
 import { VariantModule } from './variant/variant.module';
-import { RustyModule } from './rusty/rusty.module';
 import { PreferencesModule } from './petromin-it/preferences/preferences.module';
 import { NotificationModule } from 'src/petromin-it/notification/notification.module';
+import { RestyInvoicesInfoModule } from 'src/petromin-it/resty/resty.module';
+import { TransactionSyncLogsSubscriber } from 'src/petromin-it/resty/subscribers/transaction-sync-logs.subscriber';
 
 @Module({
   imports: [
@@ -65,7 +66,7 @@ import { NotificationModule } from 'src/petromin-it/notification/notification.mo
           database,
           autoLoadEntities: true,
           synchronize: true,
-          subscribers: [GlobalAuditSubscriber],
+          subscribers: [GlobalAuditSubscriber, TransactionSyncLogsSubscriber],
         };
       },
     }),
@@ -94,12 +95,12 @@ import { NotificationModule } from 'src/petromin-it/notification/notification.mo
     QrCodesModule,
     SchedulerModule,
     OpenaiModule,
+    RestyInvoicesInfoModule,
     AuthModule,
     ReferralModule,
     BurningModule,
     VehicleModule,
     MakeModule,
-    RustyModule,
     ModelModule,
     VariantModule,
     PreferencesModule,
