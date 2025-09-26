@@ -1,35 +1,56 @@
-import { Entity, PrimaryGeneratedColumn, Column, OneToMany } from 'typeorm';
-import { RustyJobcard } from './rusty-jobcards.entity';
+import { Entity, Column, PrimaryColumn, Index } from 'typeorm';
 
-@Entity('rusty_workshops')
+/**
+ * Maps to table: rusty_workshop
+ * Trimmed to core fields + minimal operational fields
+ */
+@Entity({ name: 'rusty_workshop' })
 export class RustyWorkshop {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryColumn({ name: 'id', type: 'varchar', length: 36 })
   id: string;
 
-  @Column({ nullable: true })
-  shop_type: string;
+  @Column({ name: 'shop_type', type: 'varchar', length: 45, nullable: true })
+  shop_type: string | null;
 
-  @Column({ nullable: true })
-  garage_code: string;
+  @Column({ name: 'shop_name', type: 'varchar', length: 255, nullable: true })
+  shop_name: string | null;
 
-  @Column({ nullable: true })
-  shop_name: string;
+  @Index({ unique: true })
+  @Column({ name: 'garage_code', type: 'varchar', length: 20, nullable: true })
+  garage_code: string | null;
 
-  @Column({ nullable: true })
-  region: string;
+  @Column({ name: 'region', type: 'varchar', length: 100, nullable: true })
+  region: string | null;
 
-  @Column({ nullable: true })
-  city: string;
+  @Column({ name: 'city', type: 'varchar', length: 100, nullable: true })
+  city: string | null;
 
-  @Column({ nullable: true })
-  longitude: string;
+  @Column({ name: 'longitude', type: 'varchar', length: 50, nullable: true })
+  longitude: string | null;
 
-  @Column({ nullable: true })
-  latitude: string;
+  @Column({ name: 'latitude', type: 'varchar', length: 50, nullable: true })
+  latitude: string | null;
 
-  @Column({ nullable: true })
-  geo_coordinates: string;
+  @Column({
+    name: 'geo_coordinates',
+    type: 'varchar',
+    length: 255,
+    nullable: true,
+  })
+  geo_coordinates: string | null;
 
-  @OneToMany(() => RustyJobcard, (jobcard) => jobcard.workshop)
-  jobcards: RustyJobcard[];
+  @Column({
+    name: 'status',
+    type: 'tinyint',
+    width: 1,
+    nullable: false,
+    default: () => '1',
+  })
+  status: number;
+
+  @Column({ name: 'created_at', type: 'datetime', nullable: true })
+  created_at: Date | null;
+
+  @Column({ name: 'updated_at', type: 'datetime', nullable: true })
+  updated_at: Date | null;
 }
