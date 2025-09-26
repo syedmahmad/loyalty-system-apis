@@ -42,7 +42,8 @@ import { ModelModule } from './model/model.module';
 import { VariantModule } from './variant/variant.module';
 import { PreferencesModule } from './petromin-it/preferences/preferences.module';
 import { NotificationModule } from 'src/petromin-it/notification/notification.module';
-import { RestyInvoicesInfoModule } from './petromin-it/resty-invoice-info/resty_invoices_info.module';
+import { RestyInvoicesInfoModule } from 'src/petromin-it/resty/resty.module';
+import { TransactionSyncLogsSubscriber } from 'src/petromin-it/resty/subscribers/transaction-sync-logs.subscriber';
 
 @Module({
   imports: [
@@ -65,7 +66,7 @@ import { RestyInvoicesInfoModule } from './petromin-it/resty-invoice-info/resty_
           database,
           autoLoadEntities: true,
           synchronize: true,
-          subscribers: [GlobalAuditSubscriber],
+          subscribers: [GlobalAuditSubscriber, TransactionSyncLogsSubscriber],
         };
       },
     }),

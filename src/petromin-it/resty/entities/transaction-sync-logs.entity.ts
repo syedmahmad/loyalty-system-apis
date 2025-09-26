@@ -1,8 +1,10 @@
+import { RestyInvoicesInfo } from 'src/petromin-it/resty/entities/resty_invoices_info.entity';
 import {
   Entity,
   PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
+  OneToMany,
 } from 'typeorm';
 
 @Entity('transactions_sync_logs')
@@ -13,16 +15,18 @@ export class TransactionSyncLog {
   @Column({ type: 'varchar', length: 50, default: 'pending' })
   status: string;
 
-  @Column({ type: 'int', default: 0 })
-  total_customer_count: number;
-
   @CreateDateColumn({ type: 'timestamp' })
   created_at: Date;
 
   @CreateDateColumn({ type: 'timestamp' })
   updated_at: Date;
 
-  // store list of coupon that succeeded
   @Column({ type: 'json', nullable: true })
   request_body: any;
+
+  @Column({ type: 'json', nullable: true })
+  response_body: any;
+
+  @OneToMany(() => RestyInvoicesInfo, (invoice) => invoice.syncLog)
+  invoices: RestyInvoicesInfo[];
 }
