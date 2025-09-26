@@ -38,7 +38,6 @@ import { UserCoupon } from 'src/wallet/entities/user-coupon.entity';
 import { WalletSettings } from 'src/wallet/entities/wallet-settings.entity';
 import { WalletOrder } from 'src/wallet/entities/wallet-order.entity';
 import { CustomerBootstrapService } from './startup/customer-bootstrap.service';
-import { TransactionSyncLog } from './entities/transaction-sync-logs.entity';
 
 @Module({
   imports: [
@@ -65,7 +64,6 @@ import { TransactionSyncLog } from './entities/transaction-sync-logs.entity';
       Coupon,
       CouponType,
       CustomerSegmentMember,
-      TransactionSyncLog,
       UserCoupon,
     ]),
     WalletModule,

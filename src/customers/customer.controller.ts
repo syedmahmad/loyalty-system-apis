@@ -165,11 +165,6 @@ export class CustomerController {
     return this.customerService.transactionHistory(body, page, pageSize);
   }
 
-  @Post('/sync-transactions')
-  async syncTransactions(@Body() body: any) {
-    return this.customerService.syncTransactions(body);
-  }
-
   @Post('upload-profile-image/:customerId')
   @UseInterceptors(FileInterceptor('file'))
   async uploadProfileImage(

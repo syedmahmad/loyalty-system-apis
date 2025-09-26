@@ -19,7 +19,10 @@ export class TransactionSyncLog {
   @CreateDateColumn({ type: 'timestamp' })
   created_at: Date;
 
+  @CreateDateColumn({ type: 'timestamp' })
+  updated_at: Date;
+
   // store list of coupon that succeeded
-  @Column({ type: 'simple-json', nullable: true })
-  request_body: string[];
+  @Column({ type: 'json', nullable: true })
+  request_body: any;
 }
