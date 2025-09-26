@@ -36,6 +36,7 @@ export class VehiclesService {
       const customer = await this.customerRepo.findOne({
         where: {
           uuid: customer_id,
+          status: 1,
           business_unit: { id: parseInt(bUId) },
           tenant: { id: parseInt(tenantId) },
         },
@@ -153,6 +154,7 @@ export class VehiclesService {
       const customer = await this.customerRepo.findOne({
         where: {
           uuid: customerId,
+          status: 1,
           business_unit: { id: parseInt(businessUnitId) },
           tenant: { id: parseInt(tenantId) },
         },
@@ -257,6 +259,7 @@ export class VehiclesService {
       const customer = await this.customerRepo.findOne({
         where: {
           uuid: customerId,
+          status: 1,
           business_unit: { id: parseInt(businessUnitId) },
           tenant: { id: parseInt(tenantId) },
         },

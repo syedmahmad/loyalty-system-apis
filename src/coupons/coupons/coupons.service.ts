@@ -175,7 +175,7 @@ export class CouponsService {
 
             // Ensure the customer exists in the customer table
             const customer = await this.customerRepo.findOne({
-              where: { id: eachCustomer.customer_id },
+              where: { id: eachCustomer.customer_id, status: 1 },
               relations: ['business_unit'],
             });
 
@@ -466,7 +466,7 @@ export class CouponsService {
 
             // Ensure the customer exists in the customer table
             const customer = await this.customerRepo.findOne({
-              where: { id: eachCustomer.customer_id },
+              where: { id: eachCustomer.customer_id, status: 1 },
               relations: ['business_unit'],
             });
 
@@ -520,7 +520,7 @@ export class CouponsService {
 
             // Ensure the customer exists in the customer table
             const customer = await this.customerRepo.findOne({
-              where: { id: eachCustomer.customer_id },
+              where: { id: eachCustomer.customer_id, status: 1 },
               relations: ['business_unit'],
             });
 
@@ -701,7 +701,7 @@ export class CouponsService {
 
     // Step 1: Get Customer & Wallet Info
     const customer = await this.customerRepo.findOne({
-      where: { uuid: customer_id },
+      where: { uuid: customer_id, status: 1 },
     });
     if (!customer) throw new NotFoundException('Customer not found');
 
@@ -1572,6 +1572,7 @@ export class CouponsService {
     const customer = await this.customerRepo.findOne({
       where: {
         uuid: customer_id,
+        status: 1,
         business_unit: { id: parseInt(BUId) },
         tenant: { id: tenantId },
       },
@@ -1689,7 +1690,11 @@ export class CouponsService {
   async getCustomerCoupons(body) {
     const { customerId, bUId } = body;
     const customer = await this.customerRepo.findOne({
-      where: { uuid: customerId, business_unit: { id: parseInt(bUId) } },
+      where: {
+        uuid: customerId,
+        business_unit: { id: parseInt(bUId) },
+        status: 1,
+      },
     });
 
     if (!customer) throw new NotFoundException('Customer not found');
@@ -1985,6 +1990,7 @@ export class CouponsService {
         where: {
           country_code: countryCode,
           phone: phone,
+          status: 1,
         },
       });
 
@@ -2090,7 +2096,7 @@ export class CouponsService {
 
                     // Ensure the customer exists in the customer table
                     const customer = await this.customerRepo.findOne({
-                      where: { id: eachCustomer.customer_id },
+                      where: { id: eachCustomer.customer_id, status: 1 },
                       relations: ['business_unit'],
                     });
 
@@ -2165,7 +2171,11 @@ export class CouponsService {
     const { customerId, bUId, page = 1, limit = 10 } = body;
 
     const customer = await this.customerRepo.findOne({
-      where: { uuid: customerId, business_unit: { id: parseInt(bUId) } },
+      where: {
+        uuid: customerId,
+        business_unit: { id: parseInt(bUId) },
+        status: 1,
+      },
     });
 
     if (!customer) throw new NotFoundException('Customer not found');
@@ -2272,7 +2282,11 @@ export class CouponsService {
     const { customerId, bUId, page = 1, limit = 10 } = body;
 
     const customer = await this.customerRepo.findOne({
-      where: { uuid: customerId, business_unit: { id: parseInt(bUId) } },
+      where: {
+        uuid: customerId,
+        business_unit: { id: parseInt(bUId) },
+        status: 1,
+      },
     });
 
     if (!customer) throw new NotFoundException('Customer not found');

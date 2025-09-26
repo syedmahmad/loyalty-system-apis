@@ -1,7 +1,13 @@
 import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { RestyInvoicesInfo } from '../entities/resty_invoices_info.entity';
 @Injectable()
 export class RestyService {
-  constructor() {}
+  constructor(
+    @InjectRepository(RestyInvoicesInfo)
+    private readonly restyIncoicesInfoRepo: Repository<RestyInvoicesInfo>,
+  ) {}
 
   /**
    * Process datamart payload and compute summary totals and latest invoice timestamp
@@ -73,5 +79,18 @@ export class RestyService {
       },
       errors: [],
     };
+  }
+
+  /**
+   * ✅ API 2: Return latest invoice_date stored in system
+   */
+  async getLatestTimestamp(): Promise<string | null> {
+    const lastInvoice = await this.restyIncoicesInfoRepo.findOne({
+      where: {},
+      order: { invoice_date: 'DESC' }, // already string, MySQL can sort dates
+    });
+
+    // invoice_date is a string like "2025-09-26"
+    return lastInvoice?.invoice_date || null;
   }
 }

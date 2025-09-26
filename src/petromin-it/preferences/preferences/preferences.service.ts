@@ -34,7 +34,7 @@ export class PreferencesService {
     customerUuid: string,
   ): Promise<PreferencesResponseDto> {
     const customer = await this.customerRepo.findOne({
-      where: { uuid: customerUuid },
+      where: { uuid: customerUuid, status: 1 },
     });
     if (!customer) {
       throw new NotFoundException('Customer not found');
@@ -56,7 +56,7 @@ export class PreferencesService {
     dto: UpdatePreferencesDto,
   ): Promise<PreferencesResponseDto> {
     const customer = await this.customerRepo.findOne({
-      where: { uuid: customerUuid },
+      where: { uuid: customerUuid, status: 1 },
     });
     if (!customer) {
       throw new NotFoundException('Customer not found');

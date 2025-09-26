@@ -38,7 +38,7 @@ export class CustomerProfileService {
 
   async getProfile(customerId: string) {
     const customerInfo = await this.customerRepo.findOne({
-      where: { uuid: customerId },
+      where: { uuid: customerId, status: 1 },
       relations: ['business_unit', 'tenant'],
     });
 
@@ -53,7 +53,7 @@ export class CustomerProfileService {
     }
 
     const customer = await this.customerRepo.findOne({
-      where: { id: customerInfo.id },
+      where: { id: customerInfo.id, status: 1 },
       select: [
         'uuid',
         'is_new_user',
@@ -123,7 +123,7 @@ export class CustomerProfileService {
 
   async updateProfile(customerId: string, dto: UpdateProfileDto) {
     const customer = await this.customerRepo.findOne({
-      where: { uuid: customerId },
+      where: { uuid: customerId, status: 1 },
       relations: ['tenant', 'business_unit'],
     });
 
@@ -166,7 +166,7 @@ export class CustomerProfileService {
     });
 
     const profile = await this.customerRepo.findOne({
-      where: { id: customer.id },
+      where: { id: customer.id, status: 1 },
       select: [
         'uuid',
         'is_new_user',
@@ -285,7 +285,7 @@ export class CustomerProfileService {
 
   async requestAccountDeletion(customerId: string, dto: RequestDeletionDto) {
     const customer = await this.customerRepo.findOne({
-      where: { uuid: customerId },
+      where: { uuid: customerId, status: 1 },
     });
 
     if (!customer) throw new NotFoundException('Customer not found');
@@ -311,7 +311,7 @@ export class CustomerProfileService {
    */
   async confirmAccountDeletion(customerId: string, dto: RequestDeletionDto) {
     const customerInfo = await this.customerRepo.findOne({
-      where: { uuid: customerId },
+      where: { uuid: customerId, status: 1 },
     });
 
     if (!customerInfo) throw new NotFoundException('Customer not found');
@@ -341,13 +341,13 @@ export class CustomerProfileService {
    */
   async restoreAccount(customerId: string) {
     const customerInfo = await this.customerRepo.findOne({
-      where: { uuid: customerId },
+      where: { uuid: customerId, status: 1 },
     });
 
     if (!customerInfo) throw new NotFoundException('Customer not found');
 
     const customer = await this.customerRepo.findOne({
-      where: { id: customerInfo.id },
+      where: { id: customerInfo.id, status: 1 },
     });
 
     if (!customer) throw new NotFoundException('Customer not found');
@@ -377,6 +377,7 @@ export class CustomerProfileService {
     if (referral_code) {
       referrer_user = await this.customerRepo.findOne({
         where: {
+          status: 1,
           referral_code: referral_code,
           business_unit: { id: Number(businessUnitId) },
           tenant: { id: Number(tenantId) },
@@ -391,6 +392,7 @@ export class CustomerProfileService {
     const customer = await this.customerRepo.findOne({
       where: {
         uuid: customer_id,
+        status: 1,
       },
       relations: ['business_unit', 'tenant'],
     });

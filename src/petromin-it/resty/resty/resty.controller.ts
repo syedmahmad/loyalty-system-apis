@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Get,
   Post,
   Req,
   UnauthorizedException,
@@ -58,5 +59,20 @@ export class RestyController {
     await this.txLogRepo.save(log);
 
     return result;
+  }
+
+  /**
+   * ✅ API: Get latest invoice timestamp
+   */
+  @Get('latest-timestamp')
+  async getLatestTimestamp() {
+    const timestamp = await this.restyService.getLatestTimestamp();
+    return {
+      success: true,
+      message: timestamp
+        ? 'Latest invoice timestamp retrieved successfully'
+        : 'No invoices found',
+      data: { latest_timestamp: timestamp },
+    };
   }
 }

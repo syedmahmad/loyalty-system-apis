@@ -63,12 +63,14 @@ export class AuthService {
       let customer = await this.customerRepo.findOne({
         where: {
           hashed_number: hashedPhone,
+          status: 1,
           business_unit: { id: parseInt(businessUnitId) },
           tenant: { id: parseInt(tenantId) },
         },
         relations: ['business_unit', 'tenant'],
       });
-      if (!customer) {
+
+      if (!customer || customer.status === 3) {
         // The original code only creates a new customer entity in memory, but does not save it to the database,
         // so the customer.id is not generated yet. To get the newly created id, you must save the entity first.
         customer = this.customerRepo.create({
@@ -163,6 +165,7 @@ export class AuthService {
       const hashedPhone = encrypt(plainMobile);
       const customer = await this.customerRepo.findOne({
         where: {
+          status: 1,
           hashed_number: hashedPhone,
           business_unit: { id: parseInt(businessUnitId) },
           tenant: { id: parseInt(tenantId) },

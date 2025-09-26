@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import {
   BadRequestException,
   Injectable,
@@ -515,7 +516,11 @@ export class TiersService {
     try {
       const { customerId, tenantId, BUId } = body;
       const customer = await this.customerRepo.findOne({
-        where: { uuid: customerId, business_unit: { id: parseInt(BUId) } },
+        where: {
+          uuid: customerId,
+          business_unit: { id: parseInt(BUId) },
+          status: 1,
+        },
       });
 
       const burningRule = await this.rulesRepository.findOne({

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import {
   BadRequestException,
   ForbiddenException,
@@ -151,6 +152,7 @@ export class CustomerService {
       // Check if customer already exists by external_customer_id and business unit
       const existing = await this.customerRepo.findOne({
         where: {
+          status: 1,
           external_customer_id: customerDto.external_customer_id,
           business_unit: { id: businessUnit.id },
         },
@@ -232,7 +234,7 @@ export class CustomerService {
 
   async getCustomerById(id: number) {
     const customer = await this.customerRepo.findOne({
-      where: { id },
+      where: { id, status: 1 },
     });
 
     if (!customer) {
@@ -272,7 +274,9 @@ export class CustomerService {
   }
 
   async updateStatus(id: number, status: 0 | 1) {
-    const customer = await this.customerRepo.findOne({ where: { id } });
+    const customer = await this.customerRepo.findOne({
+      where: { id, status: 1 },
+    });
 
     if (!customer) {
       throw new NotFoundException('Customer not found');
@@ -290,7 +294,7 @@ export class CustomerService {
     }
 
     const customer = await this.customerRepo.findOne({
-      where: { uuid: uuid },
+      where: { uuid: uuid, status: 1 },
     });
 
     if (!customer) {
@@ -402,7 +406,7 @@ export class CustomerService {
     couponQuery: string,
   ) {
     const customer = await this.customerRepo.findOne({
-      where: { id: customerId },
+      where: { id: customerId, status: 1 },
     });
 
     const walletinfo = await this.walletService.getSingleCustomerWalletInfoById(
@@ -444,7 +448,7 @@ export class CustomerService {
 
   async createCustomerActivity(body: CreateCustomerActivityDto) {
     const customer = await this.customerRepo.findOne({
-      where: { uuid: body.customer_uuid },
+      where: { uuid: body.customer_uuid, status: 1 },
     });
 
     if (!customer) {
@@ -463,7 +467,7 @@ export class CustomerService {
 
     // Step 1: Get Customer & Wallet Info
     const customer = await this.customerRepo.findOne({
-      where: { uuid: customer_id },
+      where: { uuid: customer_id, status: 1 },
     });
     if (!customer) throw new NotFoundException('Customer not found');
 
@@ -489,7 +493,11 @@ export class CustomerService {
 
     // 1. Find customer by uuid
     const customer = await this.customerRepo.findOne({
-      where: { uuid: customer_id, business_unit: { id: parseInt(BUId) } },
+      where: {
+        uuid: customer_id,
+        business_unit: { id: parseInt(BUId) },
+        status: 1,
+      },
     });
     if (!customer) throw new NotFoundException('Customer not found');
 
@@ -778,7 +786,7 @@ export class CustomerService {
     const total_amount = Number(metadata.amount);
 
     const customerInfo = await this.customerRepo.find({
-      where: { uuid: customer_id },
+      where: { uuid: customer_id, status: 1 },
       relations: ['business_unit'],
     });
 
@@ -1984,7 +1992,7 @@ export class CustomerService {
 
   async validateCustomerTenant(customerId, tenantId) {
     const customer = await this.customerRepo.findOne({
-      where: { uuid: customerId },
+      where: { uuid: customerId, status: 1 },
       relations: ['business_unit'],
     });
 
@@ -2007,7 +2015,11 @@ export class CustomerService {
 
     // 1. Find customer by uuid
     const customer = await this.customerRepo.findOne({
-      where: { uuid: customer_id, business_unit: { id: parseInt(BUId) } },
+      where: {
+        uuid: customer_id,
+        business_unit: { id: parseInt(BUId) },
+        status: 1,
+      },
     });
     if (!customer) throw new NotFoundException('Customer not found');
 
@@ -2366,7 +2378,7 @@ export class CustomerService {
     const { customer_id, metadata, tenantId, BUId } = bodyPayload;
 
     const customerInfo = await this.customerRepo.find({
-      where: { uuid: customer_id },
+      where: { uuid: customer_id, status: 1 },
       relations: ['business_unit'],
     });
 
@@ -2654,8 +2666,8 @@ export class CustomerService {
 
       const customer = await this.customerRepo.findOne({
         where: [
-          { phone: customer_phone_number },
-          { uuid: custom_customer_unique_id },
+          { phone: customer_phone_number, status: 1 },
+          { uuid: custom_customer_unique_id, status: 1 },
         ],
       });
 
@@ -2740,7 +2752,10 @@ export class CustomerService {
 
     try {
       const customer = await this.customerRepo.findOne({
-        where: [{ uuid: customer_id }, { phone: customer_phone_number }],
+        where: [
+          { uuid: customer_id, status: 1 },
+          { phone: customer_phone_number, status: 1 },
+        ],
         relations: ['tenant', 'business_unit'],
       });
 
@@ -2885,7 +2900,7 @@ export class CustomerService {
 
     try {
       const customer = await this.customerRepo.findOne({
-        where: { uuid: customer_id },
+        where: { uuid: customer_id, status: 1 },
         relations: ['tenant', 'business_unit'],
       });
 
@@ -2965,7 +2980,7 @@ export class CustomerService {
 
     try {
       const customer = await this.customerRepo.findOne({
-        where: { uuid: customer_id },
+        where: { uuid: customer_id, status: 1 },
         relations: ['tenant', 'business_unit'],
       });
 
@@ -3045,7 +3060,7 @@ export class CustomerService {
 
     try {
       const customer = await this.customerRepo.findOne({
-        where: { uuid: customer_id },
+        where: { uuid: customer_id, status: 1 },
         relations: ['tenant', 'business_unit'],
       });
 
@@ -3117,7 +3132,7 @@ export class CustomerService {
 
   async uploadProfileImage(customer_id, buffer, bucketName, objectName) {
     const customer = await this.customerRepo.findOne({
-      where: { uuid: customer_id },
+      where: { uuid: customer_id, status: 1 },
       relations: ['tenant', 'business_unit'],
     });
 
