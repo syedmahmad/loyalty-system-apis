@@ -10,12 +10,21 @@ import { QrcodesService } from 'src/qr_codes/qr_codes/qr_codes.service';
 import { Log } from 'src/logs/entities/log.entity';
 import { WalletModule } from 'src/wallet/wallet.module';
 import { Referral } from 'src/wallet/entities/referrals.entity';
+import { VehicleModule } from 'src/vehicles/vehicles.module';
+import { RestyCustomerProfileSelection } from 'src/customers/entities/resty_customer_profile_selection.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Customer, QrCode, Log, Referral]),
+    TypeOrmModule.forFeature([
+      Customer,
+      QrCode,
+      Log,
+      Referral,
+      RestyCustomerProfileSelection,
+    ]),
     CustomerModule,
     WalletModule,
+    VehicleModule,
   ],
   controllers: [AuthController],
   providers: [AuthService, QrcodesService, OciService],
