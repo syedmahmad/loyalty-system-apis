@@ -670,13 +670,29 @@ export class VehiclesService {
     }
   }
 
-  async softDeleteVehicle(vehicleId: string, customerId: string) {
+  async softDeleteVehicle(
+    tenantId: string,
+    businessUnitId: string,
+    platNo: string,
+    customerId: string,
+  ) {
     try {
+      const customer = await this.customerRepo.findOne({
+        where: {
+          uuid: customerId,
+          status: 1,
+          business_unit: { id: parseInt(businessUnitId) },
+          tenant: { id: parseInt(tenantId) },
+        },
+      });
+
+      if (!customer) throw new NotFoundException('Customer not found');
+
       const vehicle = await this.vehiclesRepository.findOne({
         where: {
-          id: parseInt(vehicleId),
+          plate_no: platNo,
           customer: {
-            id: parseInt(customerId),
+            id: customer.id,
             status: 1, // Ensure customer is active
           },
           status: 1, // Ensure vehicle is active
@@ -687,7 +703,7 @@ export class VehiclesService {
         throw new NotFoundException('Vehicle not found');
       }
 
-      vehicle.status = 0; // Set status to inactive
+      vehicle.status = 3; // Set status to deelte
       await this.vehiclesRepository.save(vehicle);
 
       return {
