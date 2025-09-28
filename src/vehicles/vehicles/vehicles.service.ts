@@ -8,6 +8,8 @@ import { MakeEntity } from 'src/make/entities/make.entity';
 import { ModelEntity } from 'src/model/entities/model.entity';
 import { Log } from 'src/logs/entities/log.entity';
 import { decrypt } from 'src/helpers/encryption';
+import { VariantEntity } from 'src/variant/entities/variant.entity';
+// import { FuelType } from 'src/variant/entities/variant.enum';
 // import { decrypt } from 'src/helpers/encryption';
 
 @Injectable()
@@ -27,108 +29,174 @@ export class VehiclesService {
 
     @InjectRepository(ModelEntity)
     private readonly modelRepository: Repository<ModelEntity>,
+
+    @InjectRepository(VariantEntity)
+    private readonly variantRepository: Repository<VariantEntity>,
   ) {}
 
-  async addCustomerVehicle(bodyPayload) {
+  /**
+   * Add or update a vehicle for a customer.
+   * If a vehicle with the same plate_no exists for any customer, transfer ownership to the new customer and update details.
+   * If not, create a new vehicle for the customer.
+   */
+  async manageCustomerVehicle(tenantId, businessUnitId, body) {
+    console.log('loginInfo//////////');
     try {
-      const { customer_id, tenantId, bUId } = bodyPayload;
+      // Destructure and parse IDs up front
+      const {
+        customer_id,
+        make_id,
+        model_id,
+        variant_id,
+        year,
+        plate_no,
+        vin,
+        ...restBody
+      } = body;
+      const parsedBusinessUnitId = parseInt(businessUnitId);
+      const parsedTenantId = parseInt(tenantId);
 
       // Step 1: Find customer
       const customer = await this.customerRepo.findOne({
         where: {
           uuid: customer_id,
           status: 1,
-          business_unit: { id: parseInt(bUId) },
-          tenant: { id: parseInt(tenantId) },
+          business_unit: { id: parsedBusinessUnitId },
+          tenant: { id: parsedTenantId },
         },
       });
 
       if (!customer) throw new NotFoundException('Customer not found');
 
-      if (customer && customer.status == 0) {
-        throw new NotFoundException('Customer is inactive');
-      }
+      // Fetch make, model, and variant info in parallel
+      const [makeInfo, modelInfo, variantInfo] = await Promise.all([
+        this.makeRepository.findOne({ where: { makeId: make_id } }),
+        this.modelRepository.findOne({ where: { modelId: model_id, year } }),
+        this.variantRepository.findOne({ where: { variantId: variant_id } }),
+      ]);
 
-      if (customer.status === 3) {
-        throw new NotFoundException('Customer is deleted');
-      }
+      const prePareData: any = {
+        make: makeInfo?.name ?? null,
+        make_ar: makeInfo?.nameAr ?? null,
+        make_id: make_id ?? null,
+        image: makeInfo?.logo ?? null,
+        model: modelInfo?.name ?? null,
+        model_ar: modelInfo?.nameAr ?? null,
+        model_id: model_id ?? null,
+        variant: variantInfo?.name ?? null,
+        variant_ar: variantInfo?.nameAr ?? null,
+        variant_id: variant_id ?? null,
+        vin_number: vin ?? null,
+        plate_no: plate_no ?? null,
+        year: year ?? null,
+        color: restBody?.color ?? null,
+        engine: restBody?.engine ?? null,
+        body_type: restBody?.body_type ?? null,
+        fuel_type: variantInfo?.fuelType?.toString() ?? null,
+        transmission: variantInfo?.transmission?.toString() ?? null,
+        last_mileage: restBody?.last_mileage ?? null,
+        last_service_date: restBody?.last_service_date ?? null,
+        owner_name: restBody?.owner_name ?? null,
+        owner_id: restBody?.owner_id ?? null,
+        user_id: restBody?.user_id ?? null,
+        registeration_type: restBody?.registeration_type ?? null,
+        registeration_date: restBody?.registeration_date ?? null,
+        registeration_no: restBody?.registeration_no ?? null,
+        sequence_no: restBody?.sequence_no ?? null,
+        national_id: restBody?.national_id ?? null,
+      };
 
-      const makeInfo = await this.makeRepository.findOne({
-        where: { makeId: bodyPayload.make_id },
-      });
-
-      const modelInfo = await this.modelRepository.findOne({
-        where: { modelId: bodyPayload.model_id },
-      });
-
-      // Step 2: Find or create vehicle
-      let vehicle = await this.vehiclesRepository.findOne({
+      // Step 2: Find vehicle by plate_no (regardless of customer)
+      let vehicle: any = await this.vehiclesRepository.findOne({
         where: {
-          customer: { id: customer.id },
-          registration_number: bodyPayload.plate_no,
+          plate_no: plate_no,
         },
+        relations: ['customer'],
       });
-
-      if (vehicle && vehicle.status === 0) {
-        // Reactivate the vehicle if it was inactive
-        vehicle.status = 1;
-      }
 
       if (vehicle) {
-        // Update existing vehicle
-        vehicle.vin_number = bodyPayload.vin;
-        vehicle.year = bodyPayload.model_year;
-        vehicle.make = makeInfo.name;
-        vehicle.model = modelInfo.name;
-        vehicle.make_id = bodyPayload.make_id;
-        vehicle.model_id = bodyPayload.model_id;
+        // If the vehicle exists and belongs to a different customer, transfer ownership
+        if (vehicle.customer?.id !== customer.id) {
+          vehicle.customer = { id: customer.id };
+        }
+        Object.assign(vehicle, prePareData);
       } else {
-        // Insert new vehicle
+        // Create new vehicle for this customer
         vehicle = this.vehiclesRepository.create({
           customer: { id: customer.id },
-          registration_number: bodyPayload.plate_no,
-          vin_number: bodyPayload.vin,
-          year: bodyPayload.model_year,
-          make: makeInfo?.name || null,
-          model: modelInfo?.name || null,
-          make_id: bodyPayload.make_id,
-          model_id: bodyPayload.model_id,
+          ...prePareData,
         });
       }
 
       vehicle = await this.vehiclesRepository.save(vehicle);
 
       // Step 3: Sync with Resty
-      const loginInfo = await this.customerLoginInResty();
+      let loginInfo: any;
+      try {
+        // Set a timeout for the login call (e.g., 3 seconds)
+        loginInfo = await Promise.race([
+          this.customerLoginInResty(),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Login timeout')), 3000),
+          ),
+        ]);
+      } catch (err) {
+        // If timeout or any error, proceed without loginInfo
+        loginInfo = null;
+      }
       if (!loginInfo?.access_token) {
+        // TODO: need to discuss with team
         return {
-          success: false,
-          message: 'Failed to authenticate with Resty',
+          success: true,
+          message: 'Vehicle added successfully',
           result: { vehicle },
-          errors: loginInfo,
+          errors: [],
         };
       }
 
-      const customerInfoFromResty = await this.getCustomerInfoFromResty({
-        customer,
+      // Step 3: Sync with Resty
+      let customerInfoFromResty: any;
+      try {
+        // Set a timeout for the login call (e.g., 3 seconds)
+        customerInfoFromResty = await Promise.race([
+          this.getCustomerInfoFromResty({
+            customer,
+            loginInfo,
+          }),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Login timeout')), 3000),
+          ),
+        ]);
+      } catch (err) {
+        // If timeout or any error, proceed without loginInfo
+        customerInfoFromResty = null;
+      }
+
+      if (!customerInfoFromResty.length) {
+        // TODO: need to discuss with team
+        return {
+          success: true,
+          message: 'Vehicle added successfully',
+          result: { vehicle },
+          errors: [],
+        };
+      }
+
+      console.log('/////////After getting customer form resty//////');
+
+      const restyresponseVehicles = await this.manageVehicleInResty({
+        vehiclePayload: {
+          ...vehicle,
+          // TODO: need to find customer master profiel and add this vehicle agisnt it.
+          customer_id: customerInfoFromResty[0].customer_id,
+        },
         loginInfo,
       });
 
-      if (customerInfoFromResty.length) {
-        const vehiclePayload = {
-          customer_id: customer?.uuid,
-          make: makeInfo?.name || null,
-          model: makeInfo?.name || null,
-          model_year: bodyPayload.model_year,
-          plate_no: bodyPayload.plate_no,
-          vin: bodyPayload.vin,
-        };
-
-        await this.manageVehicleInResty({
-          vehiclePayload,
-          loginInfo,
-        });
-      }
+      console.log(
+        'restyresponseVehicles////////////////',
+        restyresponseVehicles,
+      );
 
       return {
         success: true,
@@ -268,14 +336,6 @@ export class VehiclesService {
 
       if (!customer) throw new NotFoundException('Customer not found');
 
-      if (customer && customer.status == 0) {
-        throw new NotFoundException('Customer is inactive');
-      }
-
-      if (customer.status === 3) {
-        throw new NotFoundException('Customer is deleted');
-      }
-
       // 2. Get local vehicles
       const localVehicles = await this.vehiclesRepository.find({
         where: { customer: { id: customer.id }, status: 1 },
@@ -284,6 +344,7 @@ export class VehiclesService {
       // 3. Login to Resty
       const loginInfo = await this.customerLoginInResty();
 
+      console.log('/////////////loginInfo', loginInfo);
       if (!loginInfo?.access_token) {
         return {
           success: false,
@@ -300,7 +361,7 @@ export class VehiclesService {
         customer,
         loginInfo,
       });
-
+      console.log('/////////////customerInfoFromResty', customerInfoFromResty);
       if (!customerInfoFromResty.length) {
         return {
           success: false,
@@ -316,6 +377,8 @@ export class VehiclesService {
         loginInfo,
       });
 
+      console.log('/////////////restyVehicles', restyVehicles);
+
       if (!restyVehicles.length) {
         return {
           success: true,
@@ -326,9 +389,7 @@ export class VehiclesService {
       }
 
       // 6. Compare and sync
-      const localVinSet = new Set(
-        localVehicles.map((v) => v.registration_number),
-      );
+      const localVinSet = new Set(localVehicles.map((v) => v.plate_no));
       const newVehicles: any[] = [];
 
       for (const eachVehicle of restyVehicles) {
@@ -340,7 +401,7 @@ export class VehiclesService {
           const deactivatedVehicle = await this.vehiclesRepository.findOne({
             where: {
               customer: { id: customer.id },
-              registration_number: eachVehicle.plate_no,
+              plate_no: eachVehicle.plate_no,
               status: 0, // only look for deactivated vehicles
             },
           });
@@ -354,7 +415,7 @@ export class VehiclesService {
             make_id: makeInfo?.makeId || null,
             model: eachVehicle.model,
             year: eachVehicle.model_year,
-            registration_number: eachVehicle.plate_no,
+            plate_no: eachVehicle.plate_no,
             vin_number: eachVehicle.vin,
             customer: { id: customer.id },
             last_mileage: eachVehicle.last_mileage || null,
@@ -376,7 +437,7 @@ export class VehiclesService {
         make: singleVehicle.make || null,
         model: singleVehicle.model || null,
         model_year: singleVehicle.year || null,
-        plate_no: singleVehicle.registration_number || null,
+        plate_no: singleVehicle.plate_no || null,
         vin: singleVehicle.vin_number || null,
       }));
 
@@ -410,7 +471,6 @@ export class VehiclesService {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${process.env.RESTY_TOKEN || '5aa664e22cf91a1642b7c6aa65a7d13a5a5f386c23afa57c'}`,
       };
-      console.log({ loginUrl, loginPayload, loginHeaders });
 
       const response = await axios.post(loginUrl, loginPayload, {
         headers: loginHeaders,
@@ -418,7 +478,6 @@ export class VehiclesService {
 
       const restyRespose = response.data;
 
-      console.log('///////////////fixed', restyRespose);
       const logs = await this.logRepo.create({
         requestBody: JSON.stringify({
           username: `${process.env.RESTY_USERNAME}`,
@@ -430,8 +489,6 @@ export class VehiclesService {
         statusCode: 200,
       } as Log);
       await this.logRepo.save(logs);
-
-      console.log('///////////////fixed/////////', restyRespose);
 
       return restyRespose;
     } catch (error: any) {
@@ -452,7 +509,6 @@ export class VehiclesService {
   }
 
   async getCustomerInfoFromResty({ customer, loginInfo }) {
-    console.log('customer', customer.email);
     // const customerPhone = '0569845873'; for testing it is hardcoded
     // const customerPhone = `+${customer.country_code}${customer.phone}`;
     const customerPhone = decrypt(customer.hashed_number);
@@ -539,7 +595,7 @@ export class VehiclesService {
     try {
       const response = await axios.post(
         `${process.env.RESTY_BASE_URL}/api/vehicle/manage`,
-        vehiclePayload,
+        [vehiclePayload],
         {
           headers: {
             Authorization: `Bearer ${loginInfo.access_token}`,

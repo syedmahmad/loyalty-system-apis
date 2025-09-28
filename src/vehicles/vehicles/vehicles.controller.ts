@@ -27,9 +27,18 @@ export class VehiclesController {
     });
   }
 
-  @Post('add')
-  async addCustomerVehicle(@Body() bodyPayload: any) {
-    return await this.service.addCustomerVehicle(bodyPayload);
+  @Post('manage')
+  async manageCustomerVehicle(
+    @Headers() headers: Record<string, string>,
+    @Body() body: any,
+  ) {
+    const tenantId = headers['x-tenant-id'];
+    const businessUnitId = headers['x-business-unit-id'];
+    return await this.service.manageCustomerVehicle(
+      tenantId,
+      businessUnitId,
+      body,
+    );
   }
 
   @Delete(':vehicleId/:customerId')

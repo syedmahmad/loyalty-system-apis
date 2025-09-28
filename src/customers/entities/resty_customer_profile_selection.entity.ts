@@ -18,17 +18,17 @@ export enum ProfileSelectionStatus {
 @Entity('resty_customer_profile_selection')
 @Unique(['phone_number'])
 export class RestyCustomerProfileSelection {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryGeneratedColumn()
   id: string;
 
-  @Column({ type: 'varchar', length: 20 })
+  @Column({ type: 'varchar', length: 255 })
   phone_number: string;
 
   @Column({ type: 'json' })
   all_profiles: Record<string, any>;
 
-  @Column({ type: 'json', nullable: true })
-  selected_profile: Record<string, any> | null;
+  @Column({ type: 'json', nullable: true, default: null })
+  selected_profile: Record<string, any>;
 
   @Column({
     type: 'enum',

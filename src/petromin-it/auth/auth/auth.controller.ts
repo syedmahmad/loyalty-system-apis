@@ -18,9 +18,9 @@ export class AuthController {
 
   @Post('select-profile')
   async selectProfile(@Body() body: any): Promise<any> {
-    const { phone_number, selected_customer } = body;
+    const { mobileNumber, selected_customer } = body;
     return await this.authService.saveSelectedProfile(
-      phone_number,
+      mobileNumber,
       selected_customer,
     );
   }
