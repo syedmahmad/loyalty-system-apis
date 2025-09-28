@@ -17,12 +17,19 @@ import { TriggerWhatsapp } from 'src/helpers/triggerWhatsapp';
 import { Log } from 'src/logs/entities/log.entity';
 import { WalletService } from 'src/wallet/wallet/wallet.service';
 import { nanoid } from 'nanoid';
+import { VehiclesService } from 'src/vehicles/vehicles/vehicles.service';
+import {
+  ProfileSelectionStatus,
+  RestyCustomerProfileSelection,
+} from 'src/customers/entities/resty_customer_profile_selection.entity';
 // import { Referral } from 'src/wallet/entities/referrals.entity';
 @Injectable()
 export class AuthService {
   constructor(
     @InjectRepository(Customer)
     private readonly customerRepo: Repository<Customer>,
+    @InjectRepository(RestyCustomerProfileSelection)
+    private readonly restyCustomerProfileSelectionRepo: Repository<RestyCustomerProfileSelection>,
     private readonly ociService: OciService,
     private readonly customerService: CustomerService,
     @InjectRepository(QrCode)
@@ -32,6 +39,7 @@ export class AuthService {
     private readonly walletService: WalletService,
     // @InjectRepository(Referral)
     // private readonly refRepo: Repository<Referral>,
+    private readonly vehicleService: VehiclesService,
   ) {}
 
   // Generate and send OTP, upsert customer by mobileNumber, store OTP with 5-min expiry
@@ -63,12 +71,14 @@ export class AuthService {
       let customer = await this.customerRepo.findOne({
         where: {
           hashed_number: hashedPhone,
+          status: 1,
           business_unit: { id: parseInt(businessUnitId) },
           tenant: { id: parseInt(tenantId) },
         },
         relations: ['business_unit', 'tenant'],
       });
-      if (!customer) {
+
+      if (!customer || customer.status === 3) {
         // The original code only creates a new customer entity in memory, but does not save it to the database,
         // so the customer.id is not generated yet. To get the newly created id, you must save the entity first.
         customer = this.customerRepo.create({
@@ -300,30 +310,196 @@ export class AuthService {
         // }
       }
       customer.login_count += 1;
-      customer.otp_code = null;
-      customer.otp_expires_at = null;
+      // for this test uesr, do not delete it. +966583225664 Code is 7118
+      if (hashedPhone !== '4bdda01225e7dd2b0bfad85ee613489e') {
+        customer.otp_code = null;
+        customer.otp_expires_at = null;
+      }
       await this.customerRepo.save(customer);
       const qr = await this.qrCodeRepo.findOne({
         where: { customer: { id: customer.id } },
       });
       const qrUrl = qr.qr_code_url;
 
+      // Optimized Resty profile selection logic
+      const localCustomerInRestyTable =
+        await this.restyCustomerProfileSelectionRepo.findOne({
+          where: { phone_number: hashedPhone },
+        });
+
+      // Helper to build the common result object
+      const buildResult = () => ({
+        customer_id: customer.uuid,
+        tenant_id: customer.tenant?.uuid || customer.tenant.uuid,
+        business_unit_id:
+          customer.business_unit?.uuid || customer.business_unit.uuid,
+        qr_code_url: qrUrl,
+        is_new_user: customer.is_new_user,
+      });
+
+      // If no local profile selection, integrate with Resty
+      if (!localCustomerInRestyTable) {
+        // Login to Resty with timeout
+        let loginInfo: any = null;
+        try {
+          loginInfo = await Promise.race([
+            this.vehicleService.customerLoginInResty(),
+            new Promise((_, reject) =>
+              setTimeout(() => reject(new Error('resty Login timeout')), 3000),
+            ),
+          ]);
+        } catch {
+          // Ignore login errors, treat as not logged in
+        }
+
+        if (!loginInfo?.access_token) {
+          // If not logged in, just return success with local info
+          return {
+            success: true,
+            message: 'Success',
+            result: buildResult(),
+          };
+        }
+
+        // Get customer profiles from Resty with timeout
+        let customerInfoFromResty: any = null;
+        try {
+          customerInfoFromResty = await Promise.race([
+            this.vehicleService.getCustomerInfoFromResty({
+              customer,
+              loginInfo,
+            }),
+            new Promise((_, reject) =>
+              setTimeout(
+                () => reject(new Error('resty get customer timeout')),
+                3000,
+              ),
+            ),
+          ]);
+        } catch {
+          // Ignore errors, treat as no profiles
+        }
+
+        // Defensive: if not array or empty, treat as single empty profile
+        if (
+          !Array.isArray(customerInfoFromResty) ||
+          customerInfoFromResty.length === 0
+        ) {
+          return {
+            success: true,
+            message: 'Success',
+            result: buildResult(),
+          };
+        }
+
+        // Save profiles in local table
+        const now = new Date();
+        if (customerInfoFromResty.length > 1) {
+          // Multiple profiles: status PENDING
+          const customersData = this.restyCustomerProfileSelectionRepo.create({
+            phone_number: hashedPhone,
+            all_profiles: customerInfoFromResty,
+            status: ProfileSelectionStatus.PENDING,
+            created_at: now,
+            updated_at: now,
+          });
+          await this.restyCustomerProfileSelectionRepo.save(customersData);
+
+          return {
+            success: true,
+            message: 'Success',
+            result: { buildResult, customers: customerInfoFromResty },
+          };
+        } else {
+          // Single profile: status SELECTED
+          const customersData = this.restyCustomerProfileSelectionRepo.create({
+            phone_number: hashedPhone,
+            all_profiles: customerInfoFromResty,
+            selected_profile: customerInfoFromResty[0],
+            status: ProfileSelectionStatus.SELECTED,
+            created_at: now,
+            updated_at: now,
+          });
+          await this.restyCustomerProfileSelectionRepo.save(customersData);
+
+          return {
+            success: true,
+            message: 'Success',
+            result: buildResult(),
+          };
+        }
+      }
+
+      // If already selected or pending, return accordingly
+      if (
+        localCustomerInRestyTable.status === ProfileSelectionStatus.SELECTED
+      ) {
+        return {
+          success: true,
+          message: 'Success',
+          result: buildResult(),
+        };
+      }
+
+      if (localCustomerInRestyTable.status === ProfileSelectionStatus.PENDING) {
+        return {
+          success: true,
+          message: 'Success',
+          result: {
+            buildResult,
+            customers: localCustomerInRestyTable.all_profiles,
+          },
+        };
+      }
+
       return {
         success: true,
         message: 'Success',
-        result: {
-          customer_id: customer.uuid,
-          tenant_id: customer.tenant?.uuid || customer.tenant.uuid,
-          business_unit_id:
-            customer.business_unit?.uuid || customer.business_unit.uuid,
-          qr_code_url: qrUrl,
-          is_new_user: customer.is_new_user,
-        },
+        result: buildResult(),
       };
     } catch (error) {
       return {
         success: false,
         message: error?.message || 'Failed',
+        result: null,
+      };
+    }
+  }
+
+  async saveSelectedProfile(
+    phone_number: string,
+    selected_profile: Record<string, any>,
+  ): Promise<any> {
+    try {
+      const hashedPhone = encrypt(phone_number);
+      const localCustomerInRestyTable =
+        await this.restyCustomerProfileSelectionRepo.findOne({
+          where: { phone_number: hashedPhone },
+        });
+
+      if (!localCustomerInRestyTable) {
+        throw new NotFoundException(
+          'No profile selection request found for this phone number',
+        );
+      }
+
+      localCustomerInRestyTable.selected_profile = selected_profile;
+      localCustomerInRestyTable.status = ProfileSelectionStatus.SELECTED;
+      localCustomerInRestyTable.updated_at = new Date();
+
+      await this.restyCustomerProfileSelectionRepo.save(
+        localCustomerInRestyTable,
+      );
+
+      return {
+        success: true,
+        message: 'Profile selection saved successfully',
+        result: null,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: error?.message || 'Failed to save profile selection',
         result: null,
       };
     }

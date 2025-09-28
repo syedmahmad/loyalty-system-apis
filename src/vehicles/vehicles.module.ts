@@ -7,9 +7,17 @@ import { Customer } from 'src/customers/entities/customer.entity';
 import { MakeEntity } from 'src/make/entities/make.entity';
 import { ModelEntity } from 'src/model/entities/model.entity';
 import { Log } from 'src/logs/entities/log.entity';
+import { VariantEntity } from 'src/variant/entities/variant.entity';
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Vehicle, Customer, MakeEntity, ModelEntity, Log]),
+    TypeOrmModule.forFeature([
+      Vehicle,
+      Customer,
+      MakeEntity,
+      ModelEntity,
+      VariantEntity,
+      Log,
+    ]),
   ],
   controllers: [VehiclesController],
   providers: [VehiclesService],

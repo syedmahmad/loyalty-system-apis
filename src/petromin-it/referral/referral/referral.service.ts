@@ -19,7 +19,7 @@ export class ReferralService {
     // find the customer
     // Optimized: combine queries, reduce lookups, and use a map for referees
     const customer = await this.customerRepo.findOne({
-      where: { uuid: customerId },
+      where: { uuid: customerId, status: 1 },
       select: ['id', 'name', 'email', 'phone', 'referral_code', 'status'],
     });
 

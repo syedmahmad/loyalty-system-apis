@@ -1,12 +1,4 @@
-import {
-  Body,
-  Controller,
-  Delete,
-  Get,
-  Headers,
-  Param,
-  Post,
-} from '@nestjs/common';
+import { Body, Controller, Get, Headers, Param, Post } from '@nestjs/common';
 import { VehiclesService } from './vehicles.service';
 
 @Controller('vehicles')
@@ -27,17 +19,35 @@ export class VehiclesController {
     });
   }
 
-  @Post('add')
-  async addCustomerVehicle(@Body() bodyPayload: any) {
-    return await this.service.addCustomerVehicle(bodyPayload);
+  @Post('manage')
+  async manageCustomerVehicle(
+    @Headers() headers: Record<string, string>,
+    @Body() body: any,
+  ) {
+    const tenantId = headers['x-tenant-id'];
+    const businessUnitId = headers['x-business-unit-id'];
+    return await this.service.manageCustomerVehicle(
+      tenantId,
+      businessUnitId,
+      body,
+    );
   }
 
-  @Delete(':vehicleId/:customerId')
+  @Post(':platNo/:customerId')
   async deleteCustomerVehicle(
-    @Param('vehicleId') vehicleId: string,
+    @Headers() headers: Record<string, string>,
+    @Param('platNo') platNo: string,
     @Param('customerId') customerId: string,
   ) {
-    return await this.service.softDeleteVehicle(vehicleId, customerId);
+    const tenantId = headers['x-tenant-id'];
+    const businessUnitId = headers['x-business-unit-id'];
+
+    return await this.service.softDeleteVehicle(
+      tenantId,
+      businessUnitId,
+      platNo,
+      customerId,
+    );
   }
 
   @Get('/service-list/:customerId')
