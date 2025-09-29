@@ -11,7 +11,7 @@ import { OciService } from 'src/oci/oci.service';
 import { v4 as uuidv4 } from 'uuid';
 import { CustomerService } from 'src/customers/customer.service';
 import { QrCode } from 'src/qr_codes/entities/qr_code.entity';
-import { encrypt } from 'src/helpers/encryption';
+import { decrypt, encrypt } from 'src/helpers/encryption';
 import { TriggerSMS } from 'src/helpers/triggerSMS';
 import { TriggerWhatsapp } from 'src/helpers/triggerWhatsapp';
 import { Log } from 'src/logs/entities/log.entity';
@@ -353,6 +353,20 @@ export class AuthService {
           !Array.isArray(customerInfoFromResty) ||
           customerInfoFromResty.length === 0
         ) {
+          const customersData = this.restyCustomerProfileSelectionRepo.create({
+            phone_number: hashedPhone,
+            all_profiles: [], // this represent, this cusotmer not belongs to us.
+            selected_profile: {
+              customer_id: customer.uuid,
+              customer_name: customer.name,
+              email: customer.email,
+              mobile: decrypt(customer.hashed_number),
+            },
+            status: ProfileSelectionStatus.SELECTED,
+            created_at: new Date(),
+            updated_at: new Date(),
+          });
+          await this.restyCustomerProfileSelectionRepo.save(customersData);
           return {
             success: true,
             message: 'Success',
@@ -438,6 +452,7 @@ export class AuthService {
     phone_number: string,
     selected_profile: Record<string, any>,
   ): Promise<any> {
+    // TODO: once resty provide merging API, we cal it form here.
     try {
       const hashedPhone = encrypt(phone_number);
       const localCustomerInRestyTable =

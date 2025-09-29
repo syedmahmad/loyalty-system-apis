@@ -481,10 +481,9 @@ export class VehiclesService {
   }
 
   async getCustomerInfoFromResty({ customer, loginInfo }) {
-    console.log('///////customer, customer', customer);
     // const customerPhone = `+${customer.country_code}${customer.phone}`;
-    // const customerPhone = decrypt(customer.hashed_number);
-    const customerPhone = '+966532537561';
+    const customerPhone = decrypt(customer.hashed_number);
+    // const customerPhone = '+966532537561';
     try {
       const response = await axios.get(
         `${process.env.RESTY_BASE_URL}/api/customer/search?param=${customerPhone}`,
