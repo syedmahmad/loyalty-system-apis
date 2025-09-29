@@ -17,6 +17,7 @@ import { TiersService } from 'src/tiers/tiers/tiers.service';
 import { decrypt, encrypt } from 'src/helpers/encryption';
 import { Rule } from 'src/rules/entities/rules.entity';
 import { WalletService } from 'src/wallet/wallet/wallet.service';
+import { NotificationService } from 'src/petromin-it/notification/notification/notifications.service';
 
 @Injectable()
 export class BurningService {
@@ -35,6 +36,7 @@ export class BurningService {
 
     private readonly tiersService: TiersService,
     private readonly walletService: WalletService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   // #region getCustomerData Service
@@ -418,6 +420,12 @@ export class BurningService {
       wallet.available_balance -= appliedBurnPoints;
       await this.walletRepo.save(wallet);
       //#endregion
+
+      await this.notificationService.sendToUser({
+        customer_id: customer.uuid,
+        title: 'Points Burned',
+        body: `You've Burned ${appliedBurnPoints} points and got a discount of ${discountAmount} SAR`,
+      });
 
       //#region Step 6: Build and return response
       return {

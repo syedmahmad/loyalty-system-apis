@@ -59,12 +59,14 @@ import { GvrEarnBurnWithEventsDto } from 'src/customers/dto/gvr_earn_burn_with_e
 import { Tier } from 'src/tiers/entities/tier.entity';
 import { isValidUrl } from 'src/helpers/helper';
 import { CustomerDto } from './dto/customer.dto';
+import { NotificationService } from 'src/petromin-it/notification/notification/notifications.service';
 
 @Injectable()
 export class CustomerService {
   constructor(
     @InjectRepository(Customer)
     private readonly customerRepo: Repository<Customer>,
+    private readonly notificationService: NotificationService,
     private readonly walletService: WalletService,
     private readonly ociService: OciService,
     @InjectRepository(QrCode)
@@ -764,6 +766,12 @@ export class CustomerService {
     };
     // Save transaction
     const savedTx = await this.txRepo.save(walletTransaction);
+
+    await this.notificationService.sendToUser({
+      customer_id: customer.uuid,
+      title: 'Points Earned',
+      body: `You've Earned ${rewardPoints} points`,
+    });
 
     return {
       message: 'Points earned successfully',

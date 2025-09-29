@@ -14,6 +14,7 @@ import { OciModule } from 'src/oci/oci.module';
 import { WalletModule } from 'src/wallet/wallet.module';
 import { Rule } from 'src/rules/entities/rules.entity';
 import { WalletSettings } from 'src/wallet/entities/wallet-settings.entity';
+import { NotificationModule } from '../notification/notification.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { WalletSettings } from 'src/wallet/entities/wallet-settings.entity';
     ]),
     OciModule,
     WalletModule,
+    NotificationModule,
   ],
   controllers: [BurningController],
   providers: [BurningService, TiersService],

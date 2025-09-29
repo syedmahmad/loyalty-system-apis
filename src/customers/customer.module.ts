@@ -38,6 +38,8 @@ import { UserCoupon } from 'src/wallet/entities/user-coupon.entity';
 import { WalletSettings } from 'src/wallet/entities/wallet-settings.entity';
 import { WalletOrder } from 'src/wallet/entities/wallet-order.entity';
 import { CustomerBootstrapService } from './startup/customer-bootstrap.service';
+import { NotificationService } from 'src/petromin-it/notification/notification/notifications.service';
+import { NotificationModule } from 'src/petromin-it/notification/notification.module';
 
 @Module({
   imports: [
@@ -68,6 +70,7 @@ import { CustomerBootstrapService } from './startup/customer-bootstrap.service';
     ]),
     WalletModule,
     OciModule,
+    NotificationModule,
   ],
   controllers: [CustomerController],
   providers: [
