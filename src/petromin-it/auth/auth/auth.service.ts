@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { GetOtpDto, VerifyOtpDto } from 'src/petromin-it/auth/dto/auth.dto';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { Customer } from 'src/customers/entities/customer.entity';
 import { OciService } from 'src/oci/oci.service';
 import { v4 as uuidv4 } from 'uuid';
@@ -53,32 +53,20 @@ export class AuthService {
         throw new BadRequestException('Missing tenant or business unit');
       }
 
-      // if (body?.referral_code) {
-      //   const data = await this.customerRepo.findOne({
-      //     where: {
-      //       referral_code: body.referral_code,
-      //       business_unit: { id: Number(businessUnitId) },
-      //       tenant: { id: Number(tenantId) },
-      //     },
-      //   });
-      //   if (!data) {
-      //     throw new BadRequestException('referral code does not belongs to us');
-      //   }
-      // }
       const encryptedPhone = await this.ociService.encryptData(plainMobile);
       const hashedPhone = encrypt(plainMobile);
 
       let customer = await this.customerRepo.findOne({
         where: {
           hashed_number: hashedPhone,
-          status: 1,
+          status: In([0, 1]), // only active customer
           business_unit: { id: parseInt(businessUnitId) },
           tenant: { id: parseInt(tenantId) },
         },
         relations: ['business_unit', 'tenant'],
       });
 
-      if (!customer || customer.status === 3) {
+      if (!customer) {
         // The original code only creates a new customer entity in memory, but does not save it to the database,
         // so the customer.id is not generated yet. To get the newly created id, you must save the entity first.
         customer = this.customerRepo.create({
@@ -99,8 +87,19 @@ export class AuthService {
       // Set OTP expiry time to 5 minutes from now
       const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
       // Assign OTP and expiry to customer entity
-      customer.otp_code = otp;
-      customer.otp_expires_at = expiresAt;
+      let testUsers: string[] = [];
+      try {
+        testUsers = JSON.parse(process.env.TEST_USERS || '[]');
+      } catch {
+        testUsers = [];
+      }
+
+      // Only set OTP and expiry if not a test user
+      if (!testUsers.includes(hashedPhone)) {
+        customer.otp_code = otp;
+        customer.otp_expires_at = expiresAt;
+      }
+
       // Save customer with new OTP info
       customer = await this.customerRepo.save(customer); // Save to DB to get the generated id
 
@@ -130,12 +129,19 @@ export class AuthService {
 
       // trigger sms
       // Send OTP via SMS and WhatsApp in parallel, but don't block on them
-      Promise.all([
-        TriggerSMS(encryptedPhone, otp, body.language_code, this.logRepo),
-        TriggerWhatsapp(encryptedPhone, otp, body.language_code, this.logRepo),
-      ]).catch(() => {
-        // Optionally log or handle errors, but don't block the main flow
-      });
+      if (!testUsers.includes(hashedPhone)) {
+        Promise.all([
+          TriggerSMS(encryptedPhone, otp, body.language_code, this.logRepo),
+          TriggerWhatsapp(
+            encryptedPhone,
+            otp,
+            body.language_code,
+            this.logRepo,
+          ),
+        ]).catch(() => {
+          // Optionally log or handle errors, but don't block the main flow
+        });
+      }
 
       return {
         success: true,
@@ -174,6 +180,7 @@ export class AuthService {
       const customer = await this.customerRepo.findOne({
         where: {
           hashed_number: hashedPhone,
+          status: In([0, 1]), // only active customer
           business_unit: { id: parseInt(businessUnitId) },
           tenant: { id: parseInt(tenantId) },
         },
@@ -254,66 +261,27 @@ export class AuthService {
           } as Log);
           await this.logRepo.save(logs);
         }
-        // if (referral_code) {
-        //   const referrer_customer = await this.customerRepo.findOne({
-        //     where: {
-        //       referral_code: referral_code,
-        //       business_unit: { id: customer.business_unit.id },
-        //       tenant: { id: customer.tenant.id },
-        //     },
-        //     relations: ['business_unit', 'tenant'],
-        //   });
-        //   if (!referrer_customer) {
-        //     throw new BadRequestException(
-        //       'referral code does not belongs to us',
-        //     );
-        //   }
-        //   customer.referrer_id = referrer_customer.id;
-        //   // rewards points to referrer
-        //   const earnReferrerPoints = {
-        //     customer_id: referrer_customer.uuid, // need to give points to referrer
-        //     event: 'Referrer Reward Points', // this is important what if someone changes this event name form Frontend
-        //     tenantId: String(referrer_customer.tenant.id),
-        //     BUId: String(referrer_customer.business_unit.id),
-        //   };
-        //   try {
-        //     const earnedPoints =
-        //       await this.customerService.earnWithEvent(earnReferrerPoints);
-        //     // log the external call
-        //     const logs = await this.logRepo.create({
-        //       requestBody: JSON.stringify(earnReferrerPoints),
-        //       responseBody: JSON.stringify(earnedPoints),
-        //       url: earnReferrerPoints.event,
-        //       method: 'POST',
-        //       statusCode: 200,
-        //     } as Log);
-        //     await this.logRepo.save(logs);
-        //     // insert ion referral table.
-        //     const refRst = await this.refRepo.create({
-        //       referrer_id: referrer_customer.id,
-        //       referee_id: customer.id,
-        //       referrer_points: earnedPoints.points,
-        //       referee_points: 0,
-        //       business_unit: { id: customer.business_unit.id },
-        //     } as Referral);
-        //     await this.refRepo.save(refRst);
-        //   } catch (err) {
-        //     const logs = await this.logRepo.create({
-        //       requestBody: JSON.stringify(earnReferrerPoints),
-        //       responseBody: JSON.stringify(err),
-        //       url: earnReferrerPoints.event,
-        //       method: 'POST',
-        //       statusCode: 200,
-        //     } as Log);
-        //     await this.logRepo.save(logs);
-        //   }
-        // }
       }
       customer.login_count += 1;
       // for this test uesr, do not delete it. +966583225664 Code is 7118
-      if (hashedPhone !== '4bdda01225e7dd2b0bfad85ee613489e') {
+
+      // Only clear OTP if hashedPhone is not in TEST_USERS array
+      // Use JSON.parse to handle TEST_USERS as a JSON array from env
+      let testUsers: string[] = [];
+      try {
+        testUsers = JSON.parse(process.env.TEST_USERS || '[]');
+      } catch {
+        testUsers = [];
+      }
+      if (!testUsers.includes(hashedPhone)) {
         customer.otp_code = null;
         customer.otp_expires_at = null;
+      } else {
+        // only works for test users
+        // Remove any RestyCustomerProfileSelection records for this test user (by hashed phone number)
+        await this.restyCustomerProfileSelectionRepo.delete({
+          phone_number: hashedPhone,
+        });
       }
       await this.customerRepo.save(customer);
       const qr = await this.qrCodeRepo.findOne({
@@ -408,7 +376,7 @@ export class AuthService {
           return {
             success: true,
             message: 'Success',
-            result: { buildResult, customers: customerInfoFromResty },
+            result: { ...buildResult(), customers: customerInfoFromResty },
           };
         } else {
           // Single profile: status SELECTED
