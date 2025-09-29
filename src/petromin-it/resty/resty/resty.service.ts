@@ -41,25 +41,54 @@ export class RestyService {
     };
 
     totalCustomers = customers.length;
+
     for (const cust of customers) {
-      const vehicles = Array.isArray(cust?.vehicles) ? cust.vehicles : [];
+      // vehicles(Vehicle)
+      const vehicles = Array.isArray(cust?.['vehicles(Vehicle)'])
+        ? cust['vehicles(Vehicle)']
+        : [];
       totalVehicles += vehicles.length;
+
       for (const veh of vehicles) {
-        const jobcards = Array.isArray(veh?.jobcards) ? veh.jobcards : [];
+        // jobcards(WorkOrder)
+        const jobcards = Array.isArray(veh?.['jobcards(WorkOrder)'])
+          ? veh['jobcards(WorkOrder)']
+          : [];
         totalJobcards += jobcards.length;
+
         for (const jc of jobcards) {
-          const inv = jc?.jobcard_invoices;
+          const inv = jc?.['jobcard_invoices(Invoice)'];
           if (inv) {
             totalInvoices += 1;
-            const items = Array.isArray(inv?.jobcard_invoice_items)
-              ? inv.jobcard_invoice_items
+
+            // jobcard_invoice_items(InvoiceService)
+            const items = Array.isArray(
+              inv?.['jobcard_invoice_items(InvoiceService)'],
+            )
+              ? inv['jobcard_invoice_items(InvoiceService)']
               : [];
+
+            // count free items inside each InvoiceService
             const freeTotals = items.reduce((acc: number, it: any) => {
-              const free = Array.isArray(it?.FreeItems) ? it.FreeItems : [];
+              const free = Array.isArray(
+                it?.['FreeItems(InvoiceServiceItemFree)'],
+              )
+                ? it['FreeItems(InvoiceServiceItemFree)']
+                : [];
               return acc + free.length;
             }, 0);
+
             totalInvoiceItems += items.length + freeTotals;
-            latestTs = maxTs(latestTs, toDateStr(inv?.updated_at));
+
+            // use created_at(InvoiceDate) or updated_at(ModifiedOn) if available
+            latestTs = maxTs(
+              latestTs,
+              toDateStr(inv?.['created_at(InvoiceDate)']),
+            );
+            latestTs = maxTs(
+              latestTs,
+              toDateStr(inv?.['updated_at(ModifiedOn)']),
+            );
           }
         }
       }

@@ -51,39 +51,115 @@ export class TransactionSyncLogsSubscriber
       const invoicesRepo = event.manager.getRepository(RestyInvoicesInfo);
 
       for (const cust of customers) {
-        const customerId: string | null = cust?.id ?? null;
-        const phone: string | null = cust?.phone_number ?? null;
-        const vehicles = Array.isArray(cust?.vehicles) ? cust.vehicles : [];
+        // map customer fields (example uses "id(CustomerID)" etc)
+        const customerId: string | null = cust?.['id(CustomerID)'] ?? null;
+        const phone: string | null = cust?.['phone_number(Mobile)'] ?? null;
+
+        const vehicles = Array.isArray(cust?.['vehicles(Vehicle)'])
+          ? cust['vehicles(Vehicle)']
+          : [];
+
         for (const veh of vehicles) {
-          const plate: string | null = veh?.vehicle_number ?? null;
-          const vin: string | null = veh?.vin_number ?? null;
-          const brandName: string | null = veh?.vehicle_brand_id?.name ?? null;
+          const plate: string | null =
+            veh?.['vehicle_number(PlateNumber)'] ?? null;
+          const vin: string | null = veh?.['vin_number(VIN)'] ?? null;
+
+          const brandName: string | null =
+            veh?.['vehicle_brand_id(VehicleMake)']?.['name(MakeName)'] ?? null;
           const variantName: string | null =
-            veh?.vehicle_variant_id?.name ?? null;
+            veh?.['vehicle_variant_id(VehicleModel)']?.['name(ModelName)'] ??
+            null;
           const vehicleInfo: string | null =
             [brandName, variantName].filter(Boolean).join(' ') || null;
 
-          const jobcards = Array.isArray(veh?.jobcards) ? veh.jobcards : [];
+          const jobcards = Array.isArray(veh?.['jobcards(WorkOrder)'])
+            ? veh['jobcards(WorkOrder)']
+            : [];
+
           for (const jc of jobcards) {
-            const inv = jc?.jobcard_invoices;
+            const inv = jc?.['jobcard_invoices(Invoice)'];
             if (!inv) continue;
 
-            const invoiceId: string | null = inv?.id ?? null;
-            const invoiceNo: string | null = inv?.invoice_no ?? null;
+            // invoice-level fields (example keys with parentheses)
+            const invoiceId: string | null = inv?.['id(InvoiceID)'] ?? null;
+            const invoiceNo: string | null =
+              inv?.['invoice_no(InvoiceNumber)'] ?? null;
             const invoiceAmount: number | null =
-              inv?.total_amount != null ? Number(inv.total_amount) : null;
-            const invoiceDate: string | null = inv?.created_at ?? null;
+              inv?.['total_amount(InvoiceTotalAmount)'] != null
+                ? Number(inv['total_amount(InvoiceTotalAmount)'])
+                : null;
+            const invoiceDate: string | null =
+              inv?.['created_at(InvoiceDate)'] ?? null;
 
-            // Aggregate free items across invoice items
-            const items = Array.isArray(inv?.jobcard_invoice_items)
-              ? inv.jobcard_invoice_items
+            // collect free items nested under services
+            const svcArray = Array.isArray(
+              inv?.['jobcard_invoice_items(InvoiceService)'],
+            )
+              ? inv['jobcard_invoice_items(InvoiceService)']
               : [];
+
             const freeItems: any[] = [];
-            for (const it of items) {
-              const fi = Array.isArray(it?.FreeItems) ? it.FreeItems : [];
-              for (const f of fi) freeItems.push(f);
+
+            for (const svc of svcArray) {
+              // each service may contain FreeItems(InvoiceServiceItemFree)
+              const freeArray = Array.isArray(
+                svc?.['FreeItems(InvoiceServiceItemFree)'],
+              )
+                ? svc['FreeItems(InvoiceServiceItemFree)']
+                : // fallback: some payloads may use 'FreeItems' plain
+                  Array.isArray(svc?.FreeItems)
+                  ? svc.FreeItems
+                  : [];
+
+              for (const free of freeArray) {
+                // normalize free item structure (names are exactly from example PDF)
+                const freeId =
+                  free?.['id(InvoiceServiceItemFreeID)'] ??
+                  free?.id ??
+                  null; /* id may appear in different variants */
+                const invoiceServiceId =
+                  free?.InvoiceServiceID ?? free?.['InvoiceServiceID'] ?? null;
+
+                // item object is nested under "Item(ItemID)"
+                const itemObj = free?.['Item(ItemID)'] ?? free?.Item ?? null;
+
+                const itemId = itemObj?.['id(ItemID)'] ?? itemObj?.id ?? null;
+                const itemCode =
+                  itemObj?.ItemCode ?? itemObj?.['ItemCode'] ?? null;
+
+                const itemName =
+                  itemObj?.['ItemName(ItemID.ItemName)'] ??
+                  itemObj?.ItemName ??
+                  null;
+
+                const quantity = free?.ItemQuantity
+                  ? Number(free.ItemQuantity)
+                  : free?.['ItemQuantity']
+                    ? Number(free['ItemQuantity'])
+                    : null;
+
+                const itemCost =
+                  free?.ItemCost != null
+                    ? Number(free.ItemCost)
+                    : free?.['ItemCost'] != null
+                      ? Number(free['ItemCost'])
+                      : itemObj?.ItemCost != null
+                        ? Number(itemObj.ItemCost)
+                        : null;
+
+                freeItems.push({
+                  id: freeId,
+                  invoice_service_id: invoiceServiceId,
+                  item_id: itemId,
+                  item_code: itemCode,
+                  item_name: itemName,
+                  quantity,
+                  item_cost: itemCost,
+                });
+              }
             }
 
+            // create invoice row (keep your existing fields)
             const row = invoicesRepo.create({
               customer_id: customerId,
               phone: phone,
@@ -103,97 +179,21 @@ export class TransactionSyncLogsSubscriber
               sync_log_id: entity.id,
             });
 
-            // // 1. Check if customer exists with the given phone number
-            // const customerRepo = event.manager.getRepository('Customer');
-            // const customer = await customerRepo.findOne({
-            //   where: { hashed_number: encrypt(phone) },
-            // });
-
-            // const points = null;
-            // if (customer) {
-            //   // 2. Get all vehicles from resty api using getCustomerVehicle
-            //   // Assume vehicleService is available in this context
-            //   const customerVehicles =
-            //     await this.vehicleService.getCustomerVehicle(customer.uuid);
-            //   // 3. Check if vehicle with same id exists in returned data
-            //   // We assume 'vin' is the unique identifier for vehicle
-            //   const matchedVehicle = Array.isArray(customerVehicles)
-            //     ? customerVehicles.find((v) => v.registration_number === plate)
-            //     : null;
-
-            //   if (matchedVehicle) {
-            //     // 4. Get customer wallet
-            //     const walletRepo = event.manager.getRepository('Wallet');
-            //     const wallet = await walletRepo.findOne({
-            //       where: { customer_id: customer.id },
-            //     });
-
-            //     // 5. Get business_unit_id from customer
-            //     const businessUnitId = customer.business_unit_id;
-
-            //     // 6. Get earning rule from rules table
-            //     const rulesRepo = event.manager.getRepository('Rule');
-            //     const earningRule = await rulesRepo.findOne({
-            //       where: {
-            //         business_unit_id: businessUnitId,
-            //         rule_type: 'spend and earn',
-            //         rewards_condition: 'perAmount',
-            //       },
-            //     });
-
-            //     let rewardPoints = 0;
-            //     // 7. Calculate points accordingly
-            //     if (earningRule) {
-            //       if (invoiceAmount < earningRule.min_amount_spent) {
-            //         throw new BadRequestException(
-            //           `Minimum amount to earn points is ${earningRule.min_amount_spent}`,
-            //         );
-            //       }
-            //       // Points per amount spent
-            //       const multiplier = Math.floor(
-            //         invoiceAmount / earningRule.min_amount_spent === 0
-            //           ? 1
-            //           : earningRule.min_amount_spent,
-            //       );
-            //       rewardPoints = multiplier * rewardPoints;
-            //     }
-
-            //     // 8. Create transaction in walletTransaction using addTransaction method
-            //     // Assume walletTransactionService is available in this context
-            //     await this.walletService.addTransaction(
-            //       {
-            //         wallet_id: wallet.id,
-            //         business_unit_id: customer.business_unit_id,
-            //         type: WalletTransactionType.EARN,
-            //         status: WalletTransactionStatus.ACTIVE,
-            //         amount: rewardPoints,
-            //         source_type: 'invoice',
-            //         description: `Points earned for invoice ${invoiceNo}`,
-            //         created_by: 0,
-            //       },
-            //       0,
-            //     );
-
-            //     // 9. Update the invoice row to assign is_claimed to 1 and claimed_points to points
-            //     row.is_claimed = true;
-            //     row.clamined_points = points;
-            //   }
-            // }
             await invoicesRepo.save(row);
-          }
-        }
-      }
+          } // end jobcards loop
+        } // end vehicles loop
+      } // end customers loop
 
-      await event.manager
-        .getRepository(TransactionSyncLog)
-        .update({ id: entity!.id }, { status: 'completed' });
+      console.log('entity!.id', entity!.id);
+
+      entity.status = 'completed';
+      await event.manager.getRepository(TransactionSyncLog).save(entity);
     } catch (err) {
       // Silently ignore to avoid breaking insert flow; do not process this record further
       // Optionally, could mark status to failed if needed:
       try {
-        await event.manager
-          .getRepository(TransactionSyncLog)
-          .update({ id: entity!.id }, { status: 'failed' });
+        entity.status = 'failed';
+        await event.manager.getRepository(TransactionSyncLog).save(entity);
       } catch (_) {
         // ignore
       }
