@@ -170,7 +170,6 @@ export class NotificationService {
       skip: (page - 1) * offset,
       take: offset,
       select: [
-        'id',
         'notification_type',
         'is_read',
         'notification_details',

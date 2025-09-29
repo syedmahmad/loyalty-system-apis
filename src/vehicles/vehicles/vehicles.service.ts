@@ -317,12 +317,6 @@ export class VehiclesService {
           });
 
           if (!restyVehicles.length) {
-            // return {
-            //   success: true,
-            //   message: 'No vehicles found in Resty',
-            //   result: { vehicles: [] },
-            //   errors: [],
-            // };
             restyVehicles = null;
           }
         }
@@ -340,6 +334,8 @@ export class VehiclesService {
             // add them in local vehicles but
             // do not again add deleted or inactive vehicles.
             if (!localVinSet.has(eachVehicle.plate_no)) {
+              // we have deleted or inactive vehicles but resty does not have delted or inactive funcitonlaity
+              // in this case, we do nothing, will not include these vehicles.
               const deactivatedVehicle = await this.vehiclesRepository.findOne({
                 where: {
                   customer: { id: customer.id },
