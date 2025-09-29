@@ -1,28 +1,36 @@
 import {
+  DataSource,
   EntitySubscriberInterface,
-  EventSubscriber,
+  // EventSubscriber,
   InsertEvent,
 } from 'typeorm';
 import { TransactionSyncLog } from '../entities/transaction-sync-logs.entity';
 import { RestyInvoicesInfo } from 'src/petromin-it/resty/entities/resty_invoices_info.entity';
 import { VehiclesService } from 'src/vehicles/vehicles/vehicles.service';
 import { WalletService } from 'src/wallet/wallet/wallet.service';
-// import {
-// WalletTransactionStatus,
-// WalletTransactionType,
-// } from 'src/wallet/entities/wallet-transaction.entity';
-// import { encrypt } from 'src/helpers/encryption';
-// import { BadRequestException } from '@nestjs/common';
+import {
+  WalletTransactionStatus,
+  WalletTransactionType,
+} from 'src/wallet/entities/wallet-transaction.entity';
+import { encrypt } from 'src/helpers/encryption';
+import { BadRequestException, Injectable } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 
 // Remove @EventSubscriber() decorator and register manually
-@EventSubscriber()
+@Injectable()
+// @EventSubscriber()
 export class TransactionSyncLogsSubscriber
   implements EntitySubscriberInterface<TransactionSyncLog>
 {
+  private vehicleService: VehiclesService;
+  private walletService: WalletService;
   constructor(
-    private readonly vehicleService: VehiclesService,
-    private readonly walletService: WalletService,
-  ) {}
+    private readonly moduleRef: ModuleRef,
+    private readonly dataSource: DataSource,
+  ) {
+    // 🔑 register manually so TypeORM knows about it
+    this.dataSource.subscribers.push(this);
+  }
   listenTo() {
     return TransactionSyncLog;
   }
@@ -31,6 +39,20 @@ export class TransactionSyncLogsSubscriber
     const entity = event.entity as TransactionSyncLog | undefined;
     try {
       if (!entity) return;
+
+      // resolve services lazily (DI won’t work otherwise in subscribers)
+      if (!this.vehicleService) {
+        this.vehicleService = this.moduleRef.get(VehiclesService, {
+          strict: false,
+        });
+      }
+
+      if (!this.walletService) {
+        this.walletService = this.moduleRef.get(WalletService, {
+          strict: false,
+        });
+      }
+
       // Only process rows that have a request body and are newly inserted (implicitly pending by our controller)
       if (
         !entity.request_body ||
@@ -178,6 +200,98 @@ export class TransactionSyncLogsSubscriber
               free_items: freeItems.length ? freeItems : null,
               sync_log_id: entity.id,
             });
+
+            // 1. Check if customer exists with the given phone number
+            const customerRepo = event.manager.getRepository('Customer');
+            const customer = await customerRepo.findOne({
+              where: { hashed_number: encrypt(phone) },
+              relations: ['tenant', 'business_unit'],
+            });
+
+            let points = null;
+            if (customer) {
+              // 2. Get all vehicles from resty api using getCustomerVehicle
+              // Assume vehicleService is available in this context
+              let customerVehicles: any = [];
+              const customerVehiclesRes =
+                await this.vehicleService.getCustomerVehicle({
+                  customerId: customer.uuid,
+                  tenantId: customer.tenant.id,
+                  businessUnitId: customer.business_unit.id,
+                });
+
+              customerVehicles = customerVehiclesRes?.result?.vehicles;
+
+              // 3. Check if vehicle with same id exists in returned data
+              // We assume 'vin' is the unique identifier for vehicle
+              const matchedVehicle = Array.isArray(customerVehicles)
+                ? customerVehicles.find((v) => v.plate_no === plate)
+                : null;
+
+              if (matchedVehicle) {
+                // 4. Get customer wallet
+                const walletRepo = event.manager.getRepository('Wallet');
+                const wallet = await walletRepo.findOne({
+                  where: { customer: { id: customer.id } },
+                });
+
+                // 5. Get business_unit_id from customer
+                const businessUnitId = customer.business_unit.id;
+
+                // 6. Get earning rule from rules table
+                const rulesRepo = event.manager.getRepository('Rule');
+                const earningRule = await rulesRepo.findOne({
+                  where: {
+                    business_unit: { id: businessUnitId },
+                    rule_type: 'spend and earn',
+                    reward_condition: 'perAmount',
+                  },
+                });
+
+                let rewardPoints = 0;
+                // 7. Calculate points accordingly
+                if (earningRule) {
+                  if (invoiceAmount < earningRule.min_amount_spent) {
+                    throw new BadRequestException(
+                      `Minimum amount to earn points is ${earningRule.min_amount_spent}`,
+                    );
+                  }
+                  // Points per amount spent
+                  const minAmountSpent =
+                    parseInt(earningRule.min_amount_spent) === 0
+                      ? 1
+                      : parseInt(earningRule.min_amount_spent);
+                  const multiplier = invoiceAmount / minAmountSpent;
+
+                  rewardPoints =
+                    multiplier * earningRule.points_conversion_factor;
+                  points = rewardPoints;
+                }
+
+                // 8. Create transaction in walletTransaction using addTransaction method
+                // Assume walletTransactionService is available in this context
+
+                await this.walletService.addTransaction(
+                  {
+                    wallet_id: wallet.id,
+                    business_unit_id: customer.business_unit.id,
+                    type: WalletTransactionType.EARN,
+                    status: WalletTransactionStatus.ACTIVE,
+                    amount: rewardPoints,
+                    source_type: 'invoice',
+                    description: `Points earned for invoice ${invoiceNo}`,
+                    created_by: 0,
+                  },
+                  0,
+                  true,
+                );
+
+                // 9. Update the invoice row to assign is_claimed to 1 and claimed_points to points
+                row.is_claimed = true;
+                row.clamined_points = points;
+                row.claim_date = new Date().toISOString();
+              }
+            }
 
             await invoicesRepo.save(row);
           } // end jobcards loop
