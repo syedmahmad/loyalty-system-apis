@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { Vehicle } from '../entities/vehicle.entity';
 import { Customer } from 'src/customers/entities/customer.entity';
 import axios from 'axios';
@@ -231,83 +231,45 @@ export class VehiclesService {
 
       if (!customer) throw new NotFoundException('Customer not found');
 
-      if (customer && customer?.status == 0) {
-        throw new NotFoundException('Customer is inactive');
-      }
-
-      if (customer?.status === 3) {
-        throw new NotFoundException('Customer is deleted');
-      }
-
-      const loginInfo = await this.customerLoginInResty();
-      if (!loginInfo?.access_token) {
-        return {
-          success: false,
-          message: 'Authentication with Resty failed',
-          result: {},
-          errors: [loginInfo],
-        };
-      }
-
-      const customerInfoFromResty = await this.getCustomerInfoFromResty({
-        customer,
-        loginInfo,
-      });
-
-      if (!customerInfoFromResty.length) {
-        return {
-          success: false,
-          message: 'Customer not found in Resty',
-          result: {},
-          errors: [],
-        };
-      }
-
-      console.log(
-        '///////////////customerInfoFromResty id',
-        customerInfoFromResty[0].customer_id,
-      );
-
-      const customerVehicles = await this.getVehicleInfoFromResty({
-        customer_id: customerInfoFromResty[0].customer_id,
-        loginInfo,
-      });
-
-      if (!customerVehicles.length) {
-        return {
-          success: true,
-          message: 'No vehicles found in Resty',
-          result: { vehicles: [] },
-          errors: [],
-        };
-      }
-
-      console.log(
-        '///////////////customerVehicles id',
-        customerVehicles[0].vehicle_id,
-      );
-
-      // 7. Get services for all vehicles from Resty
+      let customerVehicles = [];
       const vehicleServices: any[] = [];
 
-      for (const vehicle of customerVehicles) {
-        const serviceList = await this.getVehicleServiceListFromResty({
-          customer_id: customerInfoFromResty[0].customer_id,
-          vehicle_id: vehicle.vehicle_id,
+      const loginInfo = await this.customerLoginInResty();
+      if (loginInfo?.access_token) {
+        const customerInfoFromResty = await this.getCustomerInfoFromResty({
+          customer,
           loginInfo,
         });
 
-        vehicleServices.push({
-          vehicle_id: vehicle.vehicle_id,
-          make: vehicle?.make,
-          model: vehicle?.model,
-          year: vehicle?.model_year,
-          last_mileage: vehicle?.last_mileage,
-          last_service_date: vehicle?.last_service_date,
-          vin: vehicle.vin,
-          plate_no: vehicle.plate_no,
-          services: serviceList || [],
-        });
+        if (customerInfoFromResty.length) {
+          // TODO: can get multiple customers, currently picking only first.
+          customerVehicles = await this.getVehicleInfoFromResty({
+            customer_id: customerInfoFromResty[0].customer_id,
+            loginInfo,
+          });
+
+          if (customerVehicles.length) {
+            for (const vehicle of customerVehicles) {
+              const serviceList = await this.getVehicleServiceListFromResty({
+                customer_id: customerInfoFromResty[0]?.customer_id,
+                vehicle_id: vehicle.vehicle_id,
+                loginInfo,
+              });
+
+              vehicleServices.push({
+                vehicle_id: vehicle.vehicle_id,
+                make: vehicle?.make,
+                model: vehicle?.model,
+                year: vehicle?.model_year,
+                last_mileage: vehicle?.last_mileage,
+                last_service_date: vehicle?.last_service_date,
+                vin: vehicle.vin,
+                plate_no: vehicle.plate_no,
+                services: serviceList || [],
+              });
+            }
+          }
+        }
       }
 
       return {
@@ -336,115 +298,126 @@ export class VehiclesService {
 
       if (!customer) throw new NotFoundException('Customer not found');
 
-      // 2. Get local vehicles
-      const localVehicles = await this.vehiclesRepository.find({
-        where: { customer: { id: customer.id }, status: 1 },
-      });
-
       // 3. Login to Resty
       const loginInfo = await this.customerLoginInResty();
-
-      console.log('/////////////loginInfo', loginInfo);
-      if (!loginInfo?.access_token) {
-        return {
-          success: false,
-          message: 'Authentication with Resty failed',
-          result: {},
-          errors: [loginInfo],
-        };
-      }
-
-      //TODO: it could return multiple customers profile, so we need to take decision here.
-      // but for now, we are only getting first profile.
-      // 4. Get Customer Info from Resty
-      const customerInfoFromResty = await this.getCustomerInfoFromResty({
-        customer,
-        loginInfo,
-      });
-      console.log('/////////////customerInfoFromResty', customerInfoFromResty);
-      if (!customerInfoFromResty.length) {
-        return {
-          success: false,
-          message: 'Customer not found in Resty',
-          result: {},
-          errors: [],
-        };
-      }
-
-      // 5. Get Vehicles from Resty
-      const restyVehicles = await this.getVehicleInfoFromResty({
-        customer_id: customerInfoFromResty[0].customer_id,
-        loginInfo,
-      });
-
-      console.log('/////////////restyVehicles', restyVehicles);
-
-      if (!restyVehicles.length) {
-        return {
-          success: true,
-          message: 'No vehicles found in Resty',
-          result: { vehicles: [] },
-          errors: [],
-        };
-      }
-
-      // 6. Compare and sync
-      const localVinSet = new Set(localVehicles.map((v) => v.plate_no));
-      const newVehicles: any[] = [];
-
-      for (const eachVehicle of restyVehicles) {
-        if (!localVinSet.has(eachVehicle.plate_no)) {
-          const makeInfo = await this.makeRepository.findOne({
-            where: { name: eachVehicle.make },
+      if (loginInfo?.access_token) {
+        //TODO: it could return multiple customers profile, so we need to take decision here.
+        // but for now, we are only getting first profile.
+        // 4. Get Customer Info from Resty
+        const customerInfoFromResty = await this.getCustomerInfoFromResty({
+          customer,
+          loginInfo,
+        });
+        let restyVehicles = null;
+        if (customerInfoFromResty.length) {
+          // 5. Get Vehicles from Resty
+          restyVehicles = await this.getVehicleInfoFromResty({
+            customer_id: customerInfoFromResty[0].customer_id,
+            loginInfo,
           });
 
-          const deactivatedVehicle = await this.vehiclesRepository.findOne({
-            where: {
-              customer: { id: customer.id },
-              plate_no: eachVehicle.plate_no,
-              status: 0, // only look for deactivated vehicles
-            },
-          });
-
-          if (deactivatedVehicle) {
-            continue; // Skip adding this vehicle as it's deactivated
+          if (!restyVehicles.length) {
+            // return {
+            //   success: true,
+            //   message: 'No vehicles found in Resty',
+            //   result: { vehicles: [] },
+            //   errors: [],
+            // };
+            restyVehicles = null;
           }
+        }
 
-          const savedVehicle = await this.vehiclesRepository.save({
-            make: eachVehicle.make,
-            make_id: makeInfo?.makeId || null,
-            model: eachVehicle.model,
-            year: eachVehicle.model_year,
-            plate_no: eachVehicle.plate_no,
-            vin_number: eachVehicle.vin,
-            customer: { id: customer.id },
-            last_mileage: eachVehicle.last_mileage || null,
-            last_service_date: eachVehicle.last_service_date || null,
+        if (restyVehicles) {
+          // 2. Get local vehicles
+          const localVehicles = await this.vehiclesRepository.find({
+            where: { customer: { id: customer.id }, status: 1 },
           });
+          // 6. Compare and sync
+          const localVinSet = new Set(localVehicles.map((v) => v.plate_no));
 
-          newVehicles.push(savedVehicle);
+          for (const eachVehicle of restyVehicles) {
+            // if new record comes from resty which does not exist in local vehicles
+            // add them in local vehicles but
+            // do not again add deleted or inactive vehicles.
+            if (!localVinSet.has(eachVehicle.plate_no)) {
+              const deactivatedVehicle = await this.vehiclesRepository.findOne({
+                where: {
+                  customer: { id: customer.id },
+                  plate_no: eachVehicle.plate_no,
+                  status: In([0, 3]), // look for deactivated or deleted vehicles
+                },
+              });
+
+              if (deactivatedVehicle) {
+                continue; // Skip adding this vehicle as it's deactivated
+              }
+
+              // Fetch make, model, and variant info in parallel
+              const [makeInfo, modelInfo] = await Promise.all([
+                this.makeRepository.findOne({
+                  where: { name: eachVehicle.make },
+                }),
+                this.modelRepository.findOne({
+                  where: {
+                    name: eachVehicle.model,
+                    year: eachVehicle.model_year,
+                  },
+                }),
+              ]);
+
+              const variantInfo = await this.variantRepository.findOne({
+                where: { model: { id: modelInfo.id } },
+              });
+
+              const prePareData: any = {
+                make: makeInfo?.name ?? null,
+                make_ar: makeInfo?.nameAr ?? null,
+                make_id: makeInfo?.makeId ?? null,
+                image: makeInfo?.logo ?? null,
+                model: modelInfo?.name ?? null,
+                model_ar: modelInfo?.nameAr ?? null,
+                model_id: modelInfo?.modelId ?? null,
+                variant: variantInfo?.name ?? null,
+                variant_ar: variantInfo?.nameAr ?? null,
+                variant_id: variantInfo?.variantId ?? null,
+                vin_number: eachVehicle?.vin ?? null,
+                plate_no: eachVehicle?.plate_no ?? null,
+                year: eachVehicle?.model_year ?? null,
+                fuel_type: variantInfo?.fuelType?.toString() ?? null,
+                transmission: variantInfo?.transmission?.toString() ?? null,
+                // color: eachVehicle?.color ?? null,
+                // engine: eachVehicle?.engine ?? null,
+                // body_type: eachVehicle?.body_type ?? null,
+                // owner_name: eachVehicle?.owner_name ?? null,
+                // owner_id: eachVehicle?.owner_id ?? null,
+                // user_id: eachVehicle?.user_id ?? null,
+                // registeration_type: eachVehicle?.registeration_type ?? null,
+                // registeration_date: eachVehicle?.registeration_date ?? null,
+                // registeration_no: eachVehicle?.registeration_no ?? null,
+                // sequence_no: eachVehicle?.sequence_no ?? null,
+                // national_id: eachVehicle?.national_id ?? null,
+              };
+
+              await this.vehiclesRepository.save({
+                ...prePareData,
+                customer: { id: customer.id },
+                last_mileage: eachVehicle.last_mileage || null,
+                last_service_date: eachVehicle.last_service_date || null,
+              });
+            }
+          }
         }
       }
 
       // 7. Prepare response list (union of local + newResty)
-      const mergedVehicles =
-        localVehicles.length === restyVehicles.length
-          ? localVehicles
-          : [...localVehicles, ...newVehicles];
-
-      // map to consistent response format
-      const vehicleArr = mergedVehicles.map((singleVehicle) => ({
-        make: singleVehicle.make || null,
-        model: singleVehicle.model || null,
-        model_year: singleVehicle.year || null,
-        plate_no: singleVehicle.plate_no || null,
-        vin: singleVehicle.vin_number || null,
-      }));
+      const combineVehicles = await this.vehiclesRepository.find({
+        where: { customer: { id: customer.id }, status: 1 },
+      });
 
       return {
         success: true,
         message: 'Successfully fetched the data!',
-        result: { vehicles: vehicleArr },
+        result: { vehicles: combineVehicles },
         errors: [],
       };
     } catch (error) {
@@ -459,7 +432,6 @@ export class VehiclesService {
   }
 
   async customerLoginInResty() {
-    console.log('////////////////////////////inside resty logedIn function');
     try {
       // Prepare request data
       const loginUrl = `${process.env.RESTY_BASE_URL.replace(/\/$/, '')}/api/login`;
@@ -509,10 +481,10 @@ export class VehiclesService {
   }
 
   async getCustomerInfoFromResty({ customer, loginInfo }) {
-    // const customerPhone = '0569845873'; for testing it is hardcoded
+    console.log('///////customer, customer', customer);
     // const customerPhone = `+${customer.country_code}${customer.phone}`;
-    const customerPhone = decrypt(customer.hashed_number);
-    // const customerPhone = '+966532537561';
+    // const customerPhone = decrypt(customer.hashed_number);
+    const customerPhone = '+966532537561';
     try {
       const response = await axios.get(
         `${process.env.RESTY_BASE_URL}/api/customer/search?param=${customerPhone}`,
