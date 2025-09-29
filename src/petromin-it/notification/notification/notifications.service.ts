@@ -146,4 +146,83 @@ export class NotificationService {
       };
     }
   }
+
+  async getUserNotifications(
+    customer_id: string,
+    page = 1,
+    offset = 10,
+    language_code?: string,
+  ) {
+    console.log('language_code', language_code);
+
+    const customer = await this.customerRepo.findOne({
+      where: { uuid: customer_id, status: 1 },
+    });
+
+    if (!customer) {
+      throw new NotFoundException(`Customer not found`);
+    }
+
+    // Fetch paginated notifications
+    const [notifications, total] = await this.notificationRepo.findAndCount({
+      where: { customer_id: customer.id },
+      order: { created_at: 'DESC' },
+      skip: (page - 1) * offset,
+      take: offset,
+      select: [
+        'id',
+        'notification_type',
+        'is_read',
+        'notification_details',
+        'created_at',
+        'updated_at',
+        'uuid',
+      ],
+    });
+
+    // Count unread notifications
+    const unread_count = await this.notificationRepo.count({
+      where: { customer_id: customer.id, is_read: false },
+    });
+
+    return {
+      success: true,
+      message: 'Fetched notifications successfully',
+      data: {
+        total,
+        page,
+        offset,
+        unread_count,
+        notifications: notifications,
+      },
+    };
+  }
+
+  async markAsRead(customer_id: string, notification_id: string) {
+    const customer = await this.customerRepo.findOne({
+      where: { uuid: customer_id, status: 1 },
+    });
+
+    if (!customer) {
+      throw new NotFoundException(`Customer not found`);
+    }
+
+    const notification = await this.notificationRepo.findOne({
+      where: { uuid: notification_id, customer_id: customer.id },
+    });
+
+    if (!notification) {
+      throw new NotFoundException(
+        `Notification not found for given customer and notification_id`,
+      );
+    }
+
+    notification.is_read = true;
+    await this.notificationRepo.save(notification);
+
+    return {
+      success: true,
+      message: 'Notification marked as read successfully',
+    };
+  }
 }

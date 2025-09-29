@@ -4,12 +4,27 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
+  BeforeInsert,
 } from 'typeorm';
+import { v4 as uuidv4 } from 'uuid';
 
 @Entity({ name: 'notifications' })
 export class Notification {
   @PrimaryGeneratedColumn()
   id: number;
+
+  @Column({
+    type: 'char',
+    length: 36,
+  })
+  uuid: string = uuidv4();
+
+  @BeforeInsert()
+  assignUuid() {
+    if (!this.uuid) {
+      this.uuid = uuidv4();
+    }
+  }
 
   // The user who receives the notification. Nullable for broadcast notifications.
   @Column({ type: 'int', nullable: true })
