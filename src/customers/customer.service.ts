@@ -767,11 +767,15 @@ export class CustomerService {
     // Save transaction
     const savedTx = await this.txRepo.save(walletTransaction);
 
-    await this.notificationService.sendToUser({
-      customer_id: customer.uuid,
-      title: 'Points Earned',
-      body: `You've Earned ${rewardPoints} points`,
-    });
+    try {
+      await this.notificationService.sendToUser({
+        customer_id: customer.uuid,
+        title: 'Points Earned',
+        body: `You've Earned ${rewardPoints} points`,
+      });
+    } catch (err) {
+      console.error('Error while sending notification', err);
+    }
 
     return {
       message: 'Points earned successfully',

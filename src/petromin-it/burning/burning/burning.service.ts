@@ -421,11 +421,15 @@ export class BurningService {
       await this.walletRepo.save(wallet);
       //#endregion
 
-      await this.notificationService.sendToUser({
-        customer_id: customer.uuid,
-        title: 'Points Burned',
-        body: `You've Burned ${appliedBurnPoints} points and got a discount of ${discountAmount} SAR`,
-      });
+      try {
+        await this.notificationService.sendToUser({
+          customer_id: customer.uuid,
+          title: 'Points Burned',
+          body: `You've Burned ${appliedBurnPoints} points and got a discount of ${discountAmount} SAR`,
+        });
+      } catch (err) {
+        console.error('Error while sending notification', err);
+      }
 
       //#region Step 6: Build and return response
       return {
