@@ -40,7 +40,6 @@ export class VehiclesService {
    * If not, create a new vehicle for the customer.
    */
   async manageCustomerVehicle(tenantId, businessUnitId, body) {
-    console.log('loginInfo//////////');
     try {
       // Destructure and parse IDs up front
       const {
@@ -109,16 +108,14 @@ export class VehiclesService {
       // Step 2: Find vehicle by plate_no (regardless of customer)
       let vehicle: any = await this.vehiclesRepository.findOne({
         where: {
+          customer: { id: customer.id },
           plate_no: plate_no,
+          status: 1, // not checking inactive or deleted. if deleted, create new.
         },
         relations: ['customer'],
       });
 
       if (vehicle) {
-        // If the vehicle exists and belongs to a different customer, transfer ownership
-        if (vehicle.customer?.id !== customer.id) {
-          vehicle.customer = { id: customer.id };
-        }
         Object.assign(vehicle, prePareData);
       } else {
         // Create new vehicle for this customer
@@ -182,21 +179,14 @@ export class VehiclesService {
         };
       }
 
-      console.log('/////////After getting customer form resty//////');
-
-      const restyresponseVehicles = await this.manageVehicleInResty({
+      await this.manageVehicleInResty({
         vehiclePayload: {
           ...vehicle,
-          // TODO: need to find customer master profiel and add this vehicle agisnt it.
-          customer_id: customerInfoFromResty[0].customer_id,
+          // TODO: once we apply merging API, we only get single customer
+          customer_id: customerInfoFromResty[0]?.customer_id,
         },
         loginInfo,
       });
-
-      console.log(
-        'restyresponseVehicles////////////////',
-        restyresponseVehicles,
-      );
 
       return {
         success: true,
