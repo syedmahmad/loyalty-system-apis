@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as admin from 'firebase-admin';
+import { v4 as uuidv4 } from 'uuid';
 import { DeviceToken } from 'src/petromin-it/notification/entities/device-token.entity';
 import {
   RegisterToken,
@@ -102,14 +103,24 @@ export class NotificationService {
       throw new NotFoundException(`Customer not found`);
     }
 
+    // Always save the notification to the database first
+    await this.notificationRepo.save({
+      notification_details: { title, body },
+      customer_id: customer.id,
+      notification_type: 'general',
+      uuid: uuidv4(),
+    });
+
+    // Now try to send to device(s) if tokens exist
     const tokens = await this.tokenRepo.find({
       where: { customer: { id: customer.id } },
     });
 
     if (!tokens.length) {
+      // Notification is saved, but no device token to send to
       return {
-        success: false,
-        message: `Device token to send notificaiton does not exist.`,
+        success: true,
+        message: `Notification saved, but device token does not exist. It will be available in notification history.`,
       };
     }
 
@@ -118,31 +129,17 @@ export class NotificationService {
       notification: { title, body },
     }));
 
-    // const messages = [
-    //   {
-    //     token: 'fcm_test_token_1234567890',
-    //     notification: { title, body },
-    //   },
-    // ];
-
     try {
       await Promise.all(messages.map((msg) => admin.messaging().send(msg)));
-
-      await this.notificationRepo.save({
-        notification_details: { title, body },
-        customer_id: customer.id,
-        notification_type: 'general',
-      });
 
       return {
         success: true,
         message: `Notification Sent!`,
       };
     } catch (error: any) {
-      console.log('error/////////////////////', error);
       return {
         success: false,
-        message: `Failed to Send Notifications!`,
+        message: `Notification saved, but failed to send to device(s)!`,
       };
     }
   }

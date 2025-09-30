@@ -46,6 +46,8 @@ export class LogVaultMiddleware implements NestMiddleware {
       //   headers: req.headers,
       // };
 
+      console.log('req.body', req.body);
+
       try {
         await this.logService.log({
           method: req.method,

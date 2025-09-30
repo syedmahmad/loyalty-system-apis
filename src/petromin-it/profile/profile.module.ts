@@ -10,10 +10,17 @@ import { Referral } from 'src/wallet/entities/referrals.entity';
 import { Wallet } from 'src/wallet/entities/wallet.entity';
 import { CouponsModule } from 'src/coupons/coupons.module';
 import { TiersModule } from 'src/tiers/tiers.module';
+import { RestyCustomerProfileSelection } from 'src/customers/entities/resty_customer_profile_selection.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Customer, Log, Referral, Wallet]),
+    TypeOrmModule.forFeature([
+      Customer,
+      Log,
+      Referral,
+      Wallet,
+      RestyCustomerProfileSelection,
+    ]),
     CustomerModule,
     OciModule,
     CouponsModule,

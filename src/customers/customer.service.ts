@@ -515,7 +515,9 @@ export class CustomerService {
         },
       });
       if (rule.reward_points === 0) {
-        return;
+        throw new BadRequestException(
+          `There is no rewards points to aginst this ${rule.name}`,
+        );
       }
       if (!rule)
         throw new NotFoundException('Earning rule not found for this event');
@@ -660,6 +662,7 @@ export class CustomerService {
     }
 
     if (!rewardPoints || rewardPoints <= 0) {
+      console.log('BCBCBBCBCBCBCBCBCBCBCBCBCBCBCBCBCB');
       throw new BadRequestException('No reward points to grant');
     }
 
@@ -770,8 +773,8 @@ export class CustomerService {
     try {
       await this.notificationService.sendToUser({
         customer_id: customer.uuid,
-        title: 'Points Earned',
-        body: `You've Earned ${rewardPoints} points`,
+        title: `${rewardPoints} Points Earned`,
+        body: `Earned ${rewardPoints} points ${event}`,
       });
     } catch (err) {
       console.error('Error while sending notification', err);

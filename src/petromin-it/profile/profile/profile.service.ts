@@ -18,6 +18,7 @@ import { Referral } from 'src/wallet/entities/referrals.entity';
 import { CouponsService } from 'src/coupons/coupons/coupons.service';
 import { Wallet } from 'src/wallet/entities/wallet.entity';
 import { TiersService } from 'src/tiers/tiers/tiers.service';
+import { RestyCustomerProfileSelection } from 'src/customers/entities/resty_customer_profile_selection.entity';
 
 @Injectable()
 export class CustomerProfileService {
@@ -34,6 +35,9 @@ export class CustomerProfileService {
     private readonly refRepo: Repository<Referral>,
     private readonly couponsService: CouponsService,
     private readonly tierService: TiersService,
+
+    @InjectRepository(RestyCustomerProfileSelection)
+    private readonly restyCustomerProfileSelectionRepo: Repository<RestyCustomerProfileSelection>,
   ) {}
 
   async getProfile(customerId: string) {
@@ -328,9 +332,14 @@ export class CustomerProfileService {
       reason_for_deletion_other: dto.reason_for_deletion_other,
     });
 
+    // need to delete this as well, so rety things will clear if any.
+    await this.restyCustomerProfileSelectionRepo.delete({
+      phone_number: customerInfo.hashed_number,
+    });
+
     return {
       success: true,
-      message: 'Account soft deleted successfully',
+      message: 'Account deleted successfully',
       result: {},
       errors: [],
     };
