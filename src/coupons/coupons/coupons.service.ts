@@ -252,7 +252,11 @@ export class CouponsService {
     const baseConditions = {
       status: Not(2),
       tenant_id: client_id,
-      ...(business_unit_id ? { business_unit_id } : {}),
+      ...(business_unit_id &&
+      typeof business_unit_id === 'string' &&
+      business_unit_id !== '1'
+        ? { business_unit_id }
+        : {}),
     };
     let whereClause = {};
 
@@ -288,7 +292,9 @@ export class CouponsService {
       const [data, total] = await this.couponsRepository.findAndCount({
         where: {
           ...whereClause,
-          ...(business_unit_id
+          ...(business_unit_id &&
+          typeof business_unit_id === 'string' &&
+          business_unit_id !== '1'
             ? { business_unit_id: business_unit_id }
             : { business_unit: In(availableBusinessUnitIds) }),
         },
