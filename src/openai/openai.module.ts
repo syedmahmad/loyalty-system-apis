@@ -7,5 +7,6 @@ import { OpenAIService } from './openai/openai.service';
   imports: [TypeOrmModule.forFeature([])],
   controllers: [OpenAiController],
   providers: [OpenAIService],
+  exports: [OpenAIService],
 })
 export class OpenaiModule {}
