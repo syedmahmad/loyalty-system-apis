@@ -119,10 +119,11 @@ export class ScheduleService {
       if (!wallet) continue;
 
       // Move points from locked_balance to available_balance, so picking how much locked points are for this transaction
-      const amount = Number(tx.amount);
+      const point_balance = Number(tx.point_balance);
       // Update wallet balances
-      wallet.locked_balance = Number(wallet.locked_balance) - amount;
-      wallet.available_balance = Number(wallet.available_balance) + amount;
+      wallet.locked_balance = Number(wallet.locked_balance) - point_balance;
+      wallet.available_balance =
+        Number(wallet.available_balance) + point_balance;
       // Update transaction status to 'active'
       tx.status = WalletTransactionStatus.ACTIVE;
 
@@ -193,11 +194,13 @@ export class ScheduleService {
               wallet_id: wallet.id,
               business_unit_id: wallet.business_unit.id,
               type: WalletTransactionType.EXPIRE,
-              amount: unusedPoints,
+              amount: 0,
               status: WalletTransactionStatus.ACTIVE,
               description: `Expired ${unusedPoints} unused points from transaction ${tx.id}`,
               source_type: 'system',
               source_id: tx.id, // Link to the original transaction
+              prev_available_points: wallet.available_balance,
+              points_balance: unusedPoints,
             },
             null, // system user ID or dedicated service account
             true, // callingFromGateway = true to skip permission checks
@@ -233,11 +236,12 @@ export class ScheduleService {
       const wallet = tx.wallet;
       if (!wallet) continue; // Skip if wallet relation is missing
 
-      const amount = Number(tx.amount);
+      const point_balance = Number(tx.point_balance);
 
       // Move expired points from available to locked balance
-      wallet.available_balance = Number(wallet.available_balance) - amount;
-      wallet.locked_balance = Number(wallet.locked_balance) + amount;
+      wallet.available_balance =
+        Number(wallet.available_balance) - point_balance;
+      wallet.locked_balance = Number(wallet.locked_balance) + point_balance;
 
       // Mark transaction as expired
       tx.status = WalletTransactionStatus.EXPIRED;

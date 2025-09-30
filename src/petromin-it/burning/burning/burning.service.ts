@@ -272,6 +272,8 @@ export class BurningService {
           wallet_order_id: null,
           wallet_id: wallet?.id,
           business_unit_id: customer?.business_unit?.id,
+          prev_available_points: wallet.available_balance,
+          points_balance: pointsToBurn,
         },
         customer?.id,
         true,
@@ -426,7 +428,8 @@ export class BurningService {
 
       //#region Step 5: Update transaction
       transaction.point_balance = appliedBurnPoints; // ✅ store actual burned points here
-      transaction.status = WalletTransactionStatus.ACTIVE;
+      (transaction.prev_available_points = wallet.available_balance),
+        (transaction.status = WalletTransactionStatus.ACTIVE);
       transaction.description = coupon_code
         ? `Applied coupon ${coupon_code}, burned ${appliedBurnPoints} points for discount of ${discountAmount}`
         : `Confirmed burn of ${appliedBurnPoints} points for discount of ${discountAmount}`;
