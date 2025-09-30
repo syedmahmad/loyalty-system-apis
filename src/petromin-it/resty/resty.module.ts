@@ -4,10 +4,11 @@ import { RestyInvoicesInfo } from '../resty/entities/resty_invoices_info.entity'
 import { RestyController } from 'src/petromin-it/resty/resty/resty.controller';
 import { RestyService } from 'src/petromin-it/resty/resty/resty.service';
 import { TransactionSyncLog } from './entities/transaction-sync-logs.entity';
+import { TransactionSyncLogsSubscriber } from './subscribers/transaction-sync-logs.subscriber';
 
 @Module({
   imports: [TypeOrmModule.forFeature([RestyInvoicesInfo, TransactionSyncLog])],
   controllers: [RestyController],
-  providers: [RestyService],
+  providers: [RestyService, TransactionSyncLogsSubscriber],
 })
 export class RestyInvoicesInfoModule {}
