@@ -44,6 +44,14 @@ export class CreateCustomerDto {
 
   @IsString()
   address: string;
+
+  @IsString()
+  @IsOptional()
+  country: string;
+
+  @IsString()
+  @IsOptional()
+  image_url: string;
 }
 
 export class BulkCreateCustomerDto {

@@ -2090,6 +2090,10 @@ export class CustomerService {
     // It is used to keep track of the amount associated with each rule that matches the dynamic conditions for a product.
     const orderAmount = {};
 
+    if (!rules && rules?.length === 0) {
+      throw new NotFoundException('Earning rule not found');
+    }
+
     // Loop through all earning rules to find which rules match the products in the metadata
     // Yes, with the current logic, if multiple rules match a single product, all those rules will be pushed into matchedRules.
     // Each rule is checked independently against each product, so if a product satisfies the dynamic conditions of multiple rules,
@@ -2147,7 +2151,7 @@ export class CustomerService {
       matchedRules = matchedGroup;
     }
 
-    if (!matchedRules.length) {
+    if (!matchedRules?.length) {
       throw new NotFoundException('Earning rule not found');
     }
 

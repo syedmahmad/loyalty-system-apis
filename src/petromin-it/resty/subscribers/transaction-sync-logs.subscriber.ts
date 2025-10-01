@@ -13,8 +13,9 @@ import {
   WalletTransactionType,
 } from 'src/wallet/entities/wallet-transaction.entity';
 import { encrypt } from 'src/helpers/encryption';
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
+import { TiersService } from 'src/tiers/tiers/tiers.service';
 
 // Remove @EventSubscriber() decorator and register manually
 @Injectable()
@@ -24,6 +25,7 @@ export class TransactionSyncLogsSubscriber
 {
   private vehicleService: VehiclesService;
   private walletService: WalletService;
+  private tierService: TiersService;
   constructor(
     private readonly moduleRef: ModuleRef,
     private readonly dataSource: DataSource,
@@ -49,6 +51,12 @@ export class TransactionSyncLogsSubscriber
 
       if (!this.walletService) {
         this.walletService = this.moduleRef.get(WalletService, {
+          strict: false,
+        });
+      }
+
+      if (!this.tierService) {
+        this.tierService = this.moduleRef.get(TiersService, {
           strict: false,
         });
       }
@@ -204,7 +212,7 @@ export class TransactionSyncLogsSubscriber
             // 1. Check if customer exists with the given phone number
             const customerRepo = event.manager.getRepository('Customer');
             const customer = await customerRepo.findOne({
-              where: { hashed_number: encrypt(phone) },
+              where: { hashed_number: encrypt(phone), status: 1 },
               relations: ['tenant', 'business_unit'],
             });
 
@@ -246,25 +254,43 @@ export class TransactionSyncLogsSubscriber
                     rule_type: 'spend and earn',
                     reward_condition: 'perAmount',
                   },
+                  relations: ['tiers'],
                 });
 
                 let rewardPoints = 0;
                 // 7. Calculate points accordingly
                 if (earningRule) {
-                  if (invoiceAmount < earningRule.min_amount_spent) {
-                    throw new BadRequestException(
-                      `Minimum amount to earn points is ${earningRule.min_amount_spent}`,
-                    );
-                  }
                   // Points per amount spent
                   const minAmountSpent =
-                    parseInt(earningRule.min_amount_spent) === 0
+                    parseInt(earningRule.min_amount_spent as any) === 0
                       ? 1
-                      : parseInt(earningRule.min_amount_spent);
-                  const multiplier = invoiceAmount / minAmountSpent;
+                      : parseInt(earningRule.min_amount_spent as any);
 
-                  rewardPoints =
-                    multiplier * earningRule.points_conversion_factor;
+                  const multiplier = invoiceAmount / minAmountSpent;
+                  const rewardsPointsWithoutTier =
+                    multiplier * earningRule.reward_points;
+
+                  const currentCustomerTier =
+                    await this.tierService.getCurrentCustomerTier(customer.id);
+
+                  // Default points
+                  rewardPoints = rewardsPointsWithoutTier;
+
+                  if (currentCustomerTier?.tier) {
+                    // Find matching RuleTier for the customer’s tier
+                    const matchingRuleTier = earningRule.tiers.find(
+                      (rt) => rt.tier.id === currentCustomerTier.tier.id,
+                    );
+
+                    if (matchingRuleTier) {
+                      if (matchingRuleTier.point_conversion_rate !== 1) {
+                        const bonusPoints =
+                          rewardsPointsWithoutTier *
+                          matchingRuleTier.point_conversion_rate;
+                        rewardPoints += bonusPoints;
+                      }
+                    }
+                  }
                   points = rewardPoints;
                 }
 
