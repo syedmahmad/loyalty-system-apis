@@ -19,6 +19,7 @@ import { CouponsService } from 'src/coupons/coupons/coupons.service';
 import { Wallet } from 'src/wallet/entities/wallet.entity';
 import { TiersService } from 'src/tiers/tiers/tiers.service';
 import { RestyCustomerProfileSelection } from 'src/customers/entities/resty_customer_profile_selection.entity';
+import { OpenAIService } from 'src/openai/openai/openai.service';
 
 @Injectable()
 export class CustomerProfileService {
@@ -35,12 +36,12 @@ export class CustomerProfileService {
     private readonly refRepo: Repository<Referral>,
     private readonly couponsService: CouponsService,
     private readonly tierService: TiersService,
-
+    private readonly openaiService: OpenAIService,
     @InjectRepository(RestyCustomerProfileSelection)
     private readonly restyCustomerProfileSelectionRepo: Repository<RestyCustomerProfileSelection>,
   ) {}
 
-  async getProfile(customerId: string) {
+  async getProfile(customerId: string, language_code: string = 'en') {
     const customerInfo = await this.customerRepo.findOne({
       where: { uuid: customerId, status: 1 },
       relations: ['business_unit', 'tenant'],
@@ -63,21 +64,16 @@ export class CustomerProfileService {
         'is_new_user',
         'first_name',
         'last_name',
-        // 'name',
         'email',
         'phone',
-        // 'country_code',
         'gender',
         'DOB',
         'image_url',
-        // 'nationality',
         'address',
         'city',
-        // 'custom_city',
         'country',
         'created_at',
         'external_customer_id',
-        // 'notify_tier',
       ],
     });
 
@@ -110,13 +106,37 @@ export class CustomerProfileService {
 
     const currentCustomerTier = await this.tierService.getCurrentCustomerTier(
       customer?.id,
+      language_code,
     );
+
+    // Helper function: translate if needed, else return null if empty
+    const safeTranslate = async (value: string | null) => {
+      if (!value || value.trim() === '') return null;
+      return language_code === 'en'
+        ? value
+        : await this.openaiService.translateToArabic(value);
+    };
 
     return {
       success: true,
       message: 'This is the requested profile information',
       result: {
-        customer: customer,
+        customer: {
+          uuid: customer.uuid,
+          is_new_user: customer.is_new_user,
+          first_name: await safeTranslate(customer.first_name),
+          last_name: await safeTranslate(customer.last_name),
+          email: customer.email,
+          phone: customer.phone,
+          gender: await safeTranslate(customer.gender),
+          DOB: customer.DOB,
+          image_url: customer.image_url,
+          address: await safeTranslate(customer.address),
+          city: await safeTranslate(customer.city),
+          country: await safeTranslate(customer.country),
+          created_at: customer.created_at,
+          external_customer_id: customer.external_customer_id,
+        },
         total_points: userWallet ? userWallet.available_balance : 0,
         coupons_count: customerCoupons.result.available.length,
         customer_tier: currentCustomerTier.tier,

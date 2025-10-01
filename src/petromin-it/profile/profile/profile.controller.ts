@@ -1,4 +1,13 @@
-import { Controller, Get, Param, Put, Body, Post, Patch } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Param,
+  Put,
+  Body,
+  Post,
+  Patch,
+  Query,
+} from '@nestjs/common';
 import {
   UpdateProfileDto,
   RequestDeletionDto,
@@ -11,8 +20,11 @@ export class CustomerProfileController {
   constructor(private readonly profileService: CustomerProfileService) {}
 
   @Get()
-  async getProfile(@Param('id') id: string) {
-    return await this.profileService.getProfile(id);
+  async getProfile(
+    @Param('id') id: string,
+    @Query('language_code') languague_code: string,
+  ) {
+    return await this.profileService.getProfile(id, languague_code);
   }
 
   @Put()

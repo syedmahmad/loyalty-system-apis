@@ -460,7 +460,10 @@ export class TiersService {
     }));
   }
 
-  async getCurrentCustomerTier(customerId: number) {
+  async getCurrentCustomerTier(
+    customerId: number,
+    language_code: string = 'en',
+  ) {
     // Step 1: Fetch customer's current point balance (assumes you have a Wallet table)
     const customerWallet = await this.walletRepo.findOne({
       where: { customer: { id: customerId } },
@@ -498,8 +501,10 @@ export class TiersService {
       tier: {
         id: matchingTier.id,
         uuid: matchingTier.uuid,
-        name: matchingTier.name,
-        name_ar: matchingTier.name_ar,
+        name:
+          language_code === 'en'
+            ? matchingTier.name
+            : await this.openaiService.translateToArabic(matchingTier.name),
         level: matchingTier.level,
         min_points: matchingTier.min_points,
       },

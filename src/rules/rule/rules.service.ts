@@ -7,6 +7,7 @@ import { UpdateRuleDto } from '../dto/update-rule.dto';
 import { Tenant } from 'src/tenants/entities/tenant.entity';
 import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
 import { RuleTier } from '../entities/rules-tier';
+import { OpenAIService } from 'src/openai/openai/openai.service';
 
 @Injectable()
 export class RulesService {
@@ -25,6 +26,7 @@ export class RulesService {
 
     @InjectDataSource()
     private readonly dataSource: DataSource,
+    private readonly openaiService: OpenAIService,
   ) {}
 
   async create(dto: CreateRuleDto, user: string): Promise<Rule> {
@@ -92,7 +94,11 @@ export class RulesService {
     }
   }
 
-  async allEventBased(tenant_id: string, business_unit_id: string) {
+  async allEventBased(
+    tenant_id: string,
+    business_unit_id: string,
+    language_code: string = 'en',
+  ) {
     const tenant = await this.tenantRepository.findOne({
       where: {
         uuid: tenant_id,
@@ -106,10 +112,11 @@ export class RulesService {
     const businessUnit = await this.businessUnitRepository.findOne({
       where: {
         uuid: business_unit_id,
-        tenant: { id: (await tenant).id },
+        tenant: { id: tenant.id },
       },
     });
-    return this.ruleRepository.find({
+
+    const rules = await this.ruleRepository.find({
       select: [
         'uuid',
         'name',
@@ -128,6 +135,27 @@ export class RulesService {
         status: 1,
       },
     });
+
+    // Map results and only return the correct language fields
+    return await Promise.all(
+      rules.map(async (rule) => ({
+        uuid: rule.uuid,
+        name:
+          language_code === 'en'
+            ? rule.name
+            : await this.openaiService.translateToArabic(rule.name),
+        reward_points: rule.reward_points,
+        event_triggerer: rule.event_triggerer,
+        description:
+          language_code === 'en'
+            ? rule.description
+            : rule.description !== ''
+              ? await this.openaiService.translateToArabic(rule.description)
+              : null,
+        validity_after_assignment: rule.validity_after_assignment,
+        status: rule.status,
+      })),
+    );
   }
 
   findAll(client_id: number, name: string, bu: number) {

@@ -11,6 +11,7 @@ import { Wallet } from 'src/wallet/entities/wallet.entity';
 import { CouponsModule } from 'src/coupons/coupons.module';
 import { TiersModule } from 'src/tiers/tiers.module';
 import { RestyCustomerProfileSelection } from 'src/customers/entities/resty_customer_profile_selection.entity';
+import { OpenaiModule } from 'src/openai/openai.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { RestyCustomerProfileSelection } from 'src/customers/entities/resty_cust
     OciModule,
     CouponsModule,
     TiersModule,
+    OpenaiModule,
   ],
   controllers: [CustomerProfileController],
   providers: [CustomerProfileService],
