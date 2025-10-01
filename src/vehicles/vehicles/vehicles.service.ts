@@ -339,7 +339,6 @@ export class VehiclesService {
               if (deactivatedVehicle) {
                 continue; // Skip adding this vehicle as it's deactivated
               }
-
               // Fetch make, model, and variant info in parallel
               const [makeInfo, modelInfo] = await Promise.all([
                 this.makeRepository.findOne({
@@ -353,9 +352,12 @@ export class VehiclesService {
                 }),
               ]);
 
-              const variantInfo = await this.variantRepository.findOne({
-                where: { model: { id: modelInfo.id } },
-              });
+              let variantInfo = null;
+              if (modelInfo) {
+                variantInfo = await this.variantRepository.findOne({
+                  where: { model: { id: modelInfo.id } },
+                });
+              }
 
               const prePareData: any = {
                 make: makeInfo?.name ?? null,

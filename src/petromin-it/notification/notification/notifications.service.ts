@@ -54,22 +54,11 @@ export class NotificationService {
 
     try {
       // Check if this token already exists (could be for this or another customer)
-      let existingToken = await this.tokenRepo.findOne({ where: { token } });
+      let existingToken = await this.tokenRepo.findOne({
+        where: { token, customer: { id: customer.id } },
+      });
 
-      if (existingToken) {
-        // If the token is already assigned to this customer, just update platform if needed
-        if (existingToken.customer.id === customer.id) {
-          if (existingToken.platform !== platform) {
-            existingToken.platform = platform;
-            await this.tokenRepo.save(existingToken);
-          }
-        } else {
-          // Token is assigned to another customer (user changed device or logged in on new account)
-          existingToken.customer = { id: customer.id } as any;
-          existingToken.platform = platform;
-          await this.tokenRepo.save(existingToken);
-        }
-      } else {
+      if (!existingToken) {
         // Create new token for this customer
         existingToken = this.tokenRepo.create({
           customer: { id: customer.id },
