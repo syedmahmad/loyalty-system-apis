@@ -923,6 +923,8 @@ export class CouponsService {
         : (amount * Number(coupon.discount_price)) / 100;
 
     const savedTx = await this.creditWallet({
+      point_balance: earnPoints,
+      prev_available_points: wallet.available_balance,
       wallet,
       amount: earnPoints,
       sourceType: 'coupon',
@@ -1065,6 +1067,8 @@ export class CouponsService {
   }
 
   async creditWallet({
+    point_balance,
+    prev_available_points,
     wallet,
     amount,
     sourceType,
@@ -1072,6 +1076,8 @@ export class CouponsService {
     validityAfterAssignment,
     order,
   }: {
+    point_balance: number;
+    prev_available_points: number;
     wallet: any;
     amount: number;
     sourceType: string;
@@ -1117,6 +1123,8 @@ export class CouponsService {
 
     // 4. Create wallet transaction
     const walletTransaction: Partial<WalletTransaction> = {
+      point_balance,
+      prev_available_points,
       wallet: wallet,
       orders: walletOrderResponse,
       business_unit: wallet.business_unit,

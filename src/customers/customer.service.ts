@@ -1015,6 +1015,8 @@ export class CustomerService {
         );
 
         const savedTx = await this.creditWallet({
+          point_balance: matchedRule.reward_points || 0,
+          prev_available_points: wallet.available_balance,
           wallet,
           amount: matchedRule.reward_points,
           sourceType:
@@ -1080,6 +1082,8 @@ export class CustomerService {
 
     const savedTx = await this.creditWallet({
       wallet,
+      point_balance: matchedRule.reward_points || 0,
+      prev_available_points: wallet.available_balance,
       amount: matchedRule.reward_points || 0,
       sourceType:
         matchedRule.rule_type === 'dynamic rule'
@@ -1663,6 +1667,8 @@ export class CustomerService {
           : (amount * Number(coupon.discount_price)) / 100;
 
       const savedTx = await this.creditWallet({
+        point_balance: earnPoints,
+        prev_available_points: wallet.available_balance,
         wallet,
         amount: earnPoints,
         sourceType: 'coupon',
@@ -1884,6 +1890,8 @@ export class CustomerService {
   }
 
   async creditWallet({
+    point_balance,
+    prev_available_points,
     wallet,
     amount,
     sourceType,
@@ -1891,6 +1899,8 @@ export class CustomerService {
     validityAfterAssignment,
     order,
   }: {
+    point_balance: number;
+    prev_available_points: number;
     wallet: any;
     amount: number;
     sourceType: string;
