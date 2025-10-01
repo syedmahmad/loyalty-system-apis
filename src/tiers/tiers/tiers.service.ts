@@ -615,7 +615,10 @@ export class TiersService {
             } else {
               benefits.push({
                 tierId: eachTier.uuid,
-                name_en: String(eachBenefit),
+                name:
+                  language_code === 'en'
+                    ? String(eachBenefit)
+                    : await this.openaiService.translateToArabic(eachBenefit),
                 isUsed: false,
                 icon: '',
               });
