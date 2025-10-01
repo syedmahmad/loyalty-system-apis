@@ -94,6 +94,7 @@ export class AuthService {
         testUsers = [];
       }
 
+      console.log('//////////////hashedPhone', hashedPhone);
       // Only set OTP and expiry if not a test user
       if (!testUsers.includes(hashedPhone)) {
         customer.otp_code = otp;
