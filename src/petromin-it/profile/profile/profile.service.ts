@@ -109,14 +109,6 @@ export class CustomerProfileService {
       language_code,
     );
 
-    // Helper function: translate if needed, else return null if empty
-    const safeTranslate = async (value: string | null) => {
-      if (!value || value.trim() === '') return null;
-      return language_code === 'en'
-        ? value
-        : await this.openaiService.translateToArabic(value);
-    };
-
     return {
       success: true,
       message: 'This is the requested profile information',
@@ -124,16 +116,16 @@ export class CustomerProfileService {
         customer: {
           uuid: customer.uuid,
           is_new_user: customer.is_new_user,
-          first_name: await safeTranslate(customer.first_name),
-          last_name: await safeTranslate(customer.last_name),
+          first_name: customer.first_name,
+          last_name: customer.last_name,
           email: customer.email,
           phone: customer.phone,
-          gender: await safeTranslate(customer.gender),
+          gender: customer.gender,
           DOB: customer.DOB,
           image_url: customer.image_url,
-          address: await safeTranslate(customer.address),
-          city: await safeTranslate(customer.city),
-          country: await safeTranslate(customer.country),
+          address: customer.address,
+          city: customer.city,
+          country: customer.country,
           created_at: customer.created_at,
           external_customer_id: customer.external_customer_id,
         },

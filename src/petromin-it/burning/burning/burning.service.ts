@@ -103,18 +103,9 @@ export class BurningService {
       success: true,
       message: 'Customer details fetched successfully',
       result: {
-        customer_name:
-          dto.language_code === 'en'
-            ? customer.name
-            : await this.openaiService.translateToArabic(customer.name),
-        custom_customer_first_name:
-          dto.language_code === 'en'
-            ? customer.first_name
-            : await this.openaiService.translateToArabic(customer.first_name),
-        custom_customer_last_name:
-          dto.language_code === 'en'
-            ? customer.last_name
-            : await this.openaiService.translateToArabic(customer.last_name),
+        customer_name: customer.name,
+        custom_customer_first_name: customer.first_name,
+        custom_customer_last_name: customer.last_name,
         custom_customer_unique_id: customer.uuid,
         customer_referral_code: customer.referral_code,
         custom_customer_loyalty_points: loyaltyPoints,
