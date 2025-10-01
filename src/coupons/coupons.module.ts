@@ -37,6 +37,7 @@ import { CouponSyncLog } from './entities/coupon-sync-logs.entity';
 import { CouponUsage } from './entities/coupon-usages.entity';
 import { Notification } from 'src/petromin-it/notification/entities/notification.entity';
 import { NotificationModule } from 'src/petromin-it/notification/notification.module';
+import { OpenaiModule } from 'src/openai/openai.module';
 @Module({
   imports: [
     TypeOrmModule.forFeature([
@@ -68,6 +69,7 @@ import { NotificationModule } from 'src/petromin-it/notification/notification.mo
       CouponUsage,
     ]),
     NotificationModule,
+    OpenaiModule,
   ],
   controllers: [CouponsController],
   providers: [

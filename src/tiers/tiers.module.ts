@@ -16,6 +16,7 @@ import { WalletSettings } from 'src/wallet/entities/wallet-settings.entity';
 import { UserCoupon } from 'src/wallet/entities/user-coupon.entity';
 import { WalletOrder } from 'src/wallet/entities/wallet-order.entity';
 import { Rule } from 'src/rules/entities/rules.entity';
+import { OpenaiModule } from 'src/openai/openai.module';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { Rule } from 'src/rules/entities/rules.entity';
       Rule,
       WalletSettings,
     ]),
+    OpenaiModule,
   ],
   controllers: [TiersController],
   providers: [TiersService, OciService, WalletService],

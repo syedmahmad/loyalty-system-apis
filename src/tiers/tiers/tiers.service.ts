@@ -22,6 +22,7 @@ import { Rule } from 'src/rules/entities/rules.entity';
 import { WalletSettings } from 'src/wallet/entities/wallet-settings.entity';
 import { WalletTransaction } from 'src/wallet/entities/wallet-transaction.entity';
 import * as dayjs from 'dayjs';
+import { OpenAIService } from 'src/openai/openai/openai.service';
 
 @Injectable()
 export class TiersService {
@@ -61,6 +62,7 @@ export class TiersService {
     private readonly customerRepo: Repository<Customer>,
 
     private readonly walletService: WalletService,
+    private readonly openaiService: OpenAIService,
   ) {}
 
   async create(dto: CreateTierDto, user: string): Promise<Tier> {
@@ -514,7 +516,7 @@ export class TiersService {
 
   async tierBenefits(body: tierBenefitsDto) {
     try {
-      const { customerId, tenantId, BUId } = body;
+      const { customerId, tenantId, BUId, language_code } = body;
       const customer = await this.customerRepo.findOne({
         where: {
           uuid: customerId,
@@ -569,8 +571,10 @@ export class TiersService {
           nextTier = next
             ? {
                 uuid: next.uuid,
-                name: next.name,
-                name_ar: next.name_ar,
+                name:
+                  language_code === 'en'
+                    ? next.name
+                    : await this.openaiService.translateToArabic(next.name),
                 level: next.level,
                 min_points: next.min_points,
               }
@@ -579,8 +583,10 @@ export class TiersService {
 
         tiersArr.push({
           uuid: eachTier.uuid,
-          name: eachTier.name,
-          name_ar: eachTier.name_ar,
+          name:
+            language_code === 'en'
+              ? eachTier.name
+              : await this.openaiService.translateToArabic(eachTier.name),
           level: eachTier.level,
           min_points: eachTier.min_points,
         });
@@ -611,7 +617,6 @@ export class TiersService {
                 tierId: eachTier.uuid,
                 name_en: String(eachBenefit),
                 isUsed: false,
-                name_ar: '',
                 icon: '',
               });
             }
@@ -624,8 +629,10 @@ export class TiersService {
         const firstTier = allTiers[0];
         nextTier = {
           uuid: firstTier.uuid,
-          name: firstTier.name,
-          name_ar: firstTier.name_ar,
+          name:
+            language_code === 'en'
+              ? firstTier.name
+              : await this.openaiService.translateToArabic(firstTier.name),
           level: firstTier.level,
           min_points: firstTier?.min_points,
         };
@@ -650,6 +657,7 @@ export class TiersService {
       }
 
       const { id, ...currentTier } = customerTierInfo?.tier;
+      const { name_ar, ...restTier } = currentTier;
 
       const walletSettings = await this.walletSettings.findOne({
         where: {
@@ -678,7 +686,13 @@ export class TiersService {
             (burningRule?.points_conversion_factor
               ? burningRule.points_conversion_factor
               : 0.01) * customerTierInfo.points,
-          currentTier: currentTier,
+          currentTier: {
+            ...restTier,
+            name:
+              language_code === 'en'
+                ? restTier.name
+                : await this.openaiService.translateToArabic(restTier.name),
+          },
           nextTier,
           pointsToNextTier: nextTier
             ? nextTier.min_points - wallet.total_balance
