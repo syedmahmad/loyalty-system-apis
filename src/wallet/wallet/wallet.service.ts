@@ -162,7 +162,7 @@ export class WalletService {
       ...dto,
       customer: { id: wallet.customer.id } as any,
       business_unit: { id: dto.business_unit_id } as any,
-      point_balance: wallet.available_balance,
+      point_balance: dto.points_balance,
       wallet: { id: dto.wallet_id } as any,
       unlock_date: unlockDate,
       expiry_date: expiryDate,
@@ -179,24 +179,24 @@ export class WalletService {
     if (dto.status === 'active') {
       switch (dto.type) {
         case 'earn':
-          wallet.total_balance += amount;
-          wallet.available_balance += amount;
+          wallet.total_balance += dto.points_balance;
+          wallet.available_balance += dto.points_balance;
           break;
         case 'burn':
-          wallet.available_balance -= amount;
+          wallet.available_balance -= dto.points_balance;
           break;
         case 'expire':
-          wallet.available_balance -= amount;
+          wallet.available_balance -= dto.points_balance;
           break;
         case 'adjustment':
-          wallet.total_balance += amount;
-          wallet.available_balance += amount;
+          wallet.total_balance += dto.points_balance;
+          wallet.available_balance += dto.points_balance;
           break;
       }
       await this.walletRepo.save(wallet);
     } else if (dto.status === 'pending') {
-      wallet.total_balance += amount;
-      wallet.locked_balance += amount;
+      wallet.total_balance += dto.points_balance;
+      wallet.locked_balance += dto.points_balance;
       await this.walletRepo.save(wallet);
     } else if (dto.status === 'not_confirmed') {
       // do nothing to balances

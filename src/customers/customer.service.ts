@@ -750,6 +750,8 @@ export class CustomerService {
       unlock_date:
         pendingDays > 0 ? dayjs().add(pendingDays, 'day').toDate() : null,
 
+      prev_available_points: wallet.available_balance,
+
       point_balance: rewardPoints, //wallet.available_balance,
 
       // Set the expiry_date for the wallet transaction.
@@ -907,7 +909,7 @@ export class CustomerService {
       business_unit_id: customer.business_unit.id,
       wallet_id: wallet.id,
       type: WalletTransactionType.BURN,
-      amount: pointsToBurn,
+      amount: discountAmount,
       status: WalletTransactionStatus.ACTIVE,
       source_type: rule.name,
       source_id: rule.id,
@@ -953,6 +955,8 @@ export class CustomerService {
         wallet_order_id: walletOrderRes?.id,
         wallet_id: wallet?.id,
         business_unit_id: customer?.business_unit?.id,
+        prev_available_points: wallet.available_balance,
+        points_balance: pointsToBurn,
       },
       customer?.id,
       true,
@@ -2332,7 +2336,8 @@ export class CustomerService {
         business_unit: wallet.business_unit, // pass the full BusinessUnit entity instance
         type: WalletTransactionType.EARN,
         source_type: rule.name,
-        amount: rewardPoints,
+        amount: Orderamount || 0,
+        prev_available_points: wallet.available_balance,
         status:
           pendingDays > 0
             ? WalletTransactionStatus.PENDING
@@ -2344,7 +2349,7 @@ export class CustomerService {
         unlock_date:
           pendingDays > 0 ? dayjs().add(pendingDays, 'day').toDate() : null,
 
-        point_balance: wallet.available_balance,
+        point_balance: rewardPoints,
 
         // Set the expiry_date for the wallet transaction.
         // If the rule has a validity_after_assignment value:
@@ -2607,7 +2612,7 @@ export class CustomerService {
           business_unit_id: customer.business_unit.id,
           wallet_id: wallet.id,
           type: WalletTransactionType.BURN,
-          amount: pointsToBurn,
+          amount: discountAmount,
           status: WalletTransactionStatus.ACTIVE,
           source_type: rule.name,
           source_id: rule.id,
@@ -2651,6 +2656,8 @@ export class CustomerService {
             wallet_order_id: walletOrderRes?.id,
             wallet_id: wallet?.id,
             business_unit_id: customer?.business_unit?.id,
+            prev_available_points: wallet.available_balance,
+            points_balance: pointsToBurn,
           },
           customer?.id,
           true,
@@ -2863,7 +2870,7 @@ export class CustomerService {
         business_unit_id: customer.business_unit.id,
         wallet_id: wallet.id,
         type: WalletTransactionType.BURN,
-        amount: pointsToBurn,
+        amount: discountAmount,
         status: WalletTransactionStatus.ACTIVE,
         source_type: matchedRule.name,
         source_id: matchedRule.id,
@@ -2879,6 +2886,8 @@ export class CustomerService {
           wallet_order_id: null,
           wallet_id: wallet?.id,
           business_unit_id: customer?.business_unit?.id,
+          prev_available_points: wallet.available_balance,
+          points_balance: pointsToBurn,
         },
         customer?.id,
         true,

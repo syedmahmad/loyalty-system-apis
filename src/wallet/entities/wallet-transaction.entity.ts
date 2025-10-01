@@ -83,6 +83,9 @@ export class WalletTransaction {
   point_balance: number;
 
   @Column({ nullable: true })
+  prev_available_points: number;
+
+  @Column({ nullable: true })
   source_id: number;
 
   @Column({ nullable: true })

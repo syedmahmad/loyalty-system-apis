@@ -18,6 +18,7 @@ import { decrypt, encrypt } from 'src/helpers/encryption';
 import { Rule } from 'src/rules/entities/rules.entity';
 import { WalletService } from 'src/wallet/wallet/wallet.service';
 import { NotificationService } from 'src/petromin-it/notification/notification/notifications.service';
+import { OpenAIService } from 'src/openai/openai/openai.service';
 
 @Injectable()
 export class BurningService {
@@ -37,6 +38,7 @@ export class BurningService {
     private readonly tiersService: TiersService,
     private readonly walletService: WalletService,
     private readonly notificationService: NotificationService,
+    private readonly openaiService: OpenAIService,
   ) {}
 
   // #region getCustomerData Service
@@ -101,15 +103,31 @@ export class BurningService {
       success: true,
       message: 'Customer details fetched successfully',
       result: {
-        customer_name: customer.name,
-        custom_customer_first_name: customer.first_name,
-        custom_customer_last_name: customer.last_name,
+        customer_name:
+          dto.language_code === 'en'
+            ? customer.name
+            : await this.openaiService.translateToArabic(customer.name),
+        custom_customer_first_name:
+          dto.language_code === 'en'
+            ? customer.first_name
+            : await this.openaiService.translateToArabic(customer.first_name),
+        custom_customer_last_name:
+          dto.language_code === 'en'
+            ? customer.last_name
+            : await this.openaiService.translateToArabic(customer.last_name),
         custom_customer_unique_id: customer.uuid,
         customer_referral_code: customer.referral_code,
         custom_customer_loyalty_points: loyaltyPoints,
         custom_total_transaction_amount: totalAmount,
         custom_total_transaction_count: totalCount,
-        customer_tier: tierResult?.tier?.name ?? null,
+        customer_tier:
+          dto.language_code === 'en'
+            ? (tierResult?.tier?.name ?? null)
+            : tierResult?.tier?.name
+              ? await this.openaiService.translateToArabic(
+                  tierResult?.tier?.name,
+                )
+              : null,
       },
       errors: [],
     };
@@ -254,6 +272,8 @@ export class BurningService {
           wallet_order_id: null,
           wallet_id: wallet?.id,
           business_unit_id: customer?.business_unit?.id,
+          prev_available_points: wallet.available_balance,
+          points_balance: pointsToBurn,
         },
         customer?.id,
         true,
@@ -408,7 +428,8 @@ export class BurningService {
 
       //#region Step 5: Update transaction
       transaction.point_balance = appliedBurnPoints; // ✅ store actual burned points here
-      transaction.status = WalletTransactionStatus.ACTIVE;
+      (transaction.prev_available_points = wallet.available_balance),
+        (transaction.status = WalletTransactionStatus.ACTIVE);
       transaction.description = coupon_code
         ? `Applied coupon ${coupon_code}, burned ${appliedBurnPoints} points for discount of ${discountAmount}`
         : `Confirmed burn of ${appliedBurnPoints} points for discount of ${discountAmount}`;

@@ -22,6 +22,14 @@ export class CreateWalletTransactionDto {
   @Type(() => Number)
   amount: number;
 
+  @IsNumber()
+  @Type(() => Number)
+  prev_available_points: number;
+
+  @IsNumber()
+  @Type(() => Number)
+  points_balance: number;
+
   @IsOptional()
   @IsString()
   coupon_code?: string;
