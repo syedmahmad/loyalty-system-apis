@@ -1,20 +1,22 @@
-import { IsString, IsOptional, IsObject } from 'class-validator';
+import { IsString, IsObject } from 'class-validator';
 
 export class GvrEarnBurnWithEventsDto {
   @IsString()
   customer_id: string;
 
-  @IsOptional()
   @IsObject()
   metadata?: {
+    store_id: string;
+    invoice_id: string;
+    invoice_no: string;
+    invoice_amount: number;
+    invoice_date: string;
     productitems: {
-      totalamount?: string;
       products: Array<{
-        store_id?: string;
-        name?: string;
+        name: string;
+        quantity: string;
+        amount: number;
         productcode?: string;
-        quantity?: string;
-        amount?: number;
         unitprice?: string;
         unit?: string;
         [key: string]: any;

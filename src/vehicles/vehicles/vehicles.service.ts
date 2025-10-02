@@ -78,9 +78,9 @@ export class VehiclesService {
         make: makeInfo?.name ?? null,
         make_ar: makeInfo?.nameAr ?? null,
         make_id: make_id ?? null,
-        image: makeInfo?.logo
-          ? `${process.env.VEHICLE_IMAGES_URL}${makeInfo?.logo}`
-          : null,
+        image: modelInfo?.logo
+          ? modelInfo?.logo
+          : `${process.env.VEHICLE_IMAGES_URL}${makeInfo?.logo}`,
         model: modelInfo?.name ?? null,
         model_ar: modelInfo?.nameAr ?? null,
         model_id: model_id ?? null,
@@ -363,9 +363,9 @@ export class VehiclesService {
                 make: makeInfo?.name ?? null,
                 make_ar: makeInfo?.nameAr ?? null,
                 make_id: makeInfo?.makeId ?? null,
-                image: makeInfo?.logo
-                  ? `${process.env.VEHICLE_IMAGES_URL}${makeInfo?.logo}`
-                  : null,
+                image: modelInfo?.logo
+                  ? modelInfo?.logo
+                  : `${process.env.VEHICLE_IMAGES_URL}${makeInfo?.logo}`,
                 model: modelInfo?.name ?? null,
                 model_ar: modelInfo?.nameAr ?? null,
                 model_id: modelInfo?.modelId ?? null,

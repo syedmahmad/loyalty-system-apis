@@ -44,12 +44,19 @@ export class ModelService {
             ),
           ).then((res) =>
             (res?.data?.data || []).map(
-              ({ ModelId, Model, ModelYear, IsActive = true }) => ({
+              ({
+                ModelId,
+                Model,
+                ModelYear,
+                IsActive = true,
+                ProfileImageUrlPath,
+              }) => ({
                 modelId: ModelId,
                 make: { id: make.id },
                 name: Model,
                 year: Number(ModelYear),
                 active: Number(IsActive),
+                logo: ProfileImageUrlPath || null,
               }),
             ),
           ),
@@ -63,38 +70,52 @@ export class ModelService {
               },
             ),
           ).then((res) =>
-            (res?.data?.data || []).map(({ ModelId, Model, ModelYear }) => ({
-              modelId: ModelId,
-              nameAr: Model,
-              year: Number(ModelYear),
-            })),
+            (res?.data?.data || []).map(
+              ({ ModelId, Model, ModelYear, ProfileImageUrlPath }) => ({
+                modelId: ModelId,
+                nameAr: Model,
+                year: Number(ModelYear),
+                logo: ProfileImageUrlPath || null,
+              }),
+            ),
           ),
         ]);
 
-        await this.model.upsert(response, ['modelId']);
-        await this.model.upsert(responseAr, {
-          conflictPaths: ['modelId'],
-          skipUpdateIfNoValuesChanged: true,
-        });
+        // Upsert English and Arabic responses
+        await this.model.upsert(
+          response.map((item) => ({
+            ...item,
+            make: { id: make.id },
+          })),
+          ['modelId'],
+        );
+        await this.model.upsert(
+          responseAr.map((item, idx) => ({
+            ...item,
+            make: { id: make.id },
+            modelId: response[idx]?.modelId ?? item.modelId,
+          })),
+          {
+            conflictPaths: ['modelId'],
+            skipUpdateIfNoValuesChanged: true,
+          },
+        );
 
-        const inactiveModels = await this.model.find({
+        // Find models that are currently active but not present in the latest response
+        const responseModelIds = response.map(({ modelId }) => modelId);
+        const activeModels = await this.model.find({
           where: {
             make: { id: make.id },
             active: 1,
-            modelId: Not(In(response.map(({ modelId }) => modelId))),
           },
         });
 
-        if (inactiveModels.length > 0) {
-          await this.model.update(
-            {
-              modelId: In(inactiveModels.map(({ modelId }) => modelId)),
-              make: {
-                id: make.id,
-              },
-            },
-            { active: 0 },
-          );
+        const toDeactivateIds = activeModels
+          .filter((model) => !responseModelIds.includes(model.modelId))
+          .map((model) => model.id);
+
+        if (toDeactivateIds.length > 0) {
+          await this.model.update({ id: In(toDeactivateIds) }, { active: 0 });
         }
       }
 

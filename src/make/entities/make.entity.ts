@@ -22,7 +22,7 @@ export class MakeEntity {
   @Column({ type: 'int', default: 1 })
   active: number;
 
-  @Column({ nullable: true })
+  @Column({ type: 'text', nullable: true })
   logo: string;
 
   @OneToMany(() => ModelEntity, (model) => model.make)

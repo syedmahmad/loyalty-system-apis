@@ -33,6 +33,9 @@ export class ModelEntity {
   @Column({ type: 'int', default: 1 })
   active: number;
 
+  @Column({ type: 'text', nullable: true })
+  logo: string;
+
   @ManyToOne(() => MakeEntity, (make) => make.models)
   @JoinColumn({ name: 'make_id' })
   make: MakeEntity;
