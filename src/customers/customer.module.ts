@@ -40,6 +40,7 @@ import { WalletOrder } from 'src/wallet/entities/wallet-order.entity';
 import { CustomerBootstrapService } from './startup/customer-bootstrap.service';
 import { NotificationModule } from 'src/petromin-it/notification/notification.module';
 import { OpenaiModule } from 'src/openai/openai.module';
+import { CustomerPreference } from 'src/petromin-it/preferences/entities/customer-preference.entity';
 
 @Module({
   imports: [
@@ -67,6 +68,7 @@ import { OpenaiModule } from 'src/openai/openai.module';
       CouponType,
       CustomerSegmentMember,
       UserCoupon,
+      CustomerPreference,
     ]),
     WalletModule,
     OciModule,

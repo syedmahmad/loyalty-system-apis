@@ -60,6 +60,7 @@ import { Tier } from 'src/tiers/entities/tier.entity';
 import { isValidUrl } from 'src/helpers/helper';
 import { CustomerDto } from './dto/customer.dto';
 import { NotificationService } from 'src/petromin-it/notification/notification/notifications.service';
+import { CustomerPreference } from 'src/petromin-it/preferences/entities/customer-preference.entity';
 
 @Injectable()
 export class CustomerService {
@@ -104,6 +105,9 @@ export class CustomerService {
 
     @InjectRepository(Tier)
     private tierRepo: Repository<Tier>,
+
+    @InjectRepository(CustomerPreference)
+    private readonly customerPreferencesRepo: Repository<CustomerPreference>,
   ) {}
 
   /**
@@ -772,14 +776,22 @@ export class CustomerService {
     // Save transaction
     const savedTx = await this.txRepo.save(walletTransaction);
 
-    try {
-      await this.notificationService.sendToUser({
-        customer_id: customer.uuid,
-        title: `${rewardPoints} Points Earned`,
-        body: `Earned ${rewardPoints} points ${event}`,
-      });
-    } catch (err) {
-      console.error('Error while sending notification', err);
+    const customerPreferences = await this.customerPreferencesRepo.findOne({
+      where: {
+        customer: { id: customer.id },
+      },
+    });
+
+    if (customerPreferences.push_notification) {
+      try {
+        await this.notificationService.sendToUser({
+          customer_id: customer.uuid,
+          title: `${rewardPoints} Points Earned`,
+          body: `Earned ${rewardPoints} points ${event}`,
+        });
+      } catch (err) {
+        console.error('Error while sending notification', err);
+      }
     }
 
     return {

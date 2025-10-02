@@ -31,6 +31,7 @@ import { Tenant } from 'src/tenants/entities/tenant.entity';
 import { CouponType } from 'src/coupon_type/entities/coupon_type.entity';
 import { NotificationModule } from 'src/petromin-it/notification/notification.module';
 import { OpenaiModule } from 'src/openai/openai.module';
+import { CustomerPreference } from 'src/petromin-it/preferences/entities/customer-preference.entity';
 
 @Module({
   imports: [
@@ -56,6 +57,7 @@ import { OpenaiModule } from 'src/openai/openai.module';
       BusinessUnit,
       Tenant,
       CouponType,
+      CustomerPreference,
     ]),
     NotificationModule,
     OpenaiModule,

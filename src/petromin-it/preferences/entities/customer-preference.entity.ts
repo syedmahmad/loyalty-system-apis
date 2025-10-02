@@ -20,6 +20,9 @@ export class CustomerPreference {
   @JoinColumn({ name: 'customer_id' })
   customer: Customer;
 
+  @Column({ type: 'enum', enum: ['en', 'ar'], default: 'en' })
+  preferred_lang: 'en' | 'ar';
+
   @Column({ type: 'tinyint', default: 1 })
   email_notification: number; // 1 active, 0 inactive
 

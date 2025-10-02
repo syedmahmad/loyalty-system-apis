@@ -38,6 +38,7 @@ import { CouponUsage } from './entities/coupon-usages.entity';
 import { Notification } from 'src/petromin-it/notification/entities/notification.entity';
 import { NotificationModule } from 'src/petromin-it/notification/notification.module';
 import { OpenaiModule } from 'src/openai/openai.module';
+import { CustomerPreference } from 'src/petromin-it/preferences/entities/customer-preference.entity';
 @Module({
   imports: [
     TypeOrmModule.forFeature([
@@ -67,6 +68,7 @@ import { OpenaiModule } from 'src/openai/openai.module';
       CampaignTier,
       CouponSyncLog,
       CouponUsage,
+      CustomerPreference,
     ]),
     NotificationModule,
     OpenaiModule,

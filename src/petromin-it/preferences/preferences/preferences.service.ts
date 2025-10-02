@@ -24,7 +24,10 @@ export class PreferencesService {
       where: { customer: { id: customer.id } },
     });
     if (!pref) {
-      pref = this.prefRepo.create({ customer });
+      pref = this.prefRepo.create({
+        customer,
+        preferred_lang: 'en', // ✅ default when creating new record
+      });
       await this.prefRepo.save(pref);
     }
     return pref;
@@ -48,6 +51,7 @@ export class PreferencesService {
       push_notification: pref.push_notification,
       location_access: pref.location_access,
       biometric: pref.biometric,
+      preferred_lang: pref.preferred_lang, // ✅ added here
     };
   }
 
@@ -74,6 +78,8 @@ export class PreferencesService {
     if (dto.location_access !== undefined)
       pref.location_access = dto.location_access;
     if (dto.biometric !== undefined) pref.biometric = dto.biometric;
+    if (dto.preferred_lang !== undefined)
+      pref.preferred_lang = dto.preferred_lang; // ✅ update language
 
     await this.prefRepo.save(pref);
     return this.getByCustomerUuid(customerUuid);

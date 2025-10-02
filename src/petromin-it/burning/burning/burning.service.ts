@@ -19,6 +19,7 @@ import { Rule } from 'src/rules/entities/rules.entity';
 import { WalletService } from 'src/wallet/wallet/wallet.service';
 import { NotificationService } from 'src/petromin-it/notification/notification/notifications.service';
 import { OpenAIService } from 'src/openai/openai/openai.service';
+import { CustomerPreference } from 'src/petromin-it/preferences/entities/customer-preference.entity';
 
 @Injectable()
 export class BurningService {
@@ -34,6 +35,9 @@ export class BurningService {
 
     @InjectRepository(Rule)
     private readonly ruleRepo: Repository<Rule>,
+
+    @InjectRepository(CustomerPreference)
+    private readonly customerPreferencesRepo: Repository<CustomerPreference>,
 
     private readonly tiersService: TiersService,
     private readonly walletService: WalletService,
@@ -433,14 +437,22 @@ export class BurningService {
       await this.walletRepo.save(wallet);
       //#endregion
 
-      try {
-        await this.notificationService.sendToUser({
-          customer_id: customer.uuid,
-          title: 'Points Burned',
-          body: `You've Burned ${appliedBurnPoints} points and got a discount of ${discountAmount} SAR`,
-        });
-      } catch (err) {
-        console.error('Error while sending notification', err);
+      const customerPreferences = await this.customerPreferencesRepo.findOne({
+        where: {
+          customer: { id: customer.id },
+        },
+      });
+
+      if (customerPreferences.push_notification) {
+        try {
+          await this.notificationService.sendToUser({
+            customer_id: customer.uuid,
+            title: 'Points Burned',
+            body: `You've Burned ${appliedBurnPoints} points and got a discount of ${discountAmount} SAR`,
+          });
+        } catch (err) {
+          console.error('Error while sending notification', err);
+        }
       }
 
       //#region Step 6: Build and return response

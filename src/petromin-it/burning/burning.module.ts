@@ -16,6 +16,7 @@ import { Rule } from 'src/rules/entities/rules.entity';
 import { WalletSettings } from 'src/wallet/entities/wallet-settings.entity';
 import { NotificationModule } from '../notification/notification.module';
 import { OpenaiModule } from 'src/openai/openai.module';
+import { CustomerPreference } from '../preferences/entities/customer-preference.entity';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { OpenaiModule } from 'src/openai/openai.module';
       WalletSettings,
       Tenant,
       Rule,
+      CustomerPreference,
     ]),
     OciModule,
     WalletModule,
