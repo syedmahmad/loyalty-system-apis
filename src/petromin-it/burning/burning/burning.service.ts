@@ -443,7 +443,7 @@ export class BurningService {
         },
       });
 
-      if (customerPreferences.push_notification) {
+      if (customerPreferences && customerPreferences?.push_notification) {
         try {
           await this.notificationService.sendToUser({
             customer_id: customer.uuid,
