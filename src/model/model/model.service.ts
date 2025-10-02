@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { MakeService } from 'src/make/make/make.service';
-import { In, Not, Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { GetModelsDto, GetYearsDto } from '../dto/model.dto';
 import { ModelEntity } from '../entities/model.entity';
 import { firstValueFrom } from 'rxjs';

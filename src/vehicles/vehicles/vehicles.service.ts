@@ -81,15 +81,15 @@ export class VehiclesService {
         image: modelInfo?.logo
           ? modelInfo?.logo
           : `${process.env.VEHICLE_IMAGES_URL}${makeInfo?.logo}`,
-        model: modelInfo?.name ?? null,
+        model: modelInfo?.name ? modelInfo?.name : null,
         model_ar: modelInfo?.nameAr ?? null,
-        model_id: model_id ?? null,
-        variant: variantInfo?.name ?? null,
+        model_id: model_id ? model_id : -1,
+        variant: variantInfo?.name ? variantInfo?.name : null,
         variant_ar: variantInfo?.nameAr ?? null,
-        variant_id: variant_id ?? null,
+        variant_id: variant_id ? variant_id : -1,
         vin_number: vin ?? null,
         plate_no: plate_no ?? null,
-        year: year ?? null,
+        year: modelInfo?.year ? modelInfo?.year : year,
         color: restBody?.color ?? null,
         engine: restBody?.engine ?? null,
         body_type: restBody?.body_type ?? null,
@@ -366,15 +366,19 @@ export class VehiclesService {
                 image: modelInfo?.logo
                   ? modelInfo?.logo
                   : `${process.env.VEHICLE_IMAGES_URL}${makeInfo?.logo}`,
-                model: modelInfo?.name ?? null,
+                model: modelInfo?.name ? modelInfo?.name : eachVehicle.model,
                 model_ar: modelInfo?.nameAr ?? null,
-                model_id: modelInfo?.modelId ?? null,
+                model_id: modelInfo?.modelId ? modelInfo?.modelId : -1,
                 variant: variantInfo?.name ?? null,
                 variant_ar: variantInfo?.nameAr ?? null,
-                variant_id: variantInfo?.variantId ?? null,
+                variant_id: variantInfo?.variantId
+                  ? variantInfo?.variantId
+                  : -1,
                 vin_number: eachVehicle?.vin ?? null,
                 plate_no: eachVehicle?.plate_no ?? null,
-                year: eachVehicle?.model_year ?? null,
+                year: eachVehicle?.model_year
+                  ? eachVehicle?.model_year
+                  : eachVehicle.model_year,
                 fuel_type: variantInfo?.fuelType?.toString() ?? null,
                 transmission: variantInfo?.transmission?.toString() ?? null,
                 // color: eachVehicle?.color ?? null,
