@@ -1701,7 +1701,7 @@ export class CouponsService {
     }
   }
 
-  async getCustomerCoupons(body) {
+  async getCustomerCoupons(body, language_code: string = 'en') {
     const { customerId, bUId } = body;
     const customer = await this.customerRepo.findOne({
       where: {
@@ -1788,13 +1788,19 @@ export class CouponsService {
           expired.push({
             uuid: singleCoupon.uuid,
             code: singleCoupon.code,
-            title: singleCoupon.coupon_title,
-            title_ar: singleCoupon.coupon_title_ar,
+            title:
+              language_code === 'en'
+                ? singleCoupon.coupon_title
+                : singleCoupon.coupon_title_ar,
             discount: `${singleCoupon.discount_price}${singleCoupon.discount_type === 'fixed' ? ' SAR' : '% Off'}`,
-            description_en: singleCoupon.description_en,
-            description_ar: singleCoupon.description_ar,
-            terms_and_conditions_en: singleCoupon.terms_and_conditions_en,
-            terms_and_conditions_ar: singleCoupon.terms_and_conditions_ar,
+            description:
+              language_code === 'en'
+                ? singleCoupon.description_en
+                : singleCoupon.description_ar,
+            terms_and_conditions:
+              language_code === 'en'
+                ? singleCoupon.terms_and_conditions_en
+                : singleCoupon.terms_and_conditions_ar,
             expiry_date: singleCoupon.date_to,
             services,
             products,
@@ -1803,13 +1809,19 @@ export class CouponsService {
           available.push({
             uuid: singleCoupon.uuid,
             code: singleCoupon.code,
-            title: singleCoupon.coupon_title,
-            title_ar: singleCoupon.coupon_title_ar,
+            title:
+              language_code === 'en'
+                ? singleCoupon.coupon_title
+                : singleCoupon.coupon_title_ar,
             discount: `${singleCoupon.discount_price}${singleCoupon.discount_type === 'fixed' ? ' SAR' : '% Off'}`,
-            description_en: singleCoupon.description_en,
-            description_ar: singleCoupon.description_ar,
-            terms_and_conditions_en: singleCoupon.terms_and_conditions_en,
-            terms_and_conditions_ar: singleCoupon.terms_and_conditions_ar,
+            description:
+              language_code === 'en'
+                ? singleCoupon.description_en
+                : singleCoupon.description_ar,
+            terms_and_conditions:
+              language_code === 'en'
+                ? singleCoupon.terms_and_conditions_en
+                : singleCoupon.terms_and_conditions_ar,
             expiry_date: singleCoupon.date_to,
             services,
             products,

@@ -192,8 +192,11 @@ export class CouponsController {
   }
 
   @Post('customer')
-  async getCustomerCoupons(@Body() body: CustomerCouponsDto) {
-    return await this.service.getCustomerCoupons(body);
+  async getCustomerCoupons(
+    @Body() body: CustomerCouponsDto,
+    @Query('language_code') language_code: string,
+  ) {
+    return await this.service.getCustomerCoupons(body, language_code);
   }
 
   @Post('sync')

@@ -61,6 +61,7 @@ import { isValidUrl } from 'src/helpers/helper';
 import { CustomerDto } from './dto/customer.dto';
 import { NotificationService } from 'src/petromin-it/notification/notification/notifications.service';
 import { CustomerPreference } from 'src/petromin-it/preferences/entities/customer-preference.entity';
+import { OpenAIService } from 'src/openai/openai/openai.service';
 
 @Injectable()
 export class CustomerService {
@@ -74,6 +75,7 @@ export class CustomerService {
     private readonly qrCodeRepo: Repository<QrCode>,
     private readonly qrService: QrcodesService,
     private readonly tiersService: TiersService,
+    private readonly openaiService: OpenAIService,
     @InjectRepository(Rule)
     private readonly ruleRepo: Repository<Rule>,
     @InjectRepository(WalletTransaction)
@@ -2940,7 +2942,7 @@ export class CustomerService {
     }
   }
 
-  async earnHistory(body, pageNumber, pgsize) {
+  async earnHistory(body, pageNumber, pgsize, language_code: string = 'en') {
     const { customer_id } = body;
 
     const page = Number(pageNumber) || 1;
@@ -2996,7 +2998,17 @@ export class CustomerService {
       });
 
       // remove id before returning
-      const earnhistory = earnedData.map(({ id, ...rest }) => rest);
+      const earnhistory = await Promise.all(
+        earnedData.map(async ({ id, ...rest }) => {
+          return {
+            ...rest,
+            description:
+              language_code === 'en'
+                ? rest.description
+                : await this.openaiService.translateToArabic(rest.description),
+          };
+        }),
+      );
 
       return {
         success: true,
@@ -3020,7 +3032,7 @@ export class CustomerService {
     }
   }
 
-  async burnHistory(body, pageNumber, pgsize) {
+  async burnHistory(body, pageNumber, pgsize, language_code: string = 'en') {
     const { customer_id } = body;
 
     const page = Number(pageNumber) || 1;
@@ -3076,7 +3088,17 @@ export class CustomerService {
       });
 
       // remove id before returning
-      const burnhistory = burnData.map(({ id, ...rest }) => rest);
+      const burnhistory = await Promise.all(
+        burnData.map(async ({ id, ...rest }) => {
+          return {
+            ...rest,
+            description:
+              language_code === 'en'
+                ? rest.description
+                : await this.openaiService.translateToArabic(rest.description),
+          };
+        }),
+      );
 
       return {
         success: true,
@@ -3101,7 +3123,12 @@ export class CustomerService {
   }
 
   // Combine earn burn transaction
-  async transactionHistory(body, pageNumber, pgsize) {
+  async transactionHistory(
+    body,
+    pageNumber,
+    pgsize,
+    language_code: string = 'en',
+  ) {
     const { customer_id } = body;
     const page = Number(pageNumber) || 1;
     const pageSize = Number(pgsize) || 10;
@@ -3156,7 +3183,17 @@ export class CustomerService {
       });
 
       // remove id before returning
-      const transactionhistory = transactionData.map(({ id, ...rest }) => rest);
+      const transactionhistory = await Promise.all(
+        transactionData.map(async ({ id, ...rest }) => {
+          return {
+            ...rest,
+            description:
+              language_code === 'en'
+                ? rest.description
+                : await this.openaiService.translateToArabic(rest.description),
+          };
+        }),
+      );
 
       return {
         success: true,

@@ -143,8 +143,14 @@ export class CustomerController {
     @Body() body: CustomerEarnHistoryDto,
     @Query('page') page: number,
     @Query('pageSize') pageSize: number,
+    @Query('language_code') language_code: string,
   ) {
-    return this.customerService.earnHistory(body, page, pageSize);
+    return this.customerService.earnHistory(
+      body,
+      page,
+      pageSize,
+      language_code,
+    );
   }
 
   @Post('/burn-history')
@@ -152,8 +158,14 @@ export class CustomerController {
     @Body() body: CustomerEarnHistoryDto,
     @Query('page') page: number,
     @Query('pageSize') pageSize: number,
+    @Query('language_code') language_code: string,
   ) {
-    return this.customerService.burnHistory(body, page, pageSize);
+    return this.customerService.burnHistory(
+      body,
+      page,
+      pageSize,
+      language_code,
+    );
   }
 
   @Post('/transaction-history')
@@ -161,8 +173,14 @@ export class CustomerController {
     @Body() body: CustomerEarnHistoryDto,
     @Query('page') page: number,
     @Query('pageSize') pageSize: number,
+    @Query('language_code') language_code: string,
   ) {
-    return this.customerService.transactionHistory(body, page, pageSize);
+    return this.customerService.transactionHistory(
+      body,
+      page,
+      pageSize,
+      language_code,
+    );
   }
 
   @Post('upload-profile-image/:customerId')
