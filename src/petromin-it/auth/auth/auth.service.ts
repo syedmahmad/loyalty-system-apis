@@ -425,9 +425,9 @@ export class AuthService {
     phone_number: string,
     selected_profile: Record<string, any>,
   ): Promise<any> {
-    // TODO: once resty provide merging API, we cal it form here.
     try {
       const hashedPhone = encrypt(phone_number);
+
       const localCustomerInRestyTable =
         await this.restyCustomerProfileSelectionRepo.findOne({
           where: { phone_number: hashedPhone },
@@ -439,6 +439,45 @@ export class AuthService {
         );
       }
 
+      // Get loginInfo from Resty
+      const loginInfo = await this.tryWithTimeout(
+        () => this.vehicleService.customerLoginInResty(),
+        3000,
+      );
+
+      if (!loginInfo?.access_token) {
+        throw new BadRequestException('Failed to get Resty login info');
+      }
+
+      // Extract all customer_ids from all_profiles
+      const allProfiles = Array.isArray(localCustomerInRestyTable.all_profiles)
+        ? localCustomerInRestyTable.all_profiles
+        : [];
+
+      const customerIds = allProfiles
+        .map((p: any) => p?.customer_id)
+        .filter((id: string) => !!id);
+
+      // Prepare merge payload
+      const mergePayload = {
+        customermaster_id: selected_profile.customer_id, // use selected profile as master
+        customer_id: customerIds, // all IDs
+      };
+
+      // Call Resty merge API
+      const response = await this.vehicleService.postToResty(
+        '/customer/merge',
+        mergePayload,
+        loginInfo,
+      );
+
+      if (!response || response.error) {
+        throw new BadRequestException(
+          response?.error || 'Failed to merge customer profiles in Resty',
+        );
+      }
+
+      // Update local DB after successful merge
       localCustomerInRestyTable.selected_profile = selected_profile;
       localCustomerInRestyTable.status = ProfileSelectionStatus.SELECTED;
       localCustomerInRestyTable.updated_at = new Date();
@@ -449,13 +488,13 @@ export class AuthService {
 
       return {
         success: true,
-        message: 'Profile selection saved successfully',
-        result: null,
+        message: 'Profile merged and saved successfully',
+        result: response,
       };
     } catch (error) {
       return {
         success: false,
-        message: error?.message || 'Failed to save profile selection',
+        message: error?.message || 'Failed to save/merge profile selection',
         result: null,
       };
     }

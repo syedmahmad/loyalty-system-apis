@@ -689,4 +689,22 @@ export class VehiclesService {
       };
     }
   }
+
+  async postToResty(endpoint: string, payload: any, loginInfo: any) {
+    try {
+      const response = await axios.post(
+        `${process.env.RESTY_BASE_URL}/api${endpoint}`,
+        payload,
+        {
+          headers: {
+            Authorization: `Bearer ${loginInfo.access_token}`,
+            'Content-Type': 'application/json',
+          },
+        },
+      );
+      return response.data;
+    } catch (error: any) {
+      throw error?.response?.data || error;
+    }
+  }
 }
