@@ -96,7 +96,7 @@ export class AuthService {
 
       console.log('//////////////hashedPhone', hashedPhone);
       // Only set OTP and expiry if not a test user
-      if (!testUsers.includes(hashedPhone)) {
+      if (!testUsers.includes(plainMobile)) {
         customer.otp_code = otp;
         customer.otp_expires_at = expiresAt;
       }
@@ -130,7 +130,7 @@ export class AuthService {
 
       // trigger sms
       // Send OTP via SMS and WhatsApp in parallel, but don't block on them
-      if (!testUsers.includes(hashedPhone)) {
+      if (!testUsers.includes(plainMobile)) {
         Promise.all([
           TriggerSMS(encryptedPhone, otp, body.language_code, this.logRepo),
           TriggerWhatsapp(
@@ -223,7 +223,7 @@ export class AuthService {
         testUsers = [];
       }
 
-      if (testUsers.includes(hashedPhone)) {
+      if (testUsers.includes(plainMobile)) {
         // Only works for test users → clear Resty profiles
         await this.restyCustomerProfileSelectionRepo.delete({
           phone_number: hashedPhone,
