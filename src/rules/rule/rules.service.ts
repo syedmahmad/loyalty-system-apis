@@ -141,17 +141,17 @@ export class RulesService {
       rules.map(async (rule) => ({
         uuid: rule.uuid,
         name:
-          language_code === 'en'
-            ? rule.name
-            : await this.openaiService.translateToArabic(rule.name),
+          language_code === 'ar'
+            ? await this.openaiService.translateToArabic(rule.name)
+            : rule.name,
         reward_points: rule.reward_points,
         event_triggerer: rule.event_triggerer,
         description:
-          language_code === 'en'
-            ? rule.description
-            : rule.description !== ''
+          language_code === 'ar'
+            ? rule.description !== ''
               ? await this.openaiService.translateToArabic(rule.description)
-              : null,
+              : null
+            : rule.description,
         validity_after_assignment: rule.validity_after_assignment,
         status: rule.status,
       })),

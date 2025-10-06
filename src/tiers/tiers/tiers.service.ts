@@ -502,9 +502,9 @@ export class TiersService {
         id: matchingTier.id,
         uuid: matchingTier.uuid,
         name:
-          language_code === 'en'
-            ? matchingTier.name
-            : await this.openaiService.translateToArabic(matchingTier.name),
+          language_code === 'ar'
+            ? await this.openaiService.translateToArabic(matchingTier.name)
+            : matchingTier.name,
         level: matchingTier.level,
         min_points: matchingTier.min_points,
       },
@@ -577,9 +577,9 @@ export class TiersService {
             ? {
                 uuid: next.uuid,
                 name:
-                  language_code === 'en'
-                    ? next.name
-                    : await this.openaiService.translateToArabic(next.name),
+                  language_code === 'ar'
+                    ? await this.openaiService.translateToArabic(next.name)
+                    : next.name,
                 level: next.level,
                 min_points: next.min_points,
               }
@@ -589,9 +589,9 @@ export class TiersService {
         tiersArr.push({
           uuid: eachTier.uuid,
           name:
-            language_code === 'en'
-              ? eachTier.name
-              : await this.openaiService.translateToArabic(eachTier.name),
+            language_code === 'ar'
+              ? await this.openaiService.translateToArabic(eachTier.name)
+              : eachTier.name,
           level: eachTier.level,
           min_points: eachTier.min_points,
         });
@@ -621,9 +621,9 @@ export class TiersService {
               benefits.push({
                 tierId: eachTier.uuid,
                 name:
-                  language_code === 'en'
-                    ? String(eachBenefit)
-                    : await this.openaiService.translateToArabic(eachBenefit),
+                  language_code === 'ar'
+                    ? await this.openaiService.translateToArabic(eachBenefit)
+                    : String(eachBenefit),
                 isUsed: false,
                 icon: '',
               });
@@ -638,9 +638,9 @@ export class TiersService {
         nextTier = {
           uuid: firstTier.uuid,
           name:
-            language_code === 'en'
-              ? firstTier.name
-              : await this.openaiService.translateToArabic(firstTier.name),
+            language_code === 'ar'
+              ? await this.openaiService.translateToArabic(firstTier.name)
+              : firstTier.name,
           level: firstTier.level,
           min_points: firstTier?.min_points,
         };
@@ -697,9 +697,9 @@ export class TiersService {
           currentTier: {
             ...restTier,
             name:
-              language_code === 'en'
-                ? restTier.name
-                : await this.openaiService.translateToArabic(restTier.name),
+              language_code === 'ar'
+                ? await this.openaiService.translateToArabic(restTier.name)
+                : restTier.name,
           },
           nextTier,
           pointsToNextTier: nextTier

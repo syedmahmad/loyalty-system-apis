@@ -44,6 +44,7 @@ import { PreferencesModule } from './petromin-it/preferences/preferences.module'
 import { NotificationModule } from 'src/petromin-it/notification/notification.module';
 import { RestyInvoicesInfoModule } from 'src/petromin-it/resty/resty.module';
 import { TransactionSyncLogsSubscriber } from 'src/petromin-it/resty/subscribers/transaction-sync-logs.subscriber';
+import { GvrTransactionModule } from './gvr/gvr.module';
 
 @Module({
   imports: [
@@ -81,6 +82,7 @@ import { TransactionSyncLogsSubscriber } from 'src/petromin-it/resty/subscribers
     TiersModule,
     LogModule,
     CustomerProfileModule,
+    GvrTransactionModule,
     HttpModule,
     AuditTrailModule,
     TenantsModule,

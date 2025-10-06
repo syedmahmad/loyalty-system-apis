@@ -116,13 +116,13 @@ export class BurningService {
         custom_total_transaction_amount: totalAmount,
         custom_total_transaction_count: totalCount,
         customer_tier:
-          dto.language_code === 'en'
-            ? (tierResult?.tier?.name ?? null)
-            : tierResult?.tier?.name
+          dto.language_code === 'ar'
+            ? tierResult?.tier?.name
               ? await this.openaiService.translateToArabic(
                   tierResult?.tier?.name,
                 )
-              : null,
+              : null
+            : (tierResult?.tier?.name ?? null),
       },
       errors: [],
     };

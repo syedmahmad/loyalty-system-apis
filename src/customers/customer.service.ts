@@ -3003,9 +3003,9 @@ export class CustomerService {
           return {
             ...rest,
             description:
-              language_code === 'en'
-                ? rest.description
-                : await this.openaiService.translateToArabic(rest.description),
+              language_code === 'ar'
+                ? await this.openaiService.translateToArabic(rest.description)
+                : rest.description,
           };
         }),
       );
@@ -3093,9 +3093,9 @@ export class CustomerService {
           return {
             ...rest,
             description:
-              language_code === 'en'
-                ? rest.description
-                : await this.openaiService.translateToArabic(rest.description),
+              language_code === 'ar'
+                ? await this.openaiService.translateToArabic(rest.description)
+                : rest.description,
           };
         }),
       );
@@ -3188,9 +3188,9 @@ export class CustomerService {
           return {
             ...rest,
             description:
-              language_code === 'en'
-                ? rest.description
-                : await this.openaiService.translateToArabic(rest.description),
+              language_code === 'ar'
+                ? await this.openaiService.translateToArabic(rest.description)
+                : rest.description,
           };
         }),
       );

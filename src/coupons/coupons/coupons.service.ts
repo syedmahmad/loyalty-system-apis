@@ -1789,18 +1789,18 @@ export class CouponsService {
             uuid: singleCoupon.uuid,
             code: singleCoupon.code,
             title:
-              language_code === 'en'
-                ? singleCoupon.coupon_title
-                : singleCoupon.coupon_title_ar,
+              language_code === 'ar'
+                ? singleCoupon.coupon_title_ar
+                : singleCoupon.coupon_title,
             discount: `${singleCoupon.discount_price}${singleCoupon.discount_type === 'fixed' ? ' SAR' : '% Off'}`,
             description:
-              language_code === 'en'
-                ? singleCoupon.description_en
-                : singleCoupon.description_ar,
+              language_code === 'ar'
+                ? singleCoupon.description_ar
+                : singleCoupon.description_en,
             terms_and_conditions:
-              language_code === 'en'
-                ? singleCoupon.terms_and_conditions_en
-                : singleCoupon.terms_and_conditions_ar,
+              language_code === 'ar'
+                ? singleCoupon.terms_and_conditions_ar
+                : singleCoupon.terms_and_conditions_en,
             expiry_date: singleCoupon.date_to,
             services,
             products,
@@ -1810,18 +1810,18 @@ export class CouponsService {
             uuid: singleCoupon.uuid,
             code: singleCoupon.code,
             title:
-              language_code === 'en'
-                ? singleCoupon.coupon_title
-                : singleCoupon.coupon_title_ar,
+              language_code === 'ar'
+                ? singleCoupon.coupon_title_ar
+                : singleCoupon.coupon_title,
             discount: `${singleCoupon.discount_price}${singleCoupon.discount_type === 'fixed' ? ' SAR' : '% Off'}`,
             description:
-              language_code === 'en'
-                ? singleCoupon.description_en
-                : singleCoupon.description_ar,
+              language_code === 'ar'
+                ? singleCoupon.description_ar
+                : singleCoupon.description_en,
             terms_and_conditions:
-              language_code === 'en'
-                ? singleCoupon.terms_and_conditions_en
-                : singleCoupon.terms_and_conditions_ar,
+              language_code === 'ar'
+                ? singleCoupon.terms_and_conditions_ar
+                : singleCoupon.terms_and_conditions_en,
             expiry_date: singleCoupon.date_to,
             services,
             products,
