@@ -7,6 +7,7 @@ import {
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import axios from 'axios';
 import * as dayjs from 'dayjs';
+import { v4 as uuidv4 } from 'uuid';
 import * as fs from 'fs';
 import * as fastcsv from 'fast-csv';
 // import { v4 as uuidv4 } from 'uuid';
@@ -979,9 +980,18 @@ export class CouponsService {
 
   matchConditions(couponConditions, customer) {
     return couponConditions.some((condition) => {
-      const valuesArray = condition.value.split(',').map((v) => v.trim());
+      const valuesArray = condition.value.split('|').map((v) => v.trim());
 
       switch (condition.type) {
+        case 'EMAIL_DOMAIN': {
+          const emailDomain = customer.email?.split('@')[1]?.toLowerCase();
+          const match = valuesArray
+            .map((v) => v.toLowerCase())
+            .includes(emailDomain);
+
+          return condition.operator === '==' ? match : !match;
+        }
+
         case 'EMAIL': {
           return condition.operator === '=='
             ? valuesArray.includes(customer.email)
@@ -1126,6 +1136,7 @@ export class CouponsService {
       point_balance,
       prev_available_points,
       wallet: wallet,
+      uuid: uuidv4(),
       orders: walletOrderResponse,
       business_unit: wallet.business_unit,
       type: WalletTransactionType.EARN,
@@ -1348,7 +1359,7 @@ export class CouponsService {
 
           const isVehicleSatisfied = metadata.vehicle.some((veh: any) =>
             conditions.some((cond: any) => {
-              const fieldName = cond.type;
+              const fieldName = cond.type.toLowerCase();
               const vehValue = veh[fieldName];
 
               if (vehValue === undefined) return false;
@@ -1373,7 +1384,10 @@ export class CouponsService {
 
               let variantMatch = false;
               // Variant check (if provided, match against array of allowed variants)
-              if (cond.variant.length == 1 && cond.variant[0] === 'all') {
+              if (
+                cond.variant_names.length == 1 &&
+                cond.variant_names[0] === 'all'
+              ) {
                 variantMatch = true;
               } else {
                 variantMatch =
@@ -1386,7 +1400,8 @@ export class CouponsService {
               }
 
               return (
-                (vehicleExtraFeatures && makeMatch) ||
+                vehicleExtraFeatures ||
+                makeMatch ||
                 yearMatch ||
                 modelMatch ||
                 variantMatch

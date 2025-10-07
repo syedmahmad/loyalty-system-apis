@@ -350,6 +350,7 @@ export class WalletService {
       where: {
         customer: { id: customerId },
       },
+      relations: ['customer'],
     });
   }
 
