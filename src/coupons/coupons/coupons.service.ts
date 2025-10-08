@@ -1173,9 +1173,9 @@ export class CouponsService {
 
             if (vehValue === undefined) return false;
             const vehicleExtraFeatures = this.applyOperator(
-              String(vehValue).toLowerCase(),
+              String(vehValue.trim()).toLowerCase(),
               cond.operator,
-              String(cond.value).toLowerCase(),
+              String(cond.value.trim()).toLowerCase(),
             );
 
             // Make check (if provided in condition)
@@ -1279,7 +1279,11 @@ export class CouponsService {
           );
 
           if (!service) return false;
-          return this.applyOperator(service.value, cond.operator!, cond.value);
+          return this.applyOperator(
+            service.value.trim(),
+            cond.operator!,
+            cond.value.trim(),
+          );
         });
       }
 
@@ -1364,9 +1368,9 @@ export class CouponsService {
 
               if (vehValue === undefined) return false;
               const vehicleExtraFeatures = this.applyOperator(
-                String(vehValue).toLowerCase(),
+                String(vehValue.trim()).toLowerCase(),
                 cond.operator,
-                String(cond.value).toLowerCase(),
+                String(cond.value.trim()).toLowerCase(),
               );
 
               // Make check (if provided in condition)
@@ -1483,14 +1487,15 @@ export class CouponsService {
           }
           const isServiceSatisfied = conditions.some((cond) => {
             const service = metadata.services.find(
-              (s: any) => s.name.toLowerCase() === cond.type.toLowerCase(),
+              (s: any) =>
+                s.name.toLowerCase().trim() === cond.type.toLowerCase().trim(),
             );
 
             if (!service) return false;
             return this.applyOperator(
-              service.value,
+              service.value.trim(),
               cond.operator!,
-              cond.value,
+              cond.value.trim(),
             );
           });
 
