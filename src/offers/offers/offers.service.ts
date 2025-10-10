@@ -11,6 +11,7 @@ import { User } from 'src/users/entities/user.entity';
 import { DataSource, ILike, In, Not, Repository } from 'typeorm';
 import { CreateOfferDto, UpdateOfferDto } from '../dto/offers.dto';
 import { OffersEntity } from '../entities/offers.entity';
+import { ActiveStatus } from '../type/types';
 
 @Injectable()
 export class OffersService {
@@ -138,10 +139,7 @@ export class OffersService {
 
     if (hasGlobalAccess || isSuperAdmin) {
       whereClause = name
-        ? [
-            { ...baseConditions, code: ILike(`%${name}%`) },
-            { ...baseConditions, offer_title: ILike(`%${name}%`) },
-          ]
+        ? [{ ...baseConditions, offer_title: ILike(`%${name}%`) }]
         : [baseConditions];
     } else {
       const accessibleBusinessUnitNames = privileges
@@ -313,6 +311,157 @@ export class OffersService {
       bucketName,
       objectName,
     );
+  }
+
+  async findAllForThirdParty(
+    tenant_id: number,
+    name: string,
+    page: number = 1,
+    pageSize: number = 10,
+    langCode: string = 'en',
+  ) {
+    const take = pageSize;
+    const skip = (page - 1) * take;
+
+    const tenant = await this.tenantRepository.findOne({
+      where: { id: tenant_id },
+    });
+    if (!tenant) {
+      throw new BadRequestException('Tenant not found');
+    }
+
+    const baseConditions = {
+      status: Not(2),
+      tenant_id: tenant_id,
+    };
+    let whereClause = {};
+
+    const removeExtraFields = [
+      'id',
+      'uuid',
+      'tenant_id',
+      'business_unit_id',
+      'external_system_id',
+      'all_users',
+      'created_by',
+      'created_at',
+      'updated_by',
+      'updated_at',
+      'business_unit',
+    ];
+
+    // Language-specific field removal
+    if (langCode === 'en') {
+      removeExtraFields.push(
+        'offer_title_ar',
+        'description_ar',
+        'terms_and_conditions_ar',
+        'name_ar',
+        'ar',
+      );
+    } else if (langCode === 'ar') {
+      removeExtraFields.push(
+        'offer_title',
+        'description_en',
+        'terms_and_conditions_en',
+        'name_en',
+        'en',
+      );
+    }
+
+    whereClause = name
+      ? [{ ...baseConditions, offer_title: ILike(`%${name}%`) }]
+      : [baseConditions];
+
+    const [data, total] = await this.offerRepository.findAndCount({
+      where: whereClause,
+      relations: ['business_unit'],
+      order: { created_at: 'DESC' },
+      take,
+      skip,
+    });
+
+    const offers = this.omitExtraFields(data, removeExtraFields);
+    return {
+      data: offers,
+      total,
+      page,
+      pageSize,
+      totalPages: Math.ceil(total / pageSize),
+    };
+  }
+
+  async getAllActiveAndExpiredOffers(
+    tenant_id: number,
+    langCode: string = 'en',
+  ) {
+    const offers = await this.offerRepository.find({
+      where: {
+        all_users: 1,
+        status: ActiveStatus.ACTIVE,
+        tenant_id: tenant_id,
+      },
+      order: { created_at: 'DESC' },
+    });
+
+    const removeExtraFields = [
+      'id',
+      'uuid',
+      'tenant_id',
+      'business_unit_id',
+      'external_system_id',
+      'all_users',
+      'created_by',
+      'created_at',
+      'updated_by',
+      'updated_at',
+      'business_unit',
+    ];
+
+    // Language-specific field removal
+    if (langCode === 'en') {
+      removeExtraFields.push(
+        'offer_title_ar',
+        'description_ar',
+        'terms_and_conditions_ar',
+        'name_ar',
+        'ar',
+      );
+    } else if (langCode === 'ar') {
+      removeExtraFields.push(
+        'offer_title',
+        'description_en',
+        'terms_and_conditions_en',
+        'name_en',
+        'en',
+      );
+    }
+
+    const allActiveOffers = this.omitExtraFields(offers, removeExtraFields);
+
+    const available = [];
+    const expired = [];
+    const today = new Date();
+    if (allActiveOffers.length) {
+      for (let index = 0; index <= allActiveOffers.length - 1; index++) {
+        const eachOffer = allActiveOffers[index];
+        if (eachOffer.date_to && eachOffer.date_to < today) {
+          expired.push(eachOffer);
+        } else {
+          available.push(eachOffer);
+        }
+      }
+    }
+
+    return {
+      success: true,
+      message: 'Successfully fetched the data!',
+      result: {
+        available,
+        expired,
+      },
+      errors: [],
+    };
   }
 
   omitExtraFields(input: any, extraOmit: string[] = []): any {

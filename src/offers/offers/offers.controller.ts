@@ -13,6 +13,7 @@ import {
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as jwt from 'jsonwebtoken';
 import { User } from 'src/users/entities/user.entity';
@@ -20,7 +21,6 @@ import { AuthTokenGuard } from 'src/users/guards/authTokenGuard';
 import { Repository } from 'typeorm';
 import { CreateOfferDto, UpdateOfferDto } from '../dto/offers.dto';
 import { OffersService } from './offers.service';
-import { FileInterceptor } from '@nestjs/platform-express';
 
 @Controller('offers')
 export class OffersController {
@@ -37,21 +37,29 @@ export class OffersController {
     @Body() dto: CreateOfferDto,
     @Headers('user-secret') userSecret: string,
   ) {
-    if (!userSecret) {
-      throw new BadRequestException('user-secret not found in headers');
-    }
-    const decodedUser: any = jwt.decode(userSecret);
+    try {
+      if (!userSecret) {
+        throw new BadRequestException('user-secret not found in headers');
+      }
+      const decodedUser: any = jwt.decode(userSecret);
 
-    const user = await this.userRepository.findOne({
-      where: {
-        id: decodedUser.UserId,
-      },
-    });
+      const user = await this.userRepository.findOne({
+        where: {
+          id: decodedUser.UserId,
+        },
+      });
 
-    if (!user) {
-      throw new BadRequestException('user not found against provided token');
+      if (!user) {
+        throw new BadRequestException('user not found against provided token');
+      }
+      return await this.service.create(dto, user.uuid);
+    } catch (error) {
+      return {
+        success: true,
+        message: 'Failed to fetched the data!',
+        error: error.message,
+      };
     }
-    return await this.service.create(dto, user.uuid);
   }
 
   @Get('/:client_id')
@@ -90,6 +98,23 @@ export class OffersController {
       page,
       pageSize,
       isCallingFromAdminPanel,
+      langCode,
+    );
+  }
+
+  @Get('/third-party/:tenant_id')
+  async findAllForThirdParty(
+    @Param('tenant_id') tenant_id: number,
+    @Query('name') name?: string,
+    @Query('page') page?: number,
+    @Query('pageSize') pageSize?: number,
+    @Query('langCode') langCode?: string,
+  ) {
+    return await this.service.findAllForThirdParty(
+      tenant_id,
+      name,
+      page,
+      pageSize,
       langCode,
     );
   }
@@ -175,5 +200,13 @@ export class OffersController {
       success: false,
       message: 'Failed to upload file',
     };
+  }
+
+  @Get('/active-and-expired-offers/:tenant_id')
+  async getAllActiveAndExpiredOffers(
+    @Param('tenant_id') tenant_id: number,
+    @Query('langCode') langCode: string,
+  ) {
+    return await this.service.getAllActiveAndExpiredOffers(tenant_id, langCode);
   }
 }
