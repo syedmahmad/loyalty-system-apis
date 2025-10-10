@@ -45,6 +45,7 @@ import { NotificationModule } from 'src/petromin-it/notification/notification.mo
 import { RestyInvoicesInfoModule } from 'src/petromin-it/resty/resty.module';
 import { TransactionSyncLogsSubscriber } from 'src/petromin-it/resty/subscribers/transaction-sync-logs.subscriber';
 import { GvrTransactionModule } from './gvr/gvr.module';
+import { OffersModule } from './offers/offers.module';
 
 @Module({
   imports: [
@@ -107,6 +108,7 @@ import { GvrTransactionModule } from './gvr/gvr.module';
     VariantModule,
     PreferencesModule,
     NotificationModule,
+    OffersModule,
   ],
   controllers: [AppController],
   providers: [AppService, AxiosLoggerInterceptor],
