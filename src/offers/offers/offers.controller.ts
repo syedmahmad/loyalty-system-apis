@@ -63,6 +63,8 @@ export class OffersController {
     @Query('limit') limit?: number,
     @Query('page') page?: number,
     @Query('pageSize') pageSize?: number,
+    @Query('isCallingFromAdminPanel') isCallingFromAdminPanel?: boolean,
+    @Query('langCode') langCode?: string,
   ) {
     if (!userSecret) {
       throw new BadRequestException('user-secret not found in headers');
@@ -87,12 +89,18 @@ export class OffersController {
       bu,
       page,
       pageSize,
+      isCallingFromAdminPanel,
+      langCode,
     );
   }
 
   @Get('edit/:id')
-  async findOne(@Param('id') id: string) {
-    return await this.service.findOne(+id);
+  async findOne(
+    @Param('id') id: string,
+    @Query('isCallingFromAdminPanel') isCallingFromAdminPanel: boolean,
+    @Query('langCode') langCode: string,
+  ) {
+    return await this.service.findOne(+id, isCallingFromAdminPanel, langCode);
   }
 
   @UseGuards(AuthTokenGuard)

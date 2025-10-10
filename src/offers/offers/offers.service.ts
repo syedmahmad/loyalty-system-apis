@@ -44,7 +44,7 @@ export class OffersService {
       const offer = repo.create(dto);
       const savedOffer = await repo.save(offer);
       await queryRunner.commitTransaction();
-      const cleanOffer = this.omitExtraFields(savedOffer);
+      const cleanOffer = this.omitExtraFields(savedOffer, ['id']);
       return cleanOffer;
     } catch (error) {
       await queryRunner.rollbackTransaction();
@@ -62,6 +62,8 @@ export class OffersService {
     business_unit_id: number,
     page: number = 1,
     pageSize: number = 10,
+    isCallingFromAdminPanel: boolean = false,
+    langCode: string = 'en',
   ) {
     const take = pageSize;
     const skip = (page - 1) * take;
@@ -98,6 +100,41 @@ export class OffersService {
         : {}),
     };
     let whereClause = {};
+
+    const removeExtraFields = isCallingFromAdminPanel
+      ? ['id']
+      : [
+          'id',
+          'uuid',
+          'tenant_id',
+          'business_unit_id',
+          'external_system_id',
+          'all_users',
+          'created_by',
+          'created_at',
+          'updated_by',
+          'updated_at',
+          'business_unit',
+        ];
+
+    // Language-specific field removal
+    if (langCode === 'en') {
+      removeExtraFields.push(
+        'offer_title_ar',
+        'description_ar',
+        'terms_and_conditions_ar',
+        'name_ar',
+        'ar',
+      );
+    } else if (langCode === 'ar') {
+      removeExtraFields.push(
+        'offer_title',
+        'description_en',
+        'terms_and_conditions_en',
+        'name_en',
+        'en',
+      );
+    }
 
     if (hasGlobalAccess || isSuperAdmin) {
       whereClause = name
@@ -142,7 +179,9 @@ export class OffersService {
         take,
         skip,
       });
-      const offers = this.omitExtraFields(data);
+
+      // const offers = this.omitExtraFields(data);
+      const offers = this.omitExtraFields(data, removeExtraFields);
       return {
         data: offers,
         total,
@@ -159,8 +198,8 @@ export class OffersService {
       take,
       skip,
     });
-
-    const offers = this.omitExtraFields(data);
+    // const offers = this.omitExtraFields(data);
+    const offers = this.omitExtraFields(data, removeExtraFields);
     return {
       data: offers,
       total,
@@ -170,7 +209,11 @@ export class OffersService {
     };
   }
 
-  async findOne(id: number) {
+  async findOne(
+    id: number,
+    isCallingFromAdminPanel: boolean = false,
+    langCode: string = 'en',
+  ) {
     const offer = await this.offerRepository.findOne({
       where: { id },
       relations: ['business_unit'],
@@ -179,9 +222,43 @@ export class OffersService {
 
     if (!offer) throw new NotFoundException('Offer not found');
 
-    const benefits = offer.benefits;
-    const offers = this.omitExtraFields(offer);
-    return { ...offers, benefits };
+    const removeExtraFields = isCallingFromAdminPanel
+      ? ['id']
+      : [
+          'id',
+          'uuid',
+          'tenant_id',
+          'business_unit_id',
+          'external_system_id',
+          'all_users',
+          'created_by',
+          'created_at',
+          'updated_by',
+          'updated_at',
+          'business_unit',
+        ];
+
+    // Language-specific field removal
+    if (langCode === 'en') {
+      removeExtraFields.push(
+        'offer_title_ar',
+        'description_ar',
+        'terms_and_conditions_ar',
+        'name_ar',
+        'ar',
+      );
+    } else if (langCode === 'ar') {
+      removeExtraFields.push(
+        'offer_title',
+        'description_en',
+        'terms_and_conditions_en',
+        'name_en',
+        'en',
+      );
+    }
+
+    const offers = this.omitExtraFields(offer, removeExtraFields);
+    return offers;
   }
 
   async remove(id: number, user: string) {
@@ -239,10 +316,9 @@ export class OffersService {
   }
 
   omitExtraFields(input: any, extraOmit: string[] = []): any {
-    const omitSet = new Set(['id', ...extraOmit]);
-
+    const omitSet = new Set(extraOmit);
     const recurse = (value: any): any => {
-      // ✅ Return nulls, Dates, or primitives directly
+      // Return nulls, Dates, or primitives directly
       if (
         value === null ||
         value instanceof Date ||
