@@ -7,10 +7,25 @@ import { User } from 'src/users/entities/user.entity';
 import { OffersEntity } from './entities/offers.entity';
 import { OffersController } from './offers/offers.controller';
 import { OffersService } from './offers/offers.service';
+import { CustomerSegment } from 'src/customer-segment/entities/customer-segment.entity';
+import { OfferCustomerSegment } from './entities/offer-customer-segments.entity';
+import { CustomerSegmentMember } from 'src/customer-segment/entities/customer-segment-member.entity';
+import { Customer } from 'src/customers/entities/customer.entity';
+import { UserOffer } from './entities/user-offer.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([OffersEntity, BusinessUnit, Tenant, User]),
+    TypeOrmModule.forFeature([
+      OffersEntity,
+      BusinessUnit,
+      Tenant,
+      User,
+      CustomerSegment,
+      OfferCustomerSegment,
+      CustomerSegmentMember,
+      UserOffer,
+      Customer,
+    ]),
   ],
   controllers: [OffersController],
   providers: [OffersService, OciService],

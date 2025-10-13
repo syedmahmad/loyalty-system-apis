@@ -11,7 +11,12 @@ import { User } from 'src/users/entities/user.entity';
 import { DataSource, ILike, In, Not, Repository } from 'typeorm';
 import { CreateOfferDto, UpdateOfferDto } from '../dto/offers.dto';
 import { OffersEntity } from '../entities/offers.entity';
-import { ActiveStatus } from '../type/types';
+import { ActiveStatus, OfferStatus } from '../type/types';
+import { CustomerSegment } from 'src/customer-segment/entities/customer-segment.entity';
+import { OfferCustomerSegment } from '../entities/offer-customer-segments.entity';
+import { CustomerSegmentMember } from 'src/customer-segment/entities/customer-segment-member.entity';
+import { UserOffer } from '../entities/user-offer.entity';
+import { Customer } from 'src/customers/entities/customer.entity';
 
 @Injectable()
 export class OffersService {
@@ -27,6 +32,21 @@ export class OffersService {
 
     @InjectRepository(BusinessUnit)
     private businessUnitRepository: Repository<BusinessUnit>,
+
+    @InjectRepository(CustomerSegment)
+    private segmentRepository: Repository<CustomerSegment>,
+
+    @InjectRepository(OfferCustomerSegment)
+    private offerCustomerSegment: Repository<OfferCustomerSegment>,
+
+    @InjectRepository(CustomerSegmentMember)
+    private readonly customerSegmentMemberRepository: Repository<CustomerSegmentMember>,
+
+    @InjectRepository(Customer)
+    private readonly customerRepo: Repository<Customer>,
+
+    @InjectRepository(UserOffer)
+    private userOfferRepo: Repository<UserOffer>,
 
     @InjectDataSource()
     private readonly dataSource: DataSource,
@@ -44,6 +64,73 @@ export class OffersService {
       const repo = queryRunner.manager.getRepository(OffersEntity);
       const offer = repo.create(dto);
       const savedOffer = await repo.save(offer);
+
+      // Assign customer segments
+      if (dto.customer_segment_ids?.length && dto.all_users == 0) {
+        const segments = await this.segmentRepository.findBy({
+          id: In(dto.customer_segment_ids),
+        });
+
+        if (segments.length !== dto.customer_segment_ids.length) {
+          throw new BadRequestException('Some customer segments not found');
+        }
+
+        const offerSegmentEntities = segments.map((segment) =>
+          this.offerCustomerSegment.create({
+            offer: savedOffer,
+            segment,
+          }),
+        );
+
+        await queryRunner.manager.save(
+          OfferCustomerSegment,
+          offerSegmentEntities,
+        );
+
+        // Fetch all customers that belong to the given customer segments
+        const customerFromSegments =
+          await this.customerSegmentMemberRepository.find({
+            where: {
+              segment_id: In(dto.customer_segment_ids),
+            },
+          });
+
+        if (customerFromSegments.length) {
+          const userOffers: UserOffer[] = [];
+
+          // Loop through each customer that belongs to the segments
+          for (let index = 0; index < customerFromSegments.length; index++) {
+            const eachCustomer = customerFromSegments[index];
+
+            // Ensure the customer exists in the customer table
+            const customer = await this.customerRepo.findOne({
+              where: { id: eachCustomer.customer_id, status: 1 },
+              relations: ['business_unit'],
+            });
+
+            // Skip if the customer does not exist
+            if (!customer) {
+              continue;
+            }
+
+            const userOffer = this.userOfferRepo.create({
+              status: OfferStatus.ISSUED,
+              customer: { id: customer.id },
+              business_unit: { id: customer.business_unit.id },
+              issued_from_type: 'offer',
+              issued_from_id: savedOffer.id,
+              offer_id: savedOffer?.id,
+            });
+            userOffers.push(userOffer);
+          }
+
+          // Save all the created userOffer in one go (bulk insert)
+          if (userOffers.length) {
+            await queryRunner.manager.save(UserOffer, userOffers);
+          }
+        }
+      }
+
       await queryRunner.commitTransaction();
       const cleanOffer = this.omitExtraFields(savedOffer, ['id']);
       return cleanOffer;
@@ -63,7 +150,6 @@ export class OffersService {
     business_unit_id: number,
     page: number = 1,
     pageSize: number = 10,
-    isCallingFromAdminPanel: boolean = false,
     langCode: string = 'en',
   ) {
     const take = pageSize;
@@ -102,21 +188,7 @@ export class OffersService {
     };
     let whereClause = {};
 
-    const removeExtraFields = isCallingFromAdminPanel
-      ? ['id']
-      : [
-          'id',
-          'uuid',
-          'tenant_id',
-          'business_unit_id',
-          'external_system_id',
-          'all_users',
-          'created_by',
-          'created_at',
-          'updated_by',
-          'updated_at',
-          'business_unit',
-        ];
+    const removeExtraFields = ['id'];
 
     // Language-specific field removal
     if (langCode === 'en') {
@@ -207,59 +279,25 @@ export class OffersService {
     };
   }
 
-  async findOne(
-    id: number,
-    isCallingFromAdminPanel: boolean = false,
-    langCode: string = 'en',
-  ) {
+  async findOne(uuid: string) {
     const offer = await this.offerRepository.findOne({
-      where: { id },
-      relations: ['business_unit'],
+      where: { uuid: uuid },
+      relations: [
+        'business_unit',
+        'customerSegments',
+        'customerSegments.segment',
+      ],
       order: { created_at: 'DESC' },
     });
 
     if (!offer) throw new NotFoundException('Offer not found');
 
-    const removeExtraFields = isCallingFromAdminPanel
-      ? ['id']
-      : [
-          'id',
-          'uuid',
-          'tenant_id',
-          'business_unit_id',
-          'external_system_id',
-          'all_users',
-          'created_by',
-          'created_at',
-          'updated_by',
-          'updated_at',
-          'business_unit',
-        ];
-
-    // Language-specific field removal
-    if (langCode === 'en') {
-      removeExtraFields.push(
-        'offer_title_ar',
-        'description_ar',
-        'terms_and_conditions_ar',
-        'name_ar',
-        'ar',
-      );
-    } else if (langCode === 'ar') {
-      removeExtraFields.push(
-        'offer_title',
-        'description_en',
-        'terms_and_conditions_en',
-        'name_en',
-        'en',
-      );
-    }
-
+    const removeExtraFields = [];
     const offers = this.omitExtraFields(offer, removeExtraFields);
     return offers;
   }
 
-  async remove(id: number, user: string) {
+  async remove(uuid: string, user: string) {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -267,8 +305,8 @@ export class OffersService {
     try {
       queryRunner.data = { user };
       const repo = queryRunner.manager.getRepository(OffersEntity);
-      const offer = await repo.findOne({ where: { id } });
-      if (!offer) throw new Error(`Offer with id ${id} not found`);
+      const offer = await repo.findOne({ where: { uuid: uuid } });
+      if (!offer) throw new Error(`Offer with id ${uuid} not found`);
       offer.status = 2;
       await repo.save(offer);
       await queryRunner.commitTransaction();
@@ -281,7 +319,7 @@ export class OffersService {
     }
   }
 
-  async update(id: number, dto: UpdateOfferDto, user: string) {
+  async update(uuid: string, dto: UpdateOfferDto, user: string) {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -289,14 +327,138 @@ export class OffersService {
     try {
       queryRunner.data = { user };
       const repo = queryRunner.manager.getRepository(OffersEntity);
-      const offer = await repo.findOne({ where: { id } });
+      const offer = await repo.findOne({ where: { uuid: uuid } });
 
-      if (!offer) throw new Error(`Offer with id ${id} not found`);
+      if (!offer) throw new Error(`Offer with id ${uuid} not found`);
       repo.merge(offer, dto);
       await repo.save(offer);
-      await queryRunner.commitTransaction();
 
-      return await this.findOne(id);
+      // === CUSTOMER SEGMENTS SYNC ===
+      const incomingSegmentIds = dto.customer_segment_ids || [];
+      const existingRelations = await this.offerCustomerSegment.find({
+        where: { offer: { id: offer.id } },
+        relations: ['segment'],
+      });
+      const existingIds = existingRelations.map((r) => r.segment.id);
+      const toAdd = incomingSegmentIds.filter(
+        (sid) => !existingIds.includes(sid),
+      );
+      let toRemove = existingIds.filter(
+        (sid) => !incomingSegmentIds.includes(sid),
+      );
+      if (dto.all_users == 1 && incomingSegmentIds.length) {
+        toRemove = incomingSegmentIds;
+      }
+
+      if (toRemove.length) {
+        // Delete all coupon_customer_segments
+        const toDelete = await queryRunner.manager.find(OfferCustomerSegment, {
+          where: { offer: { id: offer.id }, segment: In(toRemove) },
+        });
+        if (toDelete.length) {
+          await queryRunner.manager.remove(OfferCustomerSegment, toDelete);
+        }
+
+        /* Delete all user_offer
+              Fetch all customers that belong to the given customer segments */
+        const customerFromSegments =
+          await this.customerSegmentMemberRepository.find({
+            where: {
+              segment_id: In(toRemove),
+            },
+          });
+
+        if (customerFromSegments.length) {
+          const customerArr = [];
+          // Loop through each customer that belongs to the segments
+          for (let index = 0; index < customerFromSegments.length; index++) {
+            const eachCustomer = customerFromSegments[index];
+
+            // Ensure the customer exists in the customer table
+            const customer = await this.customerRepo.findOne({
+              where: { id: eachCustomer.customer_id, status: 1 },
+              relations: ['business_unit'],
+            });
+
+            // Skip if the customer does not exist
+            if (!customer) {
+              continue;
+            }
+
+            customerArr.push(customer.id);
+          }
+
+          const customersToDelete = await queryRunner.manager.find(UserOffer, {
+            where: { offer_id: offer.id, customer: In(customerArr) },
+          });
+
+          if (customersToDelete.length) {
+            await queryRunner.manager.remove(UserOffer, customersToDelete);
+          }
+        }
+      }
+
+      if (toAdd.length) {
+        const segments = await this.segmentRepository.findBy({ id: In(toAdd) });
+
+        if (segments.length !== toAdd.length) {
+          throw new BadRequestException('Some customer segments not found');
+        }
+
+        const newLinks = segments.map((segment) =>
+          this.offerCustomerSegment.create({
+            offer,
+            segment,
+          }),
+        );
+
+        await queryRunner.manager.save(OfferCustomerSegment, newLinks);
+
+        // Fetch all customers that belong to the given customer segments
+        const customerFromSegments =
+          await this.customerSegmentMemberRepository.find({
+            where: {
+              segment_id: In(toAdd),
+            },
+          });
+
+        if (customerFromSegments.length) {
+          const userOffers: UserOffer[] = [];
+          // Loop through each customer that belongs to the segments
+          for (let index = 0; index < customerFromSegments.length; index++) {
+            const eachCustomer = customerFromSegments[index];
+
+            // Ensure the customer exists in the customer table
+            const customer = await this.customerRepo.findOne({
+              where: { id: eachCustomer.customer_id, status: 1 },
+              relations: ['business_unit'],
+            });
+
+            // Skip if the customer does not exist
+            if (!customer) {
+              continue;
+            }
+
+            const userOffer = this.userOfferRepo.create({
+              status: OfferStatus.ISSUED,
+              customer: { id: customer.id },
+              business_unit: { id: customer.business_unit.id },
+              issued_from_type: 'offer',
+              issued_from_id: offer?.id,
+              offer_id: offer?.id,
+            });
+            userOffers.push(userOffer);
+          }
+
+          // Save all the created userOffer in one go (bulk insert)
+          if (userOffers.length) {
+            await queryRunner.manager.save(UserOffer, userOffers);
+          }
+        }
+      }
+
+      await queryRunner.commitTransaction();
+      return await this.findOne(uuid);
     } catch (error) {
       await queryRunner.rollbackTransaction();
       throw error;

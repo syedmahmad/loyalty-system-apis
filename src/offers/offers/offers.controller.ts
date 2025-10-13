@@ -71,7 +71,6 @@ export class OffersController {
     @Query('limit') limit?: number,
     @Query('page') page?: number,
     @Query('pageSize') pageSize?: number,
-    @Query('isCallingFromAdminPanel') isCallingFromAdminPanel?: boolean,
     @Query('langCode') langCode?: string,
   ) {
     if (!userSecret) {
@@ -97,7 +96,6 @@ export class OffersController {
       bu,
       page,
       pageSize,
-      isCallingFromAdminPanel,
       langCode,
     );
   }
@@ -120,18 +118,14 @@ export class OffersController {
   }
 
   @Get('edit/:id')
-  async findOne(
-    @Param('id') id: string,
-    @Query('isCallingFromAdminPanel') isCallingFromAdminPanel: boolean,
-    @Query('langCode') langCode: string,
-  ) {
-    return await this.service.findOne(+id, isCallingFromAdminPanel, langCode);
+  async findOne(@Param('id') id: string) {
+    return await this.service.findOne(id);
   }
 
   @UseGuards(AuthTokenGuard)
-  @Delete(':id')
+  @Delete(':uuid')
   async remove(
-    @Param('id') id: string,
+    @Param('uuid') uuid: string,
     @Headers('user-secret') userSecret: string,
   ) {
     if (!userSecret) {
@@ -148,7 +142,7 @@ export class OffersController {
     if (!user) {
       throw new BadRequestException('user not found against provided token');
     }
-    return await this.service.remove(+id, user.uuid);
+    return await this.service.remove(uuid, user.uuid);
   }
 
   @UseGuards(AuthTokenGuard)
@@ -172,7 +166,7 @@ export class OffersController {
     if (!user) {
       throw new BadRequestException('user not found against provided token');
     }
-    return await this.service.update(+id, dto, user.uuid);
+    return await this.service.update(id, dto, user.uuid);
   }
 
   @Post('upload-file-to-bucket')

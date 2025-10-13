@@ -7,11 +7,13 @@ import {
   Entity,
   JoinColumn,
   ManyToOne,
+  OneToMany,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 import { ActiveStatus } from '../type/types';
+import { OfferCustomerSegment } from './offer-customer-segments.entity';
 
 class ImageLang {
   en?: string;
@@ -67,7 +69,7 @@ export class OffersEntity {
   @Column({ type: 'datetime', nullable: true })
   date_to: Date;
 
-  @Column({ type: 'json', nullable: true })
+  @Column({ type: 'simple-json', nullable: true })
   benefits: { name_en: string; name_ar: string; icon: string }[];
 
   @Column({ type: 'tinyint', default: ActiveStatus.ACTIVE })
@@ -84,6 +86,9 @@ export class OffersEntity {
 
   @Column({ nullable: true, type: 'text' })
   terms_and_conditions_ar: string;
+
+  @OneToMany(() => OfferCustomerSegment, (cs) => cs.offer)
+  customerSegments: OfferCustomerSegment[];
 
   @Column({ type: 'int', nullable: true })
   external_system_id: number;

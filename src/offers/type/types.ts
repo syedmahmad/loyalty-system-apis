@@ -4,3 +4,9 @@ export const ActiveStatus = {
   DELETED: 2,
   SUSPENDED: 3,
 } as const;
+
+export enum OfferStatus {
+  ISSUED = 'issued',
+  USED = 'used',
+  EXPIRED = 'expired',
+}
