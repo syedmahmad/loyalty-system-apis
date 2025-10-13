@@ -626,6 +626,16 @@ export class OffersService {
     };
   }
 
+  async removeFile(fileUrl: string) {
+    if (!fileUrl) {
+      throw new BadRequestException('File URL is required');
+    }
+
+    const bucketName = process.env.OCI_BUCKET;
+    await this.ociService.removeObjectFromOci(bucketName, fileUrl);
+    return { message: `File removed successfully`, url: fileUrl };
+  }
+
   omitExtraFields(input: any, extraOmit: string[] = []): any {
     const omitSet = new Set(extraOmit);
     const recurse = (value: any): any => {

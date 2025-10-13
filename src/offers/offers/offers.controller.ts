@@ -122,6 +122,11 @@ export class OffersController {
     return await this.service.findOne(id);
   }
 
+  @Delete('/remove-file')
+  async removeFile(@Query('url') fileUrl: string) {
+    return await this.service.removeFile(fileUrl);
+  }
+
   @UseGuards(AuthTokenGuard)
   @Delete(':uuid')
   async remove(
