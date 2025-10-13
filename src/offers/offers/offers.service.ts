@@ -561,7 +561,7 @@ export class OffersService {
       where: {
         all_users: 1,
         status: ActiveStatus.ACTIVE,
-        tenant_id: tenant_id,
+        tenant_id,
       },
       order: { created_at: 'DESC' },
     });
@@ -580,7 +580,7 @@ export class OffersService {
       'business_unit',
     ];
 
-    // Language-specific field removal
+    // language-based extra fields
     if (langCode === 'en') {
       removeExtraFields.push(
         'offer_title_ar',
@@ -589,7 +589,7 @@ export class OffersService {
         'name_ar',
         'ar',
       );
-    } else if (langCode === 'ar') {
+    } else {
       removeExtraFields.push(
         'offer_title',
         'description_en',
@@ -599,29 +599,59 @@ export class OffersService {
       );
     }
 
-    const allActiveOffers = this.omitExtraFields(offers, removeExtraFields);
+    const allOffers = this.omitExtraFields(offers, removeExtraFields);
 
+    const today = new Date();
     const available = [];
     const expired = [];
-    const today = new Date();
-    if (allActiveOffers.length) {
-      for (let index = 0; index <= allActiveOffers.length - 1; index++) {
-        const eachOffer = allActiveOffers[index];
-        if (eachOffer.date_to && eachOffer.date_to < today) {
-          expired.push(eachOffer);
-        } else {
-          available.push(eachOffer);
-        }
+
+    for (const eachOffer of allOffers) {
+      // Normalize fields according to language
+      const normalized = {
+        offer_title:
+          langCode === 'en'
+            ? eachOffer.offer_title
+            : eachOffer.offer_title_ar || eachOffer.offer_title,
+        description:
+          langCode === 'en'
+            ? eachOffer.description_en
+            : eachOffer.description_ar || eachOffer.description_en,
+        terms_and_conditions:
+          langCode === 'en'
+            ? eachOffer.terms_and_conditions_en
+            : eachOffer.terms_and_conditions_ar ||
+              eachOffer.terms_and_conditions_en,
+        images: {
+          desktop:
+            langCode === 'en'
+              ? eachOffer.images?.desktop?.en
+              : eachOffer.images?.desktop?.ar || eachOffer.images?.desktop?.en,
+          mobile:
+            langCode === 'en'
+              ? eachOffer.images?.mobile?.en
+              : eachOffer.images?.mobile?.ar || eachOffer.images?.mobile?.en,
+        },
+        benefits: (eachOffer.benefits || []).map((b) => ({
+          name: langCode === 'en' ? b.name_en : b.name_ar || b.name_en,
+          icon: b.icon || '',
+        })),
+        date_from: eachOffer.date_from,
+        date_to: eachOffer.date_to,
+        status: eachOffer.status,
+      };
+
+      // Sort into available or expired
+      if (eachOffer.date_to && new Date(eachOffer.date_to) < today) {
+        expired.push(normalized);
+      } else {
+        available.push(normalized);
       }
     }
 
     return {
       success: true,
       message: 'Successfully fetched the data!',
-      result: {
-        available,
-        expired,
-      },
+      result: { available, expired },
       errors: [],
     };
   }
