@@ -62,7 +62,7 @@ export class CustomerSegment {
   coupons: CouponCustomerSegment[];
 
   @OneToMany(() => OfferCustomerSegment, (cs) => cs.segment)
-  offers: CouponCustomerSegment[];
+  offers: OfferCustomerSegment[];
 
   @CreateDateColumn()
   created_at: Date;
