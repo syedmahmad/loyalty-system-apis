@@ -14,6 +14,7 @@ import { Tenant } from 'src/tenants/entities/tenant.entity';
 import { CampaignCustomerSegment } from 'src/campaigns/entities/campaign-customer-segments.entity';
 import { CouponCustomerSegment } from 'src/coupons/entities/coupon-customer-segments.entity';
 import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
+import { OfferCustomerSegment } from 'src/offers/entities/offer-customer-segments.entity';
 
 @Entity('customer_segments')
 export class CustomerSegment {
@@ -59,6 +60,9 @@ export class CustomerSegment {
 
   @OneToMany(() => CouponCustomerSegment, (cs) => cs.segment)
   coupons: CouponCustomerSegment[];
+
+  @OneToMany(() => OfferCustomerSegment, (cs) => cs.segment)
+  offers: CouponCustomerSegment[];
 
   @CreateDateColumn()
   created_at: Date;

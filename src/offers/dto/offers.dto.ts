@@ -105,6 +105,14 @@ export class CreateOfferDto {
 
   @IsOptional()
   images?: ImagesDto;
+
+  @IsOptional()
+  @IsArray()
+  @IsInt({ each: true })
+  customer_segment_ids?: number[];
+
+  @IsInt()
+  all_users: number;
 }
 
 export class UpdateOfferDto extends PartialType(CreateOfferDto) {
