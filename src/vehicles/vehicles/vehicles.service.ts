@@ -225,7 +225,131 @@ export class VehiclesService {
 
       let customerVehicles = [];
       const vehicleServices: any[] = [];
+      const loginInfo = await this.customerLoginInResty();
+      if (loginInfo?.access_token) {
+        const customerInfoFromResty = await this.getCustomerInfoFromResty({
+          customer,
+          loginInfo,
+        });
 
+        if (customerInfoFromResty.length) {
+          // Only picking first customer for now
+          customerVehicles = await this.getVehicleInfoFromResty({
+            customer_id: customerInfoFromResty[0].customer_id,
+            loginInfo,
+          });
+
+          if (customerVehicles.length) {
+            // Parallelize fetching vehicle services for performance
+            const allVehicleServices = await Promise.all(
+              customerVehicles.map(async (vehicle) => {
+                const serviceList = await this.getVehicleServiceListFromResty({
+                  customer_id: customerInfoFromResty[0]?.customer_id,
+                  vehicle_id: vehicle.vehicle_id,
+                  loginInfo,
+                });
+
+                // Add invoiceURL and feedback=null to each service
+                const servicesWithUrl = (serviceList || []).map((val: any) => ({
+                  ...val,
+                  invoiceURL: 'https://www.gogomotor.com/', // need to hit another API call to get url form mac
+                  feedback: null,
+                }));
+
+                return {
+                  vehicle_id: vehicle.vehicle_id,
+                  make: vehicle?.make,
+                  model: vehicle?.model,
+                  year: vehicle?.model_year,
+                  last_mileage: vehicle?.last_mileage,
+                  last_service_date: vehicle?.last_service_date,
+                  vin: vehicle.vin,
+                  plate_no: vehicle.plate_no,
+                  services: servicesWithUrl,
+                };
+              }),
+            );
+            vehicleServices.push(...allVehicleServices);
+          }
+        }
+      }
+
+      let feedbacks: any[] = [];
+      if (vehicleServices.length) {
+        try {
+          // The customer_id here is hardcoded, replace it if dynamic is needed
+          const feedbackRes = await axios.get(
+            `${process.env.DRAGON_WORKSHOPS_URL}/feedback?customer_id=${customerId}`,
+            {
+              headers: {
+                'auth-key': process.env.DRAGON_WORKSHOPS_AUTH_KEY,
+              },
+            },
+          );
+          feedbacks = feedbackRes.data?.feedback?.workshop || [];
+        } catch (err) {
+          console.error(
+            'Error fetching feedbacks:',
+            err?.response?.data || err.message || err,
+          );
+        }
+      }
+
+      let updatedVehicleServices = [];
+      if (feedbacks.length) {
+        // Efficiently merge feedbacks by iterating once and using a map for lookups if many feedbacks/services.
+        updatedVehicleServices = vehicleServices.map((vehicle) => ({
+          ...vehicle,
+          services: vehicle.services.map((service) => {
+            const feedback = feedbacks.find(
+              (fb) =>
+                fb.workstation_code === service.BranchCode &&
+                fb.workstation_name === service.BranchName &&
+                fb.invoice_number === service.InvoiceNumber,
+            );
+            return {
+              ...service,
+              feedback: feedback
+                ? {
+                    rating: feedback.rating || '',
+                  }
+                : null,
+            };
+          }),
+        }));
+      }
+
+      return {
+        success: true,
+        message: 'Successfully fetched the data!',
+        result: updatedVehicleServices.length
+          ? updatedVehicleServices
+          : vehicleServices,
+        errors: [],
+      };
+    } catch (error: any) {
+      const errResponse = error?.response;
+      return errResponse;
+    }
+  }
+
+  async getLastServiceFeedback(bodyPayload) {
+    const { customerId, businessUnitId, tenantId } = bodyPayload;
+    try {
+      // Step 1: Find customer
+      const customer = await this.customerRepo.findOne({
+        where: {
+          uuid: customerId,
+          status: 1,
+          business_unit: { id: parseInt(businessUnitId) },
+          tenant: { id: parseInt(tenantId) },
+        },
+      });
+
+      if (!customer) throw new NotFoundException('Customer not found');
+
+      let customerVehicles = [];
+      const vehicleServices: any[] = [];
       const loginInfo = await this.customerLoginInResty();
       if (loginInfo?.access_token) {
         const customerInfoFromResty = await this.getCustomerInfoFromResty({
@@ -240,14 +364,31 @@ export class VehiclesService {
             loginInfo,
           });
 
-          if (customerVehicles.length) {
+          if (customerVehicles && customerVehicles.length) {
             for (const vehicle of customerVehicles) {
               const serviceList = await this.getVehicleServiceListFromResty({
                 customer_id: customerInfoFromResty[0]?.customer_id,
                 vehicle_id: vehicle.vehicle_id,
                 loginInfo,
               });
+              console.log('serviceList', serviceList);
 
+              // Add invoiceURL and feedback=null to each service
+              // const servicesWithUrl = (serviceList || []).map((val: any) => ({
+              //   ...val,
+              //   invoiceURL: 'https://www.gogomotor.com/', // need to hit another API call to get url form mac
+              //   feedback: null,
+              // }));
+
+              let latestService = null;
+              if (serviceList && serviceList.length > 0) {
+                latestService = serviceList.reduce((latest, current) => {
+                  return new Date(current.InvoiceDate) >
+                    new Date(latest.InvoiceDate)
+                    ? current
+                    : latest;
+                });
+              }
               vehicleServices.push({
                 vehicle_id: vehicle.vehicle_id,
                 make: vehicle?.make,
@@ -257,17 +398,78 @@ export class VehiclesService {
                 last_service_date: vehicle?.last_service_date,
                 vin: vehicle.vin,
                 plate_no: vehicle.plate_no,
-                services: serviceList || [],
+                services: latestService ? [latestService] : [],
               });
             }
           }
         }
       }
 
+      console.log('///////////////hellow', vehicleServices);
+
+      let feedbacks: any[] = [];
+      // if there are some history then need to fetch feedbacks.
+      // aginst these history and linked each other.
+      if (vehicleServices && vehicleServices.length) {
+        try {
+          const feedbackRes = await axios.get(
+            `${process.env.DRAGON_WORKSHOPS_URL}/feedback?customer_id=${customerId}`,
+            {
+              headers: {
+                'auth-key': process.env.DRAGON_WORKSHOPS_AUTH_KEY,
+              },
+            },
+          );
+          feedbacks = feedbackRes.data?.feedback?.workshop;
+        } catch (err) {
+          console.error(
+            'Error fetching feedbacks:',
+            err?.response?.data || err.message || err,
+          );
+        }
+      }
+
+      let updatedVehicleServices = [];
+      if (feedbacks && feedbacks.length) {
+        // Merge feedbacks into vehicle services
+        updatedVehicleServices = vehicleServices?.map((vehicle) => ({
+          ...vehicle,
+          services: vehicle?.services?.map((service) => {
+            const feedback = feedbacks.find(
+              (fb) =>
+                fb.workstation_code === service.BranchCode &&
+                fb.workstation_name === service.BranchName &&
+                fb.invoice_number === service.InvoiceNumber,
+            );
+            return {
+              ...service,
+              feedback: feedback
+                ? {
+                    rating: feedback.rating || '',
+                  }
+                : null,
+            };
+          }),
+        }));
+      }
+
+      const finalData = updatedVehicleServices.length
+        ? updatedVehicleServices
+        : vehicleServices;
       return {
         success: true,
         message: 'Successfully fetched the data!',
-        result: { vehicleServices },
+        // result: { vehicleServices },
+        result: {
+          feedback: finalData,
+          // .flatMap((vehicle) => vehicle.services) // get all services from all vehicles
+          // .map((service) => ({
+          //   feedback: service.feedback,
+          //   BranchCode: service.BranchCode,
+          //   BranchName: service.BranchName,
+          //   InvoiceNumber: service.InvoiceNumber,
+          // })),
+        },
         errors: [],
       };
     } catch (error: any) {
@@ -479,7 +681,8 @@ export class VehiclesService {
   async getCustomerInfoFromResty({ customer, loginInfo }) {
     // const customerPhone = `+${customer.country_code}${customer.phone}`;
     const customerPhone = decrypt(customer.hashed_number);
-    // const customerPhone = '+966532537561';
+    // console.log(customer.phone);
+    // const customerPhone = '+966555657588';
     try {
       const response = await axios.get(
         `${process.env.RESTY_BASE_URL}/api/customer/search?param=${customerPhone}`,

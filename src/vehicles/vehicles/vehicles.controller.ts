@@ -64,4 +64,19 @@ export class VehiclesController {
       businessUnitId,
     });
   }
+
+  @Get('/get-last-service-feedback/:customerId')
+  async getLastServiceFeedback(
+    @Headers() headers: Record<string, string>,
+    @Param('customerId') customerId: string,
+  ) {
+    const tenantId = headers['x-tenant-id'];
+    const businessUnitId = headers['x-business-unit-id'];
+
+    return await this.service.getLastServiceFeedback({
+      customerId,
+      tenantId,
+      businessUnitId,
+    });
+  }
 }
