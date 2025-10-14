@@ -132,4 +132,42 @@ export class OciService {
       throw error;
     }
   }
+
+  async removeObjectFromOci(
+    bucketName: string,
+    objectUrl: string,
+  ): Promise<void> {
+    try {
+      const incomingUrl = new URL(objectUrl);
+
+      //  const baseOciUrl = new URL(this.configService.get<string>('oci.ociUrl') || '');
+      const baseOciUrl = new URL(process.env.OCI_URL);
+
+      // Decode the pathname first (it includes %2F for '/')
+      let decodedPathname = decodeURIComponent(incomingUrl.pathname); // e.g. "/download/uploads/1756...png"
+
+      // Normalize base pathname (strip trailing slash)
+      const basePathname = baseOciUrl.pathname.endsWith('/')
+        ? baseOciUrl.pathname.slice(0, -1)
+        : baseOciUrl.pathname;
+
+      // If the decoded path starts with the base path prefix, strip it
+      if (basePathname && decodedPathname.startsWith(basePathname)) {
+        decodedPathname = decodedPathname.slice(basePathname.length);
+      }
+
+      // Remove any leading slashes to form the object name inside the bucket
+      const objectName = decodedPathname.replace(/^\/+/, ''); // e.g. "uploads/1756...png"
+
+      const deleteObjectRequest: objectstorage.requests.DeleteObjectRequest = {
+        namespaceName: process.env.OCI_NAMESPACE,
+        bucketName,
+        objectName,
+      };
+
+      await this.objectStorageClient.deleteObject(deleteObjectRequest);
+    } catch (error) {
+      throw error;
+    }
+  }
 }
