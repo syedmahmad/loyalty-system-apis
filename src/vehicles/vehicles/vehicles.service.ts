@@ -241,34 +241,47 @@ export class VehiclesService {
 
           if (customerVehicles.length) {
             // Parallelize fetching vehicle services for performance
-            const allVehicleServices = await Promise.all(
-              customerVehicles.map(async (vehicle) => {
-                const serviceList = await this.getVehicleServiceListFromResty({
-                  customer_id: customerInfoFromResty[0]?.customer_id,
-                  vehicle_id: vehicle.vehicle_id,
-                  loginInfo,
-                });
+            const allVehicleServices = (
+              await Promise.all(
+                customerVehicles.map(async (vehicle) => {
+                  const serviceList = await this.getVehicleServiceListFromResty(
+                    {
+                      customer_id: customerInfoFromResty[0]?.customer_id,
+                      vehicle_id: vehicle.vehicle_id,
+                      loginInfo,
+                    },
+                  );
 
-                // Add invoiceURL and feedback=null to each service
-                const servicesWithUrl = (serviceList || []).map((val: any) => ({
-                  ...val,
-                  invoiceURL: 'https://www.gogomotor.com/', // need to hit another API call to get url form mac
-                  feedback: null,
-                }));
+                  // Only add vehicle if serviceList exists and is not null/undefined/empty
+                  if (
+                    !serviceList ||
+                    !Array.isArray(serviceList) ||
+                    serviceList.length === 0
+                  ) {
+                    return null;
+                  }
 
-                return {
-                  vehicle_id: vehicle.vehicle_id,
-                  make: vehicle?.make,
-                  model: vehicle?.model,
-                  year: vehicle?.model_year,
-                  last_mileage: vehicle?.last_mileage,
-                  last_service_date: vehicle?.last_service_date,
-                  vin: vehicle.vin,
-                  plate_no: vehicle.plate_no,
-                  services: servicesWithUrl,
-                };
-              }),
-            );
+                  // Add invoiceURL and feedback=null to each service
+                  const servicesWithUrl = serviceList.map((val: any) => ({
+                    ...val,
+                    invoiceURL: 'https://www.gogomotor.com/', // need to hit another API call to get url from mac
+                    feedback: null,
+                  }));
+
+                  return {
+                    vehicle_id: vehicle.vehicle_id,
+                    make: vehicle?.make,
+                    model: vehicle?.model,
+                    year: vehicle?.model_year,
+                    last_mileage: vehicle?.last_mileage,
+                    last_service_date: vehicle?.last_service_date,
+                    vin: vehicle.vin,
+                    plate_no: vehicle.plate_no,
+                    services: servicesWithUrl,
+                  };
+                }),
+              )
+            ).filter(Boolean);
             vehicleServices.push(...allVehicleServices);
           }
         }
