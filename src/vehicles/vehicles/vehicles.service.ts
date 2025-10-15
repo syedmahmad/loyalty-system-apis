@@ -335,6 +335,11 @@ export class VehiclesService {
                 fb.workstation_name === service.BranchName &&
                 fb.invoice_number === service.InvoiceNumber,
             );
+            console.log(
+              '/////////////////////////feedback/////////////////////',
+              feedback,
+            );
+
             return {
               feedback: feedback
                 ? {
