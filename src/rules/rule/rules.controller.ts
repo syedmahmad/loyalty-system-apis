@@ -79,11 +79,13 @@ export class RulesController {
   allEventBased(
     @Param('tenant_id') tenant_id: string,
     @Param('business_unit_id') business_unit_id: string,
+    @Query('customer_id') customer_id: string,
     @Query('language_code') language_code: any,
   ) {
     return this.rulesService.allEventBased(
       tenant_id,
       business_unit_id,
+      customer_id,
       language_code,
     );
   }
