@@ -26,6 +26,7 @@ import { CreateCouponDto } from '../dto/create-coupon.dto';
 import { CustomerCouponsDto } from '../dto/customer-coupon.dto';
 import { UpdateCouponDto } from '../dto/update-coupon.dto';
 import { CouponsService } from './coupons.service';
+import { ValidateCouponDto } from '../dto/validate-coupon.dto';
 
 @Controller('coupons')
 export class CouponsController {
@@ -285,5 +286,10 @@ export class CouponsController {
       success: false,
       message: 'Failed to upload file',
     };
+  }
+
+  @Post('validate-coupon')
+  async validateCoupon(@Body() body: ValidateCouponDto) {
+    return await this.service.validateCoupon(body);
   }
 }

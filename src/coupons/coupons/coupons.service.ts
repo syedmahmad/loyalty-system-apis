@@ -52,7 +52,8 @@ import {
 import { OciService } from 'src/oci/oci.service';
 import { CouponSyncLog } from '../entities/coupon-sync-logs.entity';
 import { CouponUsage } from '../entities/coupon-usages.entity';
-import { CouponTypeName } from '../type/types';
+import { CouponType, CouponTypeName } from '../type/types';
+import { Tier } from 'src/tiers/entities/tier.entity';
 
 @Injectable()
 export class CouponsService {
@@ -110,6 +111,9 @@ export class CouponsService {
 
     @InjectRepository(WalletTransaction)
     private txRepo: Repository<WalletTransaction>,
+
+    @InjectRepository(Tier)
+    private tierRepo: Repository<Tier>,
 
     private readonly couponTypeService: CouponTypeService,
     private readonly tiersService: TiersService,
@@ -1722,30 +1726,40 @@ export class CouponsService {
   }
 
   async getCustomerCoupons(body, language_code: string = 'en') {
-    const { customerId, bUId } = body;
-    const customer = await this.customerRepo.findOne({
-      where: {
-        uuid: customerId,
-        business_unit: { id: parseInt(bUId) },
-        status: 1,
-      },
-    });
+    const { customerId, bUId, product } = body;
 
-    if (!customer) throw new NotFoundException('Customer not found');
+    let customer;
+    if (customerId) {
+      customer = await this.customerRepo.findOne({
+        where: {
+          uuid: customerId,
+          business_unit: { id: parseInt(bUId) },
+          status: 1,
+        },
+      });
 
-    if (customer && customer.status == 0) {
-      throw new NotFoundException('This customer is no longer active.');
+      if (!customer) throw new NotFoundException('Customer not found');
+
+      if (customer && customer.status == 0) {
+        throw new NotFoundException('This customer is no longer active.');
+      }
+
+      if (customer.status === 3) {
+        throw new NotFoundException('Customer is deleted');
+      }
     }
 
-    if (customer.status === 3) {
-      throw new NotFoundException('Customer is deleted');
+    const userCouponsObj = {
+      business_unit: { id: bUId },
+      status: In([CouponStatus.EXPIRED, CouponStatus.ISSUED]),
+    };
+
+    if (customer && customerId) {
+      userCouponsObj['customer'] = { id: customer.id };
     }
 
     const userCoupons = await this.userCouponRepo.find({
-      where: {
-        customer: { id: customer.id },
-        status: In([CouponStatus.EXPIRED, CouponStatus.ISSUED]),
-      },
+      where: userCouponsObj,
       order: { redeemed_at: 'DESC' },
     });
 
@@ -1779,17 +1793,18 @@ export class CouponsService {
         ) {
           const conditionTypes = singleCoupon.conditions.map((c) => c.type);
           if (singleCoupon.coupon_type_id == CouponTypeName.PRODUCT_SPECIFIC) {
-            products.push(conditionTypes);
+            products.push(...conditionTypes);
           }
+
           if (singleCoupon.coupon_type_id == CouponTypeName.SERVICE_BASED) {
-            services.push(conditionTypes);
+            services.push(...conditionTypes);
           }
         }
 
         // if it is a complex coupon
         if (
           singleCoupon.coupon_type_id == null &&
-          singleCoupon.complex_coupon.length
+          singleCoupon?.complex_coupon?.length
         ) {
           singleCoupon.complex_coupon.forEach((c) => {
             const types = c.dynamicRows.map((row) => row.type);
@@ -1802,6 +1817,10 @@ export class CouponsService {
               products.push(...types);
             }
           });
+        }
+
+        if (product && !products.includes(product)) {
+          continue;
         }
 
         if (singleCoupon.date_to && singleCoupon.date_to < today) {
@@ -1851,13 +1870,14 @@ export class CouponsService {
     }
 
     const couponsForAllUser = await this.couponsRepository.find({
-      where: [{ all_users: 1, status: 1 }],
+      where: [
+        { all_users: 1, status: 1, business_unit: { id: parseInt(bUId) } },
+      ],
     });
 
     if (couponsForAllUser.length) {
       for (let index = 0; index <= couponsForAllUser.length - 1; index++) {
         const singleCoupon = couponsForAllUser[index];
-
         const exists = available.some((c) => c.code === singleCoupon.code);
         if (exists) {
           continue;
@@ -1876,17 +1896,17 @@ export class CouponsService {
         ) {
           const conditionTypes = singleCoupon.conditions.map((c) => c.type);
           if (singleCoupon.coupon_type_id == CouponTypeName.PRODUCT_SPECIFIC) {
-            products.push(conditionTypes);
+            products.push(...conditionTypes);
           }
           if (singleCoupon.coupon_type_id == CouponTypeName.SERVICE_BASED) {
-            services.push(conditionTypes);
+            services.push(...conditionTypes);
           }
         }
 
         // if it is a complex coupon
         if (
-          singleCoupon.coupon_type_id == null &&
-          singleCoupon.complex_coupon.length
+          singleCoupon?.coupon_type_id == null &&
+          singleCoupon?.complex_coupon?.length
         ) {
           singleCoupon.complex_coupon.forEach((c) => {
             const types = c.dynamicRows.map((row) => row.type);
@@ -1899,6 +1919,10 @@ export class CouponsService {
               products.push(...types);
             }
           });
+        }
+
+        if (product && !products.includes(product)) {
+          continue;
         }
 
         if (singleCoupon.date_to && singleCoupon.date_to < today) {
@@ -2401,5 +2425,189 @@ export class CouponsService {
       bucketName,
       objectName,
     );
+  }
+
+  async validateCoupon(body) {
+    const { tenantId, bUId, coupon_code } = body;
+
+    const coupon = await this.couponRepo.findOne({
+      where: {
+        code: coupon_code,
+        tenant_id: tenantId,
+        business_unit: { id: bUId },
+        status: 1,
+      },
+    });
+
+    if (!coupon) throw new NotFoundException('Coupon not found');
+
+    const tiers = await this.tierRepo.find({
+      where: {
+        tenant: { id: tenantId },
+        business_unit: { id: bUId },
+      },
+    });
+
+    const responseObj = {
+      coupon_code: coupon.code,
+      expiry_date: coupon.date_to,
+      eligible_criteria: coupon.coupon_type_id
+        ? this.makeCriteriaFromCouponPayloadForSimpleCoupon(
+            coupon.coupon_type_id,
+            coupon.conditions,
+            tiers,
+          )
+        : this.makeCriteriaFromCouponPayload(coupon.complex_coupon, tiers),
+    };
+
+    const today = new Date();
+    if (coupon.date_to && coupon.date_to < today) {
+      return {
+        success: false,
+        message: 'This coupon has been expired',
+        result: responseObj,
+        errors: [],
+      };
+    }
+
+    return {
+      success: true,
+      message: 'Successfully fetched the data!',
+      result: responseObj,
+      errors: [],
+    };
+  }
+
+  //For Complex coupon validate
+  makeCriteriaFromCouponPayload(conditions, tiers = []) {
+    const result = {};
+
+    conditions.forEach((coupon) => {
+      const { selectedCouponType, dynamicRows } = coupon;
+
+      switch (selectedCouponType) {
+        case CouponType.SERVICE_BASED:
+          result['services'] = dynamicRows.map((row) => ({ name: row.type }));
+          break;
+
+        case CouponType.PRODUCT_SPECIFIC:
+          result['products'] = dynamicRows.map((row) => ({ name: row.type }));
+          break;
+
+        case CouponType.DISCOUNT:
+          result['discounts'] = dynamicRows.map((row) => ({ name: row.type }));
+          break;
+
+        case CouponType.BIRTHDAY:
+          result['birthday'] = true;
+          break;
+
+        case CouponType.TIER_BASED:
+          result['tiers'] = dynamicRows.map((row) => {
+            const matchedTier = tiers.find((t) => t.id === row.tier);
+            return { name: matchedTier ? matchedTier.name : null };
+          });
+          break;
+
+        case CouponType.GEO_TARGETED:
+          result['geoTargated'] = dynamicRows.map((row) => ({
+            name: row.type,
+          }));
+          break;
+
+        case CouponType.REFERRAL:
+          result['referral'] = dynamicRows.map((row) => ({
+            name: row.type,
+            value: row.value,
+          }));
+          break;
+
+        case CouponType.USER_SPECIFIC:
+          result['userSpecific'] = dynamicRows.map((row) => ({
+            name: row.type,
+            value: row.value,
+          }));
+          break;
+
+        case CouponType.VEHICLE_SPECIFIC:
+          result['vehicle'] = dynamicRows.map((row) => ({
+            make: row.make_name || null,
+            model: row.model_name || null,
+            variants: row.variant_names || null,
+            year: row.year || null,
+            [row.type]: row.value || null,
+          }));
+          break;
+
+        default:
+          break;
+      }
+    });
+
+    return result;
+  }
+
+  //For Simple coupon validate
+  makeCriteriaFromCouponPayloadForSimpleCoupon(
+    coupon_type_id,
+    conditions,
+    tiers = [],
+  ) {
+    const result = {};
+
+    const add = (key, value) => {
+      if (!result[key]) result[key] = [];
+      result[key].push(value);
+    };
+
+    conditions?.forEach((coupon) => {
+      switch (coupon_type_id) {
+        case CouponTypeName.USER_SPECIFIC:
+          add('userSpecific', { name: coupon.type, value: coupon.value });
+          break;
+
+        case CouponTypeName.PRODUCT_SPECIFIC:
+          add('products', { name: coupon.type });
+          break;
+
+        case CouponTypeName.SERVICE_BASED:
+          add('serivices', { name: coupon.type });
+          break;
+
+        case CouponTypeName.DISCOUNT:
+          add('discounts', { name: coupon.type, value: coupon.value });
+          break;
+
+        case CouponTypeName.TIER_BASED: {
+          const matchedTier = tiers.find((t) => t.id === coupon.tier);
+          add('tiers', { name: matchedTier ? matchedTier.name : null });
+          break;
+        }
+
+        case CouponTypeName.GEO_TARGETED:
+          add('geoTargated', { name: coupon.type });
+          break;
+
+        case CouponTypeName.VEHICLE_SPECIFIC:
+          add('vehicle', {
+            make: coupon.make_name || null,
+            model: coupon.model_name || null,
+            variant_names: coupon.variant_names || null,
+            year: coupon.year || null,
+            [coupon.type]: coupon.value || null,
+          });
+          break;
+
+        case CouponTypeName.REFERRAL:
+          add('referral', { name: coupon.type, value: coupon.value });
+          break;
+      }
+    });
+
+    if (coupon_type_id == CouponTypeName.BIRTHDAY) {
+      result['birthday'] = true;
+    }
+
+    return result;
   }
 }
