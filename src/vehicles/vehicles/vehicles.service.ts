@@ -209,7 +209,7 @@ export class VehiclesService {
   }
 
   async getServiceList(bodyPayload) {
-    const { customerId, businessUnitId, tenantId } = bodyPayload;
+    const { customerId, plateNo, businessUnitId, tenantId } = bodyPayload;
     try {
       // Step 1: Find customer
       const customer = await this.customerRepo.findOne({
@@ -240,10 +240,17 @@ export class VehiclesService {
           });
 
           if (customerVehicles.length) {
+            // Filter vehicles by plateNo if provided
+            const filteredVehicles = plateNo
+              ? customerVehicles.filter(
+                  (vehicle) => vehicle.plate_no === plateNo,
+                )
+              : customerVehicles;
+
             // Parallelize fetching vehicle services for performance
             const allVehicleServices = (
               await Promise.all(
-                customerVehicles.map(async (vehicle) => {
+                filteredVehicles.map(async (vehicle) => {
                   const serviceList = await this.getVehicleServiceListFromResty(
                     {
                       customer_id: customerInfoFromResty[0]?.customer_id,

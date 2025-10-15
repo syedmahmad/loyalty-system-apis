@@ -50,16 +50,17 @@ export class VehiclesController {
     );
   }
 
-  @Get('/service-list/:customerId')
+  @Post('/service-list')
   async getServiceList(
     @Headers() headers: Record<string, string>,
-    @Param('customerId') customerId: string,
+    @Body() body: { customer_id: string; plateNo: string },
   ) {
     const tenantId = headers['x-tenant-id'];
     const businessUnitId = headers['x-business-unit-id'];
 
     return await this.service.getServiceList({
-      customerId,
+      customerId: body.customer_id,
+      plateNo: body.plateNo,
       tenantId,
       businessUnitId,
     });
