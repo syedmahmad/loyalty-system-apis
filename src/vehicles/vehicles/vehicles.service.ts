@@ -332,23 +332,47 @@ export class VehiclesService {
                 fb.invoice_number === service.InvoiceNumber,
             );
             return {
-              ...service,
               feedback: feedback
                 ? {
                     rating: feedback.rating || '',
                   }
                 : null,
+              ...service,
             };
           }),
         }));
       }
 
+      // Determine final result based on plateNo parameter and service availability
+      const finalResult = updatedVehicleServices.length
+        ? updatedVehicleServices
+        : vehicleServices;
+
+      // If no services found, return null
+      if (!finalResult || finalResult.length === 0) {
+        return {
+          success: true,
+          message: 'No services found for this customer',
+          result: null,
+          errors: [],
+        };
+      }
+
+      // If plateNo is provided, return single object instead of array
+      if (plateNo) {
+        return {
+          success: true,
+          message: 'Successfully fetched the data!',
+          result: finalResult[0], // Return first (and only) vehicle object
+          errors: [],
+        };
+      }
+
+      // Default case: return array of vehicles
       return {
         success: true,
         message: 'Successfully fetched the data!',
-        result: updatedVehicleServices.length
-          ? updatedVehicleServices
-          : vehicleServices,
+        result: finalResult,
         errors: [],
       };
     } catch (error: any) {
@@ -431,7 +455,7 @@ export class VehiclesService {
         return {
           success: true,
           message: 'No service history available for this customer',
-          result: {},
+          result: null,
           errors: [],
         };
       }
@@ -462,8 +486,76 @@ export class VehiclesService {
         );
       }
 
-      // Step 6: Prepare response
+      // Step 6: Extract service items from the last service
+      let serviceItems: string[] = [];
+
+      // Check for different possible field names for service items
+      if (
+        lastService.service_items &&
+        Array.isArray(lastService.service_items)
+      ) {
+        serviceItems = lastService.service_items.map((item: any) =>
+          typeof item === 'string'
+            ? item
+            : item.ServiceName ||
+              item.name ||
+              item.item_name ||
+              item.description ||
+              String(item),
+        );
+      } else if (lastService.items && Array.isArray(lastService.items)) {
+        serviceItems = lastService.items.map((item: any) =>
+          typeof item === 'string'
+            ? item
+            : item.ServiceName ||
+              item.name ||
+              item.item_name ||
+              item.description ||
+              String(item),
+        );
+      } else if (lastService.Items && Array.isArray(lastService.Items)) {
+        // Handle capitalized 'Items' as in upstream payload
+        serviceItems = lastService.Items.map((item: any) =>
+          typeof item === 'string'
+            ? item
+            : item.ServiceName ||
+              item.name ||
+              item.item_name ||
+              item.description ||
+              String(item),
+        );
+      } else if (lastService.services && Array.isArray(lastService.services)) {
+        serviceItems = lastService.services.map((item: any) =>
+          typeof item === 'string'
+            ? item
+            : item.ServiceName ||
+              item.name ||
+              item.item_name ||
+              item.description ||
+              String(item),
+        );
+      } else if (
+        lastService.service_list &&
+        Array.isArray(lastService.service_list)
+      ) {
+        serviceItems = lastService.service_list.map((item: any) =>
+          typeof item === 'string'
+            ? item
+            : item.ServiceName ||
+              item.name ||
+              item.item_name ||
+              item.description ||
+              String(item),
+        );
+      }
+
+      // Step 7: Prepare response
       const result = {
+        feedback: feedback
+          ? {
+              rating: feedback.rating || '',
+            }
+          : null,
         BranchCode: lastService.BranchCode,
         BranchName: lastService.BranchName,
         InvoiceNumber: lastService.InvoiceNumber,
@@ -474,11 +566,7 @@ export class VehiclesService {
         year: lastService.year,
         plate_no: lastService.plate_no,
         vin: lastService.vin,
-        feedback: feedback
-          ? {
-              rating: feedback.rating || '',
-            }
-          : null,
+        service_items: serviceItems,
       };
 
       return {
