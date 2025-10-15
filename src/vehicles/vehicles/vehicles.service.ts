@@ -105,6 +105,10 @@ export class VehiclesService {
         registeration_no: restBody?.registeration_no ?? null,
         sequence_no: restBody?.sequence_no ?? null,
         national_id: restBody?.national_id ?? null,
+        // new car value fields.
+        carCondition: restBody?.carCondition ?? null,
+        minPrice: restBody?.minPrice ?? null,
+        maxPrice: restBody?.maxPrice ?? null,
       };
 
       // Step 2: Find vehicle by plate_no (regardless of customer)
@@ -209,7 +213,7 @@ export class VehiclesService {
   }
 
   async getServiceList(bodyPayload) {
-    const { customerId, businessUnitId, tenantId } = bodyPayload;
+    const { customerId, plateNo, businessUnitId, tenantId } = bodyPayload;
     try {
       // Step 1: Find customer
       const customer = await this.customerRepo.findOne({
@@ -240,35 +244,55 @@ export class VehiclesService {
           });
 
           if (customerVehicles.length) {
+            // Filter vehicles by plateNo if provided
+            const filteredVehicles = plateNo
+              ? customerVehicles.filter(
+                  (vehicle) => vehicle.plate_no === plateNo,
+                )
+              : customerVehicles;
+
             // Parallelize fetching vehicle services for performance
-            const allVehicleServices = await Promise.all(
-              customerVehicles.map(async (vehicle) => {
-                const serviceList = await this.getVehicleServiceListFromResty({
-                  customer_id: customerInfoFromResty[0]?.customer_id,
-                  vehicle_id: vehicle.vehicle_id,
-                  loginInfo,
-                });
+            const allVehicleServices = (
+              await Promise.all(
+                filteredVehicles.map(async (vehicle) => {
+                  const serviceList = await this.getVehicleServiceListFromResty(
+                    {
+                      customer_id: customerInfoFromResty[0]?.customer_id,
+                      vehicle_id: vehicle.vehicle_id,
+                      loginInfo,
+                    },
+                  );
 
-                // Add invoiceURL and feedback=null to each service
-                const servicesWithUrl = (serviceList || []).map((val: any) => ({
-                  ...val,
-                  invoiceURL: 'https://www.gogomotor.com/', // need to hit another API call to get url form mac
-                  feedback: null,
-                }));
+                  // Only add vehicle if serviceList exists and is not null/undefined/empty
+                  if (
+                    !serviceList ||
+                    !Array.isArray(serviceList) ||
+                    serviceList.length === 0
+                  ) {
+                    return null;
+                  }
 
-                return {
-                  vehicle_id: vehicle.vehicle_id,
-                  make: vehicle?.make,
-                  model: vehicle?.model,
-                  year: vehicle?.model_year,
-                  last_mileage: vehicle?.last_mileage,
-                  last_service_date: vehicle?.last_service_date,
-                  vin: vehicle.vin,
-                  plate_no: vehicle.plate_no,
-                  services: servicesWithUrl,
-                };
-              }),
-            );
+                  // Add invoiceURL and feedback=null to each service
+                  const servicesWithUrl = serviceList.map((val: any) => ({
+                    ...val,
+                    invoiceURL: 'https://www.gogomotor.com/', // need to hit another API call to get url from mac
+                    feedback: null,
+                  }));
+
+                  return {
+                    vehicle_id: vehicle.vehicle_id,
+                    make: vehicle?.make,
+                    model: vehicle?.model,
+                    year: vehicle?.model_year,
+                    last_mileage: vehicle?.last_mileage,
+                    last_service_date: vehicle?.last_service_date,
+                    vin: vehicle.vin,
+                    plate_no: vehicle.plate_no,
+                    services: servicesWithUrl,
+                  };
+                }),
+              )
+            ).filter(Boolean);
             vehicleServices.push(...allVehicleServices);
           }
         }
@@ -307,6 +331,7 @@ export class VehiclesService {
                 fb.workstation_name === service.BranchName &&
                 fb.invoice_number === service.InvoiceNumber,
             );
+
             return {
               ...service,
               feedback: feedback
@@ -319,12 +344,36 @@ export class VehiclesService {
         }));
       }
 
+      // Determine final result based on plateNo parameter and service availability
+      const finalResult = updatedVehicleServices.length
+        ? updatedVehicleServices
+        : vehicleServices;
+
+      // If no services found, return null
+      if (!finalResult || finalResult.length === 0) {
+        return {
+          success: true,
+          message: 'No services found for this customer',
+          result: null,
+          errors: [],
+        };
+      }
+
+      // If plateNo is provided, return single object instead of array
+      if (plateNo) {
+        return {
+          success: true,
+          message: 'Successfully fetched the data!',
+          result: finalResult[0], // Return first (and only) vehicle object
+          errors: [],
+        };
+      }
+
+      // Default case: return array of vehicles
       return {
         success: true,
         message: 'Successfully fetched the data!',
-        result: updatedVehicleServices.length
-          ? updatedVehicleServices
-          : vehicleServices,
+        result: finalResult,
         errors: [],
       };
     } catch (error: any) {
@@ -348,8 +397,8 @@ export class VehiclesService {
 
       if (!customer) throw new NotFoundException('Customer not found');
 
-      let customerVehicles = [];
-      const vehicleServices: any[] = [];
+      // Step 2: Get all services for customer (similar to getServiceList but more efficient)
+      let allServices: any[] = [];
       const loginInfo = await this.customerLoginInResty();
       if (loginInfo?.access_token) {
         const customerInfoFromResty = await this.getCustomerInfoFromResty({
@@ -358,123 +407,185 @@ export class VehiclesService {
         });
 
         if (customerInfoFromResty.length) {
-          // TODO: can get multiple customers, currently picking only first.
-          customerVehicles = await this.getVehicleInfoFromResty({
+          const customerVehicles = await this.getVehicleInfoFromResty({
             customer_id: customerInfoFromResty[0].customer_id,
             loginInfo,
           });
 
           if (customerVehicles && customerVehicles.length) {
-            for (const vehicle of customerVehicles) {
-              const serviceList = await this.getVehicleServiceListFromResty({
-                customer_id: customerInfoFromResty[0]?.customer_id,
-                vehicle_id: vehicle.vehicle_id,
-                loginInfo,
-              });
-              console.log('serviceList', serviceList);
-
-              // Add invoiceURL and feedback=null to each service
-              // const servicesWithUrl = (serviceList || []).map((val: any) => ({
-              //   ...val,
-              //   invoiceURL: 'https://www.gogomotor.com/', // need to hit another API call to get url form mac
-              //   feedback: null,
-              // }));
-
-              let latestService = null;
-              if (serviceList && serviceList.length > 0) {
-                latestService = serviceList.reduce((latest, current) => {
-                  return new Date(current.InvoiceDate) >
-                    new Date(latest.InvoiceDate)
-                    ? current
-                    : latest;
+            // Get all services from all vehicles in parallel
+            const allVehicleServices = await Promise.all(
+              customerVehicles.map(async (vehicle) => {
+                const serviceList = await this.getVehicleServiceListFromResty({
+                  customer_id: customerInfoFromResty[0].customer_id,
+                  vehicle_id: vehicle.vehicle_id,
+                  loginInfo,
                 });
-              }
-              vehicleServices.push({
-                vehicle_id: vehicle.vehicle_id,
-                make: vehicle?.make,
-                model: vehicle?.model,
-                year: vehicle?.model_year,
-                last_mileage: vehicle?.last_mileage,
-                last_service_date: vehicle?.last_service_date,
-                vin: vehicle.vin,
-                plate_no: vehicle.plate_no,
-                services: latestService ? [latestService] : [],
-              });
-            }
+
+                // Add vehicle info to each service
+                return (serviceList || []).map((service) => ({
+                  ...service,
+                  vehicle_id: vehicle.vehicle_id,
+                  make: vehicle.make,
+                  model: vehicle.model,
+                  year: vehicle.model_year,
+                  plate_no: vehicle.plate_no,
+                  vin: vehicle.vin,
+                }));
+              }),
+            );
+
+            // Flatten all services into one array
+            allServices = allVehicleServices.flat();
           }
         }
       }
 
-      console.log('///////////////hellow', vehicleServices);
+      // Step 3: Find the most recent service across all vehicles
+      let lastService = null;
+      if (allServices.length > 0) {
+        lastService = allServices.reduce((latest, current) => {
+          return new Date(current.InvoiceDate) > new Date(latest.InvoiceDate)
+            ? current
+            : latest;
+        });
+      }
 
-      let feedbacks: any[] = [];
-      // if there are some history then need to fetch feedbacks.
-      // aginst these history and linked each other.
-      if (vehicleServices && vehicleServices.length) {
-        try {
-          const feedbackRes = await axios.get(
-            `${process.env.DRAGON_WORKSHOPS_URL}/feedback?customer_id=${customerId}`,
-            {
-              headers: {
-                'auth-key': process.env.DRAGON_WORKSHOPS_AUTH_KEY,
-              },
+      // Step 4: If no services found, return empty result
+      if (!lastService) {
+        return {
+          success: true,
+          message: 'No service history available for this customer',
+          result: null,
+          errors: [],
+        };
+      }
+
+      // Step 5: Fetch feedback for the last service
+      let feedback = null;
+      try {
+        const feedbackRes = await axios.get(
+          `${process.env.DRAGON_WORKSHOPS_URL}/feedback?customer_id=${customerId}`,
+          {
+            headers: {
+              'auth-key': process.env.DRAGON_WORKSHOPS_AUTH_KEY,
             },
-          );
-          feedbacks = feedbackRes.data?.feedback?.workshop;
-        } catch (err) {
-          console.error(
-            'Error fetching feedbacks:',
-            err?.response?.data || err.message || err,
-          );
-        }
+          },
+        );
+
+        const feedbacks = feedbackRes.data?.feedback?.workshop || [];
+        feedback = feedbacks.find(
+          (fb) =>
+            fb.workstation_code === lastService.BranchCode &&
+            fb.workstation_name === lastService.BranchName &&
+            fb.invoice_number === lastService.InvoiceNumber,
+        );
+      } catch (err) {
+        console.error(
+          'Error fetching feedbacks:',
+          err?.response?.data || err.message || err,
+        );
       }
 
-      let updatedVehicleServices = [];
-      if (feedbacks && feedbacks.length) {
-        // Merge feedbacks into vehicle services
-        updatedVehicleServices = vehicleServices?.map((vehicle) => ({
-          ...vehicle,
-          services: vehicle?.services?.map((service) => {
-            const feedback = feedbacks.find(
-              (fb) =>
-                fb.workstation_code === service.BranchCode &&
-                fb.workstation_name === service.BranchName &&
-                fb.invoice_number === service.InvoiceNumber,
-            );
-            return {
-              ...service,
-              feedback: feedback
-                ? {
-                    rating: feedback.rating || '',
-                  }
-                : null,
-            };
-          }),
-        }));
+      // Step 6: Extract service items from the last service
+      let serviceItems: string[] = [];
+
+      // Check for different possible field names for service items
+      if (
+        lastService.service_items &&
+        Array.isArray(lastService.service_items)
+      ) {
+        serviceItems = lastService.service_items.map((item: any) =>
+          typeof item === 'string'
+            ? item
+            : item.ServiceName ||
+              item.name ||
+              item.item_name ||
+              item.description ||
+              String(item),
+        );
+      } else if (lastService.items && Array.isArray(lastService.items)) {
+        serviceItems = lastService.items.map((item: any) =>
+          typeof item === 'string'
+            ? item
+            : item.ServiceName ||
+              item.name ||
+              item.item_name ||
+              item.description ||
+              String(item),
+        );
+      } else if (lastService.Items && Array.isArray(lastService.Items)) {
+        // Handle capitalized 'Items' as in upstream payload
+        serviceItems = lastService.Items.map((item: any) =>
+          typeof item === 'string'
+            ? item
+            : item.ServiceName ||
+              item.name ||
+              item.item_name ||
+              item.description ||
+              String(item),
+        );
+      } else if (lastService.services && Array.isArray(lastService.services)) {
+        serviceItems = lastService.services.map((item: any) =>
+          typeof item === 'string'
+            ? item
+            : item.ServiceName ||
+              item.name ||
+              item.item_name ||
+              item.description ||
+              String(item),
+        );
+      } else if (
+        lastService.service_list &&
+        Array.isArray(lastService.service_list)
+      ) {
+        serviceItems = lastService.service_list.map((item: any) =>
+          typeof item === 'string'
+            ? item
+            : item.ServiceName ||
+              item.name ||
+              item.item_name ||
+              item.description ||
+              String(item),
+        );
       }
 
-      const finalData = updatedVehicleServices.length
-        ? updatedVehicleServices
-        : vehicleServices;
+      // Step 7: Prepare response
+      const result = {
+        feedback: feedback
+          ? {
+              rating: feedback.rating || '',
+            }
+          : null,
+        BranchCode: lastService.BranchCode,
+        BranchName: lastService.BranchName,
+        InvoiceNumber: lastService.InvoiceNumber,
+        InvoiceDate: lastService.InvoiceDate,
+        vehicle_id: lastService.vehicle_id,
+        make: lastService.make,
+        model: lastService.model,
+        year: lastService.year,
+        plate_no: lastService.plate_no,
+        vin: lastService.vin,
+        service_items: serviceItems,
+      };
+
       return {
         success: true,
-        message: 'Successfully fetched the data!',
-        // result: { vehicleServices },
-        result: {
-          feedback: finalData,
-          // .flatMap((vehicle) => vehicle.services) // get all services from all vehicles
-          // .map((service) => ({
-          //   feedback: service.feedback,
-          //   BranchCode: service.BranchCode,
-          //   BranchName: service.BranchName,
-          //   InvoiceNumber: service.InvoiceNumber,
-          // })),
-        },
+        message: feedback
+          ? 'Successfully fetched the last service feedback!'
+          : 'Last service found but no feedback available',
+        result,
         errors: [],
       };
     } catch (error: any) {
-      const errResponse = error?.response;
-      return errResponse;
+      console.error('getLastServiceFeedback Error:', error);
+      return {
+        success: false,
+        message: error?.message || 'Something went wrong',
+        result: {},
+        errors: [error],
+      };
     }
   }
 

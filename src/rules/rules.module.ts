@@ -9,6 +9,8 @@ import { Tenant } from 'src/tenants/entities/tenant.entity';
 import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
 import { RuleTier } from './entities/rules-tier';
 import { OpenaiModule } from 'src/openai/openai.module';
+import { WalletTransaction } from 'src/wallet/entities/wallet-transaction.entity';
+import { Customer } from 'src/customers/entities/customer.entity';
 
 @Module({
   imports: [
@@ -18,7 +20,9 @@ import { OpenaiModule } from 'src/openai/openai.module';
       User,
       Tenant,
       BusinessUnit,
+      WalletTransaction,
       RuleTier,
+      Customer,
     ]),
     OpenaiModule,
   ],

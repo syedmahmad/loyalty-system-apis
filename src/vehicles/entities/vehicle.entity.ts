@@ -131,4 +131,14 @@ export class Vehicle {
 
   @Column({ type: 'varchar', length: 64, nullable: true })
   fuel_type_name_ar: string;
+
+  // New fields for car condition and price range
+  @Column({ type: 'varchar', length: 128, nullable: true })
+  carCondition: string;
+
+  @Column({ type: 'decimal', precision: 15, scale: 2, nullable: true })
+  minPrice: number;
+
+  @Column({ type: 'decimal', precision: 15, scale: 2, nullable: true })
+  maxPrice: number;
 }

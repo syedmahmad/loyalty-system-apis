@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { DataSource, ILike, Repository } from 'typeorm';
 import { Rule } from '../entities/rules.entity';
@@ -8,6 +8,11 @@ import { Tenant } from 'src/tenants/entities/tenant.entity';
 import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
 import { RuleTier } from '../entities/rules-tier';
 import { OpenAIService } from 'src/openai/openai/openai.service';
+import {
+  WalletTransaction,
+  WalletTransactionType,
+} from 'src/wallet/entities/wallet-transaction.entity';
+import { Customer } from 'src/customers/entities/customer.entity';
 
 @Injectable()
 export class RulesService {
@@ -23,6 +28,12 @@ export class RulesService {
 
     @InjectRepository(RuleTier)
     private readonly ruleTierRepository: Repository<RuleTier>,
+
+    @InjectRepository(WalletTransaction)
+    private readonly walletTransactionRepository: Repository<WalletTransaction>,
+
+    @InjectRepository(Customer)
+    private readonly customerRepo: Repository<Customer>,
 
     @InjectDataSource()
     private readonly dataSource: DataSource,
@@ -97,25 +108,21 @@ export class RulesService {
   async allEventBased(
     tenant_id: string,
     business_unit_id: string,
+    customer_id: string,
     language_code: string = 'en',
   ) {
-    const tenant = await this.tenantRepository.findOne({
+    const customer = await this.customerRepo.findOne({
       where: {
-        uuid: tenant_id,
+        uuid: customer_id,
+        status: 1,
+        business_unit: { id: parseInt(business_unit_id) },
+        tenant: { id: parseInt(tenant_id) },
       },
     });
 
-    if (!tenant) {
-      throw new Error('Tenant not found');
-    }
+    if (!customer) throw new NotFoundException('Customer not found');
 
-    const businessUnit = await this.businessUnitRepository.findOne({
-      where: {
-        uuid: business_unit_id,
-        tenant: { id: tenant.id },
-      },
-    });
-
+    // Get all active event-based earn rules
     const rules = await this.ruleRepository.find({
       select: [
         'uuid',
@@ -129,16 +136,65 @@ export class RulesService {
         'status',
       ],
       where: {
-        tenant: { id: tenant.id },
-        business_unit: { id: businessUnit.id },
+        tenant: { id: parseInt(tenant_id) },
+        business_unit: { id: parseInt(business_unit_id) },
         rule_type: 'event based earn',
         status: 1,
       },
     });
 
+    // Get rules that the customer has already earned
+    const earnedTransactions = await this.walletTransactionRepository.find({
+      where: {
+        customer: { id: customer.id },
+        type: WalletTransactionType.EARN,
+        business_unit: { id: parseInt(business_unit_id) },
+      },
+      select: ['source_type'],
+    });
+
+    // Extract unique rule names that customer has already earned
+    const earnedRuleNames = new Set(
+      earnedTransactions
+        .map((transaction) => transaction.source_type)
+        .filter((sourceType) => sourceType !== null),
+    );
+
+    // Filter out rules that customer has already earned
+    const availableRules = rules.filter(
+      (rule) => !earnedRuleNames.has(rule.name),
+    );
+
+    // The error message "Unknown column 'distinctAlias.Rule_id' in 'field list'" suggests that TypeORM is generating a query asking for 'Rule_id',
+    // but the column in your database is probably called 'id' (or another field name), not 'Rule_id'.
+    // In your `.findOne()` call, you are querying by the primary key using a select list that does NOT include 'id', which TypeORM often requires
+    // (especially if the primary key column is called 'id', not 'Rule_id', or if you have customized entity field names).
+    // To fix this, add 'id' to your select array:
+    const spendAndEarn = await this.ruleRepository.find({
+      select: [
+        'uuid',
+        'name',
+        'name_ar',
+        'reward_points',
+        'event_triggerer',
+        'description',
+        'description_ar',
+        'validity_after_assignment',
+        'status',
+      ],
+      where: {
+        tenant: { id: parseInt(tenant_id) },
+        business_unit: { id: parseInt(business_unit_id) },
+        rule_type: 'spend and earn',
+        status: 1,
+      },
+    });
+
+    availableRules.push(spendAndEarn[0]);
+
     // Map results and only return the correct language fields
     return await Promise.all(
-      rules.map(async (rule) => ({
+      availableRules.map(async (rule) => ({
         uuid: rule.uuid,
         name:
           language_code === 'ar'
