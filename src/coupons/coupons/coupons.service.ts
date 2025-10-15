@@ -1819,7 +1819,10 @@ export class CouponsService {
           });
         }
 
-        if (product && !products.includes(product)) {
+        if (
+          product &&
+          !products.some((p) => p.toLowerCase() === product.toLowerCase())
+        ) {
           continue;
         }
 
@@ -1921,7 +1924,10 @@ export class CouponsService {
           });
         }
 
-        if (product && !products.includes(product)) {
+        if (
+          product &&
+          !products.some((p) => p.toLowerCase() === product.toLowerCase())
+        ) {
           continue;
         }
 
