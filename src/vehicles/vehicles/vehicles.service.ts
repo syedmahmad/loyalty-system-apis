@@ -341,16 +341,21 @@ export class VehiclesService {
             );
 
             return {
+              ...service,
               feedback: feedback
                 ? {
                     rating: feedback.rating || '',
                   }
                 : null,
-              ...service,
             };
           }),
         }));
       }
+
+      console.log(
+        '/////////////////updatedVehicleServices',
+        updatedVehicleServices,
+      );
 
       // Determine final result based on plateNo parameter and service availability
       const finalResult = updatedVehicleServices.length
