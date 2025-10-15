@@ -62,6 +62,7 @@ import { CustomerDto } from './dto/customer.dto';
 import { NotificationService } from 'src/petromin-it/notification/notification/notifications.service';
 import { CustomerPreference } from 'src/petromin-it/preferences/entities/customer-preference.entity';
 import { OpenAIService } from 'src/openai/openai/openai.service';
+import { BUSINESS_UNITS_WITH_UUID } from './type/type';
 
 @Injectable()
 export class CustomerService {
@@ -164,6 +165,7 @@ export class CustomerService {
           external_customer_id: customerDto.external_customer_id,
           business_unit: { id: businessUnit.id },
         },
+        relations: ['business_unit'],
       });
 
       if (existing) {
@@ -183,11 +185,16 @@ export class CustomerService {
           );
         }
 
-        // Return status 'exists' and QR code URL
-        results.push({
+        const responseObj = {
           status: 'exists',
           qr_code_url: `/qrcodes/qr/${existCustomerQr.short_id}`,
-        });
+        };
+        if (BUSINESS_UNITS_WITH_UUID.includes(existing.business_unit.id)) {
+          responseObj['uuid'] = existing.uuid;
+        }
+
+        // Return status 'exists' and QR code URL
+        results.push(responseObj);
         continue;
       }
 
@@ -228,12 +235,17 @@ export class CustomerService {
         tenant_id: tenant.id,
       });
 
-      // Return status 'created' and QR code URL
-      results.push({
+      const responseObj = {
         status: 'created',
-        // TODO: baseUrl is wrong, we do not allow direct admin API access, all communication should be through gatwway
         qr_code_url: `/qrcodes/qr/${saveCustomerQrCodeInfo.short_id}`,
-      });
+      };
+
+      if (BUSINESS_UNITS_WITH_UUID.includes(saved.business_unit.id)) {
+        responseObj['uuid'] = saved.uuid;
+      }
+
+      // Return status 'created' and QR code URL
+      results.push(responseObj);
     }
 
     // Return results for all processed customers
