@@ -310,7 +310,6 @@ export class VehiclesService {
               },
             },
           );
-          console.log('/////////////////feedbacks', feedbackRes);
           feedbacks = feedbackRes.data?.feedback?.workshop || [];
         } catch (err) {
           console.error(
@@ -320,9 +319,6 @@ export class VehiclesService {
         }
       }
 
-      console.log('/////////////////feedbacks');
-      console.log('/////////////////feedbacks');
-      console.log('/////////////////feedbacks', feedbacks);
       let updatedVehicleServices = [];
       if (feedbacks.length) {
         // Efficiently merge feedbacks by iterating once and using a map for lookups if many feedbacks/services.
@@ -335,27 +331,18 @@ export class VehiclesService {
                 fb.workstation_name === service.BranchName &&
                 fb.invoice_number === service.InvoiceNumber,
             );
-            console.log(
-              '/////////////////////////feedback/////////////////////',
-              feedback,
-            );
 
             return {
-              ...service,
               feedback: feedback
                 ? {
                     rating: feedback.rating || '',
                   }
                 : null,
+              ...service,
             };
           }),
         }));
       }
-
-      console.log(
-        '/////////////////updatedVehicleServices',
-        updatedVehicleServices,
-      );
 
       // Determine final result based on plateNo parameter and service availability
       const finalResult = updatedVehicleServices.length
