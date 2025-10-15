@@ -333,12 +333,12 @@ export class VehiclesService {
             );
 
             return {
+              ...service,
               feedback: feedback
                 ? {
                     rating: feedback.rating || '',
                   }
                 : null,
-              ...service,
             };
           }),
         }));
