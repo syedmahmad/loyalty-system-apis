@@ -1,9 +1,19 @@
-import { IsNotEmpty, IsNumber, IsUUID } from 'class-validator';
+import {
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsString,
+  IsUUID,
+} from 'class-validator';
 
 export class CustomerCouponsDto {
   @IsUUID()
   @IsNotEmpty()
-  customerId: string;
+  customerId?: string;
+
+  @IsString()
+  @IsOptional()
+  product?: string;
 
   @IsNumber()
   tenantId: number;
