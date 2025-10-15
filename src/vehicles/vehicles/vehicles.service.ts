@@ -310,6 +310,7 @@ export class VehiclesService {
               },
             },
           );
+          console.log('/////////////////feedbacks', feedbackRes);
           feedbacks = feedbackRes.data?.feedback?.workshop || [];
         } catch (err) {
           console.error(
@@ -319,6 +320,9 @@ export class VehiclesService {
         }
       }
 
+      console.log('/////////////////feedbacks');
+      console.log('/////////////////feedbacks');
+      console.log('/////////////////feedbacks', feedbacks);
       let updatedVehicleServices = [];
       if (feedbacks.length) {
         // Efficiently merge feedbacks by iterating once and using a map for lookups if many feedbacks/services.
