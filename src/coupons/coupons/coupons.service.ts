@@ -1371,10 +1371,27 @@ export class CouponsService {
               const vehValue = veh[fieldName];
 
               if (vehValue === undefined) return false;
+
+              // Normalize actual & expected values based on type
+              let actualValue = vehValue;
+              let expectedValue = cond.value;
+
+              if (typeof actualValue === 'string') {
+                actualValue = actualValue.trim().toLowerCase();
+              } else if (typeof actualValue === 'number') {
+                actualValue = Number(actualValue);
+              }
+
+              if (typeof expectedValue === 'string') {
+                expectedValue = expectedValue.trim().toLowerCase();
+              } else if (typeof expectedValue === 'number') {
+                expectedValue = Number(expectedValue);
+              }
+
               const vehicleExtraFeatures = this.applyOperator(
-                String(vehValue.trim()).toLowerCase(),
+                actualValue,
                 cond.operator,
-                String(cond.value.trim()).toLowerCase(),
+                expectedValue,
               );
 
               // Make check (if provided in condition)
@@ -1657,6 +1674,7 @@ export class CouponsService {
             amount: eachProduct.amount,
             status: WalletTransactionStatus.ACTIVE,
             description: `Customer placed a new order.`,
+            uuid: uuidv4(),
           };
 
           const transaction = await this.txRepo.save(walletTransaction);
