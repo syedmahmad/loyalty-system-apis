@@ -105,6 +105,10 @@ export class VehiclesService {
         registeration_no: restBody?.registeration_no ?? null,
         sequence_no: restBody?.sequence_no ?? null,
         national_id: restBody?.national_id ?? null,
+        // new car value fields.
+        carCondition: restBody?.carCondition ?? null,
+        minPrice: restBody?.minPrice ?? null,
+        maxPrice: restBody?.maxPrice ?? null,
       };
 
       // Step 2: Find vehicle by plate_no (regardless of customer)
@@ -368,8 +372,8 @@ export class VehiclesService {
 
       if (!customer) throw new NotFoundException('Customer not found');
 
-      let customerVehicles = [];
-      const vehicleServices: any[] = [];
+      // Step 2: Get all services for customer (similar to getServiceList but more efficient)
+      let allServices: any[] = [];
       const loginInfo = await this.customerLoginInResty();
       if (loginInfo?.access_token) {
         const customerInfoFromResty = await this.getCustomerInfoFromResty({
@@ -378,123 +382,121 @@ export class VehiclesService {
         });
 
         if (customerInfoFromResty.length) {
-          // TODO: can get multiple customers, currently picking only first.
-          customerVehicles = await this.getVehicleInfoFromResty({
+          const customerVehicles = await this.getVehicleInfoFromResty({
             customer_id: customerInfoFromResty[0].customer_id,
             loginInfo,
           });
 
           if (customerVehicles && customerVehicles.length) {
-            for (const vehicle of customerVehicles) {
-              const serviceList = await this.getVehicleServiceListFromResty({
-                customer_id: customerInfoFromResty[0]?.customer_id,
-                vehicle_id: vehicle.vehicle_id,
-                loginInfo,
-              });
-              console.log('serviceList', serviceList);
-
-              // Add invoiceURL and feedback=null to each service
-              // const servicesWithUrl = (serviceList || []).map((val: any) => ({
-              //   ...val,
-              //   invoiceURL: 'https://www.gogomotor.com/', // need to hit another API call to get url form mac
-              //   feedback: null,
-              // }));
-
-              let latestService = null;
-              if (serviceList && serviceList.length > 0) {
-                latestService = serviceList.reduce((latest, current) => {
-                  return new Date(current.InvoiceDate) >
-                    new Date(latest.InvoiceDate)
-                    ? current
-                    : latest;
+            // Get all services from all vehicles in parallel
+            const allVehicleServices = await Promise.all(
+              customerVehicles.map(async (vehicle) => {
+                const serviceList = await this.getVehicleServiceListFromResty({
+                  customer_id: customerInfoFromResty[0].customer_id,
+                  vehicle_id: vehicle.vehicle_id,
+                  loginInfo,
                 });
-              }
-              vehicleServices.push({
-                vehicle_id: vehicle.vehicle_id,
-                make: vehicle?.make,
-                model: vehicle?.model,
-                year: vehicle?.model_year,
-                last_mileage: vehicle?.last_mileage,
-                last_service_date: vehicle?.last_service_date,
-                vin: vehicle.vin,
-                plate_no: vehicle.plate_no,
-                services: latestService ? [latestService] : [],
-              });
-            }
+
+                // Add vehicle info to each service
+                return (serviceList || []).map((service) => ({
+                  ...service,
+                  vehicle_id: vehicle.vehicle_id,
+                  make: vehicle.make,
+                  model: vehicle.model,
+                  year: vehicle.model_year,
+                  plate_no: vehicle.plate_no,
+                  vin: vehicle.vin,
+                }));
+              }),
+            );
+
+            // Flatten all services into one array
+            allServices = allVehicleServices.flat();
           }
         }
       }
 
-      console.log('///////////////hellow', vehicleServices);
+      // Step 3: Find the most recent service across all vehicles
+      let lastService = null;
+      if (allServices.length > 0) {
+        lastService = allServices.reduce((latest, current) => {
+          return new Date(current.InvoiceDate) > new Date(latest.InvoiceDate)
+            ? current
+            : latest;
+        });
+      }
 
-      let feedbacks: any[] = [];
-      // if there are some history then need to fetch feedbacks.
-      // aginst these history and linked each other.
-      if (vehicleServices && vehicleServices.length) {
-        try {
-          const feedbackRes = await axios.get(
-            `${process.env.DRAGON_WORKSHOPS_URL}/feedback?customer_id=${customerId}`,
-            {
-              headers: {
-                'auth-key': process.env.DRAGON_WORKSHOPS_AUTH_KEY,
-              },
+      // Step 4: If no services found, return empty result
+      if (!lastService) {
+        return {
+          success: true,
+          message: 'No service history available for this customer',
+          result: {},
+          errors: [],
+        };
+      }
+
+      // Step 5: Fetch feedback for the last service
+      let feedback = null;
+      try {
+        const feedbackRes = await axios.get(
+          `${process.env.DRAGON_WORKSHOPS_URL}/feedback?customer_id=${customerId}`,
+          {
+            headers: {
+              'auth-key': process.env.DRAGON_WORKSHOPS_AUTH_KEY,
             },
-          );
-          feedbacks = feedbackRes.data?.feedback?.workshop;
-        } catch (err) {
-          console.error(
-            'Error fetching feedbacks:',
-            err?.response?.data || err.message || err,
-          );
-        }
+          },
+        );
+
+        const feedbacks = feedbackRes.data?.feedback?.workshop || [];
+        feedback = feedbacks.find(
+          (fb) =>
+            fb.workstation_code === lastService.BranchCode &&
+            fb.workstation_name === lastService.BranchName &&
+            fb.invoice_number === lastService.InvoiceNumber,
+        );
+      } catch (err) {
+        console.error(
+          'Error fetching feedbacks:',
+          err?.response?.data || err.message || err,
+        );
       }
 
-      let updatedVehicleServices = [];
-      if (feedbacks && feedbacks.length) {
-        // Merge feedbacks into vehicle services
-        updatedVehicleServices = vehicleServices?.map((vehicle) => ({
-          ...vehicle,
-          services: vehicle?.services?.map((service) => {
-            const feedback = feedbacks.find(
-              (fb) =>
-                fb.workstation_code === service.BranchCode &&
-                fb.workstation_name === service.BranchName &&
-                fb.invoice_number === service.InvoiceNumber,
-            );
-            return {
-              ...service,
-              feedback: feedback
-                ? {
-                    rating: feedback.rating || '',
-                  }
-                : null,
-            };
-          }),
-        }));
-      }
+      // Step 6: Prepare response
+      const result = {
+        BranchCode: lastService.BranchCode,
+        BranchName: lastService.BranchName,
+        InvoiceNumber: lastService.InvoiceNumber,
+        InvoiceDate: lastService.InvoiceDate,
+        vehicle_id: lastService.vehicle_id,
+        make: lastService.make,
+        model: lastService.model,
+        year: lastService.year,
+        plate_no: lastService.plate_no,
+        vin: lastService.vin,
+        feedback: feedback
+          ? {
+              rating: feedback.rating || '',
+            }
+          : null,
+      };
 
-      const finalData = updatedVehicleServices.length
-        ? updatedVehicleServices
-        : vehicleServices;
       return {
         success: true,
-        message: 'Successfully fetched the data!',
-        // result: { vehicleServices },
-        result: {
-          feedback: finalData,
-          // .flatMap((vehicle) => vehicle.services) // get all services from all vehicles
-          // .map((service) => ({
-          //   feedback: service.feedback,
-          //   BranchCode: service.BranchCode,
-          //   BranchName: service.BranchName,
-          //   InvoiceNumber: service.InvoiceNumber,
-          // })),
-        },
+        message: feedback
+          ? 'Successfully fetched the last service feedback!'
+          : 'Last service found but no feedback available',
+        result,
         errors: [],
       };
     } catch (error: any) {
-      const errResponse = error?.response;
-      return errResponse;
+      console.error('getLastServiceFeedback Error:', error);
+      return {
+        success: false,
+        message: error?.message || 'Something went wrong',
+        result: {},
+        errors: [error],
+      };
     }
   }
 
