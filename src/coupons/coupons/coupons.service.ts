@@ -1757,14 +1757,6 @@ export class CouponsService {
       });
 
       if (!customer) throw new NotFoundException('Customer not found');
-
-      if (customer && customer.status == 0) {
-        throw new NotFoundException('This customer is no longer active.');
-      }
-
-      if (customer.status === 3) {
-        throw new NotFoundException('Customer is deleted');
-      }
     }
 
     const userCouponsObj = {
@@ -1950,31 +1942,71 @@ export class CouponsService {
         }
 
         if (singleCoupon.date_to && singleCoupon.date_to < today) {
+          // expired.push({
+          //   uuid: singleCoupon.uuid,
+          //   code: singleCoupon.code,
+          //   title: singleCoupon.coupon_title,
+          //   title_ar: singleCoupon.coupon_title_ar,
+          //   discount: `${singleCoupon.discount_price}${singleCoupon.discount_type === 'fixed' ? ' SAR' : '% Off'}`,
+          //   description_en: singleCoupon.description_en,
+          //   description_ar: singleCoupon.description_ar,
+          //   terms_and_conditions_en: singleCoupon.terms_and_conditions_en,
+          //   terms_and_conditions_ar: singleCoupon.terms_and_conditions_ar,
+          //   expiry_date: singleCoupon.date_to,
+          //   services,
+          //   products,
+          // });
           expired.push({
             uuid: singleCoupon.uuid,
             code: singleCoupon.code,
-            title: singleCoupon.coupon_title,
-            title_ar: singleCoupon.coupon_title_ar,
+            title:
+              language_code === 'ar'
+                ? singleCoupon.coupon_title_ar
+                : singleCoupon.coupon_title,
             discount: `${singleCoupon.discount_price}${singleCoupon.discount_type === 'fixed' ? ' SAR' : '% Off'}`,
-            description_en: singleCoupon.description_en,
-            description_ar: singleCoupon.description_ar,
-            terms_and_conditions_en: singleCoupon.terms_and_conditions_en,
-            terms_and_conditions_ar: singleCoupon.terms_and_conditions_ar,
+            description:
+              language_code === 'ar'
+                ? singleCoupon.description_ar
+                : singleCoupon.description_en,
+            terms_and_conditions:
+              language_code === 'ar'
+                ? singleCoupon.terms_and_conditions_ar
+                : singleCoupon.terms_and_conditions_en,
             expiry_date: singleCoupon.date_to,
             services,
             products,
           });
         } else {
+          // available.push({
+          //   uuid: singleCoupon.uuid,
+          //   code: singleCoupon.code,
+          //   title: singleCoupon.coupon_title,
+          //   title_ar: singleCoupon.coupon_title_ar,
+          //   discount: `${singleCoupon.discount_price}${singleCoupon.discount_type === 'fixed' ? ' SAR' : '% Off'}`,
+          //   description_en: singleCoupon.description_en,
+          //   description_ar: singleCoupon.description_ar,
+          //   terms_and_conditions_en: singleCoupon.terms_and_conditions_en,
+          //   terms_and_conditions_ar: singleCoupon.terms_and_conditions_ar,
+          //   expiry_date: singleCoupon.date_to,
+          //   services,
+          //   products,
+          // });
           available.push({
             uuid: singleCoupon.uuid,
             code: singleCoupon.code,
-            title: singleCoupon.coupon_title,
-            title_ar: singleCoupon.coupon_title_ar,
+            title:
+              language_code === 'ar'
+                ? singleCoupon.coupon_title_ar
+                : singleCoupon.coupon_title,
             discount: `${singleCoupon.discount_price}${singleCoupon.discount_type === 'fixed' ? ' SAR' : '% Off'}`,
-            description_en: singleCoupon.description_en,
-            description_ar: singleCoupon.description_ar,
-            terms_and_conditions_en: singleCoupon.terms_and_conditions_en,
-            terms_and_conditions_ar: singleCoupon.terms_and_conditions_ar,
+            description:
+              language_code === 'ar'
+                ? singleCoupon.description_ar
+                : singleCoupon.description_en,
+            terms_and_conditions:
+              language_code === 'ar'
+                ? singleCoupon.terms_and_conditions_ar
+                : singleCoupon.terms_and_conditions_en,
             expiry_date: singleCoupon.date_to,
             services,
             products,
