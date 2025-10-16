@@ -59,6 +59,18 @@ export class CreateOfferDto {
   @IsOptional()
   offer_title_ar?: string;
 
+  @IsString()
+  @IsNotEmpty()
+  offer_subtitle: string;
+
+  @IsString()
+  @IsOptional()
+  offer_subtitle_ar?: string;
+
+  @IsString()
+  @IsOptional()
+  station_type?: string;
+
   @IsDateString()
   @IsOptional()
   date_from?: Date;

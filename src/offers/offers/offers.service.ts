@@ -516,6 +516,7 @@ export class OffersService {
     if (langCode === 'en') {
       removeExtraFields.push(
         'offer_title_ar',
+        'offer_subtitle_ar',
         'description_ar',
         'terms_and_conditions_ar',
         'name_ar',
@@ -524,6 +525,7 @@ export class OffersService {
     } else if (langCode === 'ar') {
       removeExtraFields.push(
         'offer_title',
+        'offer_subtitle',
         'description_en',
         'terms_and_conditions_en',
         'name_en',
@@ -584,6 +586,7 @@ export class OffersService {
     if (langCode === 'en') {
       removeExtraFields.push(
         'offer_title_ar',
+        'offer_subtitle_ar',
         'description_ar',
         'terms_and_conditions_ar',
         'name_ar',
@@ -592,6 +595,7 @@ export class OffersService {
     } else {
       removeExtraFields.push(
         'offer_title',
+        'offer_subtitle',
         'description_en',
         'terms_and_conditions_en',
         'name_en',
@@ -612,6 +616,11 @@ export class OffersService {
           langCode === 'en'
             ? eachOffer.offer_title
             : eachOffer.offer_title_ar || eachOffer.offer_title,
+
+        offer_subtitle:
+          langCode === 'en'
+            ? eachOffer.offer_subtitle
+            : eachOffer.offer_subtitle_ar || eachOffer.offer_subtitle,
         description:
           langCode === 'en'
             ? eachOffer.description_en
@@ -638,6 +647,7 @@ export class OffersService {
         date_from: eachOffer.date_from,
         date_to: eachOffer.date_to,
         status: eachOffer.status,
+        station_type: eachOffer.station_type,
       };
 
       // Sort into available or expired
