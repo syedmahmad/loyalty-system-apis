@@ -43,6 +43,15 @@ export class OffersEntity {
   @Column({ nullable: true })
   offer_title_ar: string;
 
+  @Column({ nullable: true })
+  offer_subtitle: string;
+
+  @Column({ nullable: true })
+  offer_subtitle_ar: string;
+
+  @Column({ nullable: true })
+  station_type: string;
+
   @Column({
     type: 'char',
     length: 36,
