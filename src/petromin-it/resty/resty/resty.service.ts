@@ -2,11 +2,14 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { RestyInvoicesInfo } from '../entities/resty_invoices_info.entity';
+import { VehicleServiceJob } from '../entities/vehicle_service_job.entity';
 @Injectable()
 export class RestyService {
   constructor(
     @InjectRepository(RestyInvoicesInfo)
     private readonly restyIncoicesInfoRepo: Repository<RestyInvoicesInfo>,
+    @InjectRepository(VehicleServiceJob)
+    private readonly vehicleServiceJobRepo: Repository<VehicleServiceJob>,
   ) {}
 
   /**
@@ -121,5 +124,30 @@ export class RestyService {
 
     // invoice_date is a string like "2025-09-26"
     return lastInvoice?.invoice_date || null;
+  }
+
+  async createVehicleServiceJob(payload: {
+    phone_number?: string;
+    vehicle_platNo?: string;
+    delivery_date?: string;
+    status?: string;
+    workshop_code?: string;
+    workshop_name?: string;
+    workshop_address?: string;
+    workshop_phone?: string;
+    odometer_reading?: string;
+  }) {
+    const record = this.vehicleServiceJobRepo.create({
+      phone_number: payload.phone_number ?? null,
+      vehicle_platNo: payload.vehicle_platNo ?? null,
+      delivery_date: payload.delivery_date ?? null,
+      status: payload.status ?? null,
+      workshop_code: payload.workshop_code ?? null,
+      workshop_name: payload.workshop_name ?? null,
+      workshop_address: payload.workshop_address ?? null,
+      workshop_phone: payload.workshop_phone ?? null,
+      odometer_reading: payload.odometer_reading ?? null,
+    });
+    return this.vehicleServiceJobRepo.save(record);
   }
 }

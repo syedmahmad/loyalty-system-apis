@@ -5,9 +5,12 @@ import { RestyController } from 'src/petromin-it/resty/resty/resty.controller';
 import { RestyService } from 'src/petromin-it/resty/resty/resty.service';
 import { TransactionSyncLog } from './entities/transaction-sync-logs.entity';
 import { TransactionSyncLogsSubscriber } from './subscribers/transaction-sync-logs.subscriber';
+import { VehicleServiceJob } from './entities/vehicle_service_job.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([RestyInvoicesInfo, TransactionSyncLog])],
+  imports: [
+    TypeOrmModule.forFeature([RestyInvoicesInfo, TransactionSyncLog, VehicleServiceJob]),
+  ],
   controllers: [RestyController],
   providers: [RestyService, TransactionSyncLogsSubscriber],
 })

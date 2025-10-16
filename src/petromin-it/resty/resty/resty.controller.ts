@@ -75,4 +75,25 @@ export class RestyController {
       data: { latest_timestamp: timestamp },
     };
   }
+
+  @Post('mac-sync/service-job')
+  async createServiceJob(@Req() req: any, @Body() payload: any) {
+    const authHeader = req.headers['authorization'];
+    if (!authHeader) {
+      throw new UnauthorizedException('Missing Authorization header');
+    }
+
+    const token = authHeader.split(' ')[1];
+    const decoded: any = jwt.decode(token);
+    if (!decoded || !decoded.name || decoded.name !== 'Rusty') {
+      throw new UnauthorizedException('Invalid token in payload');
+    }
+
+    try {
+      await this.restyService.createVehicleServiceJob(payload);
+      return { success: true, data: 'successfully create service job' };
+    } catch (error) {
+      throw new BadRequestException('Failed to create service job');
+    }
+  }
 }
