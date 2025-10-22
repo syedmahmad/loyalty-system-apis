@@ -74,6 +74,7 @@ export class VehiclesService {
         this.variantRepository.findOne({ where: { variantId: variant_id } }),
       ]);
 
+      // plate_no should not be updated if vehicle already exists (on update)
       const prePareData: any = {
         make: makeInfo?.name ?? null,
         make_ar: makeInfo?.nameAr ?? null,
@@ -88,7 +89,7 @@ export class VehiclesService {
         variant_ar: variantInfo?.nameAr ?? null,
         variant_id: variant_id ? variant_id : -1,
         vin_number: vin ?? null,
-        plate_no: plate_no ?? null,
+        // Do NOT include plate_no here by default, it will be conditionally set below
         year: modelInfo?.year ? modelInfo?.year : year,
         color: restBody?.color ?? null,
         engine: restBody?.engine ?? null,
@@ -122,12 +123,14 @@ export class VehiclesService {
       });
 
       if (vehicle) {
+        // Don't update plate_no if vehicle already exists
         Object.assign(vehicle, prePareData);
       } else {
-        // Create new vehicle for this customer
+        // Include plate_no only in creation
         vehicle = this.vehiclesRepository.create({
           customer: { id: customer.id },
           ...prePareData,
+          plate_no: plate_no ?? null,
         });
       }
 
