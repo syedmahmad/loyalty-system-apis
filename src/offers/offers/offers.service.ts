@@ -602,7 +602,7 @@ export class OffersService {
         'en',
       );
     }
-
+    console.log('allOffers/////////', offers[0].terms_and_conditions_en);
     const allOffers = this.omitExtraFields(offers, removeExtraFields);
 
     const today = new Date();

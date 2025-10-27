@@ -164,10 +164,24 @@ export class Coupon {
   @Column({ nullable: true })
   description_ar: string;
 
-  @Column({ nullable: true, type: 'text' })
+  @Column({
+    nullable: true,
+    type: 'text',
+    transformer: {
+      to: (value: string) => value, // when saving
+      from: (value: string) => (value ? value.replace(/\r?\n|\r/g, '') : value), // when reading
+    },
+  })
   terms_and_conditions_en: string;
 
-  @Column({ nullable: true, type: 'text' })
+  @Column({
+    nullable: true,
+    type: 'text',
+    transformer: {
+      to: (value: string) => value, // when saving
+      from: (value: string) => (value ? value.replace(/\r?\n|\r/g, '') : value), // when reading
+    },
+  })
   terms_and_conditions_ar: string;
 
   @OneToMany(() => CouponCustomerSegment, (cs) => cs.coupon)

@@ -159,17 +159,16 @@ export class RestyService {
   // I have multiple invoices in databse and in each invoice have multiple items, with same invoice of user entries.
   // There could be multiple invoices for each customer and there could be multiple customers data in this array.
 
-  // I am creating a simple dataset with this, which holds single invoice of a particular customer that holds arrays 
-  // of its items, so if there are 5 rows in database of same customer invoice with 5 items, its creates and give me 
-  // single invoice entry that contians 5 items array inside particular customer invoice, and these could be many 
-  // invoices of many cusotmers as I gave you data form database which will be today’s data and in this data, 
-  // there could be multiple customers invoices with multiple items.Final array could be like that but you can 
+  // I am creating a simple dataset with this, which holds single invoice of a particular customer that holds arrays
+  // of its items, so if there are 5 rows in database of same customer invoice with 5 items, its creates and give me
+  // single invoice entry that contians 5 items array inside particular customer invoice, and these could be many
+  // invoices of many cusotmers as I gave you data form database which will be today’s data and in this data,
+  // there could be multiple customers invoices with multiple items.Final array could be like that but you can
   // give me better optimise json if you want.
 
-  @Cron(CronExpression.EVERY_10_SECONDS)
+  // @Cron(CronExpression.EVERY_10_SECONDS)
   async processLatestInvoices() {
     console.log('processLatestInvoices :::');
-
 
     const invoices = restyLatestInvoices;
     const total = invoices.length;
@@ -178,7 +177,7 @@ export class RestyService {
 
       for (const row of invoices) {
         const invoiceKey = row.InvoiceID;
-    
+
         // If this invoice isn't already in our map, add it
         if (!invoicesMap.has(invoiceKey)) {
           invoicesMap.set(invoiceKey, {
@@ -202,34 +201,37 @@ export class RestyService {
             InvoiceID: row.InvoiceID,
             InvoiceDate: new Date(row.InvoiceDate).toUTCString(),
             InvoiceNumber: row.InvoiceNumber,
-            InvoiceSubTotalAmount: row.InvoiceBeforeTaxAmount?.toFixed(4) ?? '0.0000',
+            InvoiceSubTotalAmount:
+              row.InvoiceBeforeTaxAmount?.toFixed(4) ?? '0.0000',
             InvoiceTotalAmount: row.InvoiceTotalAmount?.toFixed(4) ?? '0.0000',
-            InvoiceTotalDiscountAmount: row.InvoiceDiscountAmount?.toFixed(4) ?? '0.0000',
+            InvoiceTotalDiscountAmount:
+              row.InvoiceDiscountAmount?.toFixed(4) ?? '0.0000',
             Latitude: row.Latitude?.toString() ?? '',
             Longitude: row.Longitude?.toString() ?? '',
             Mileage: row.WorkOrderMileage,
             Items: [],
           });
         }
-    
+
         // Build item object from this row
         const item = {
           ItemBeforeTaxAmount: row.ItemBeforeTaxAmount?.toFixed(4) ?? '0.0000',
           ItemGroup: row.ItemGroup ?? null,
-          ServiceBeforeTaxAmount: row.ServiceBeforeTaxAmount?.toFixed(4) ?? '0.0000',
+          ServiceBeforeTaxAmount:
+            row.ServiceBeforeTaxAmount?.toFixed(4) ?? '0.0000',
           ServiceItem: row.ItemName ?? null,
           ServiceName: row.ServiceName ?? null,
         };
-    
+
         // Push item into the corresponding invoice's Items array
         invoicesMap.get(invoiceKey).Items.push(item);
       }
-    
+
       // Return grouped and formatted invoices
       const processedInvocies = Array.from(invoicesMap.values());
 
       // Bulk create instead of inserting one by one
-      const invoiceEntities = processedInvocies.map(singleInvoice =>
+      const invoiceEntities = processedInvocies.map((singleInvoice) =>
         this.restyInvoicesInfo.create({
           customer_id: singleInvoice.CustomerID,
           phone: singleInvoice.CustomerMobile,
@@ -247,7 +249,7 @@ export class RestyService {
           claim_date: null,
           free_items: null,
           sync_log_id: null,
-        })
+        }),
       );
 
       await this.restyInvoicesInfo.save(invoiceEntities);
