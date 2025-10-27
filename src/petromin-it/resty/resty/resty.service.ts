@@ -3,6 +3,9 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { RestyInvoicesInfo } from '../entities/resty_invoices_info.entity';
 import { VehicleServiceJob } from '../entities/vehicle_service_job.entity';
+import { Cron, CronExpression } from '@nestjs/schedule';
+import { restyLatestInvoices } from './invoices.data';
+
 @Injectable()
 export class RestyService {
   constructor(
@@ -10,6 +13,8 @@ export class RestyService {
     private readonly restyIncoicesInfoRepo: Repository<RestyInvoicesInfo>,
     @InjectRepository(VehicleServiceJob)
     private readonly vehicleServiceJobRepo: Repository<VehicleServiceJob>,
+    @InjectRepository(RestyInvoicesInfo)
+    private readonly restyInvoicesInfo: Repository<RestyInvoicesInfo>,
   ) {}
 
   /**
@@ -149,5 +154,105 @@ export class RestyService {
       odometer_reading: payload.odometer_reading ?? null,
     });
     return this.vehicleServiceJobRepo.save(record);
+  }
+
+  // I have multiple invoices in databse and in each invoice have multiple items, with same invoice of user entries.
+  // There could be multiple invoices for each customer and there could be multiple customers data in this array.
+
+  // I am creating a simple dataset with this, which holds single invoice of a particular customer that holds arrays 
+  // of its items, so if there are 5 rows in database of same customer invoice with 5 items, its creates and give me 
+  // single invoice entry that contians 5 items array inside particular customer invoice, and these could be many 
+  // invoices of many cusotmers as I gave you data form database which will be today’s data and in this data, 
+  // there could be multiple customers invoices with multiple items.Final array could be like that but you can 
+  // give me better optimise json if you want.
+
+  @Cron(CronExpression.EVERY_10_SECONDS)
+  async processLatestInvoices() {
+    console.log('processLatestInvoices :::');
+
+
+    const invoices = restyLatestInvoices;
+    const total = invoices.length;
+    if (total > 0) {
+      const invoicesMap = new Map<string, any>();
+
+      for (const row of invoices) {
+        const invoiceKey = row.InvoiceID;
+    
+        // If this invoice isn't already in our map, add it
+        if (!invoicesMap.has(invoiceKey)) {
+          invoicesMap.set(invoiceKey, {
+            CustomerID: row.customermaster_id,
+            CustomerName: row.CustomerName,
+            CustomerMobile: row.Mobile,
+            Email: row.Email,
+            StatusFlag: row.StatusFlag,
+            Nationality: row.Nationality,
+            BirthDate: row.BirthDate,
+            LocationName: row.LocationName,
+            MakeName: row.MakeName,
+            ModelName: row.ModelName,
+            VehicleYear: row.VehicleYear,
+            VehicleTransmissionTypeID: row.VehicleTransmissionTypeID,
+            VIN: row.VIN,
+            PlateNumber: row.PlateNumber,
+            BranchCode: row.BranchCode,
+            BranchName: row.BranchName,
+            City: row.City,
+            InvoiceID: row.InvoiceID,
+            InvoiceDate: new Date(row.InvoiceDate).toUTCString(),
+            InvoiceNumber: row.InvoiceNumber,
+            InvoiceSubTotalAmount: row.InvoiceBeforeTaxAmount?.toFixed(4) ?? '0.0000',
+            InvoiceTotalAmount: row.InvoiceTotalAmount?.toFixed(4) ?? '0.0000',
+            InvoiceTotalDiscountAmount: row.InvoiceDiscountAmount?.toFixed(4) ?? '0.0000',
+            Latitude: row.Latitude?.toString() ?? '',
+            Longitude: row.Longitude?.toString() ?? '',
+            Mileage: row.WorkOrderMileage,
+            Items: [],
+          });
+        }
+    
+        // Build item object from this row
+        const item = {
+          ItemBeforeTaxAmount: row.ItemBeforeTaxAmount?.toFixed(4) ?? '0.0000',
+          ItemGroup: row.ItemGroup ?? null,
+          ServiceBeforeTaxAmount: row.ServiceBeforeTaxAmount?.toFixed(4) ?? '0.0000',
+          ServiceItem: row.ItemName ?? null,
+          ServiceName: row.ServiceName ?? null,
+        };
+    
+        // Push item into the corresponding invoice's Items array
+        invoicesMap.get(invoiceKey).Items.push(item);
+      }
+    
+      // Return grouped and formatted invoices
+      const processedInvocies = Array.from(invoicesMap.values());
+
+      // Bulk create instead of inserting one by one
+      const invoiceEntities = processedInvocies.map(singleInvoice =>
+        this.restyInvoicesInfo.create({
+          customer_id: singleInvoice.CustomerID,
+          phone: singleInvoice.CustomerMobile,
+          invoice_no: singleInvoice.InvoiceNumber,
+          invoice_id: singleInvoice.InvoiceID,
+          invoice_amount: singleInvoice.InvoiceTotalAmount,
+          invoice_date: singleInvoice.InvoiceDate,
+          vehicle_plate_number: singleInvoice.PlateNumber,
+          vehicle_vin: singleInvoice.VIN,
+          vehicle_info: singleInvoice.VehicleInfo,
+          // Ensure claim-related fields remain null/empty
+          is_claimed: null,
+          clamined_points: null,
+          claim_id: null,
+          claim_date: null,
+          free_items: null,
+          sync_log_id: null,
+        })
+      );
+
+      await this.restyInvoicesInfo.save(invoiceEntities);
+
+      console.dir(processedInvocies, { depth: null });
+    }
   }
 }
