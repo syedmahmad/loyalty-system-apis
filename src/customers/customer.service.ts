@@ -3253,4 +3253,55 @@ export class CustomerService {
       objectName,
     );
   }
+
+  async uploadVehicleImage(customerId, files) {
+    const customer = await this.customerRepo.findOne({
+      where: { uuid: customerId, status: 1 },
+      relations: ['tenant', 'business_unit'],
+    });
+
+    if (!customer) {
+      throw new NotFoundException(`Customer not found`);
+    }
+
+    if (customer.status == 0) {
+      throw new BadRequestException(`Customer is inactive`);
+    }
+
+    if (customer.status === 3) {
+      throw new NotFoundException('Customer is deleted');
+    }
+
+    if (!files || files.length === 0) {
+      throw new BadRequestException('No files uploaded');
+    }
+
+    const bucketName = process.env.OCI_BUCKET;
+    const ociBaseUrl = process.env.OCI_URL;
+
+    const uploadedFiles = await Promise.all(
+      files.map(async (file) => {
+        const timestamp = Date.now();
+        const objectName = `uploads/${timestamp}-${file.originalname}`;
+
+        await this.ociService.uploadBufferToOci(
+          file.buffer,
+          bucketName,
+          objectName,
+        );
+        const fileUrl = `${ociBaseUrl}/${encodeURIComponent(objectName)}`;
+
+        return {
+          originalName: file.originalname,
+          storedName: `${timestamp}-${file.originalname}`,
+          url: fileUrl,
+        };
+      }),
+    );
+
+    return {
+      message: 'Files uploaded successfully',
+      files: uploadedFiles,
+    };
+  }
 }

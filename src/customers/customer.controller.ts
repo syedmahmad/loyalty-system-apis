@@ -9,6 +9,7 @@ import {
   Query,
   Req,
   UploadedFile,
+  UploadedFiles,
   UseInterceptors,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -24,7 +25,7 @@ import { BurnWithEvent } from 'src/customers/dto/burn-with-event.dto';
 import { GvrEarnBurnWithEventsDto } from 'src/customers/dto/gvr_earn_burn_with_event.dto';
 import { CustomerDto } from './dto/customer.dto';
 import { CustomerEarnHistoryDto } from './dto/customer-earn-history.dto';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 
 @Controller('customers')
 export class CustomerController {
@@ -219,5 +220,14 @@ export class CustomerController {
         message: error.message,
       };
     }
+  }
+
+  @Post('upload-vehicle-image/:customerId')
+  @UseInterceptors(FilesInterceptor('files'))
+  async uploadVehicleImage(
+    @Param('customerId') customerId: string,
+    @UploadedFiles() files: Express.Multer.File[],
+  ) {
+    return await this.customerService.uploadVehicleImage(customerId, files);
   }
 }
