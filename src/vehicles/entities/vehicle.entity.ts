@@ -150,4 +150,7 @@ export class Vehicle {
 
   @Column({ type: 'decimal', precision: 15, scale: 2, nullable: true })
   maxPrice: number;
+
+  @Column({ type: 'json', nullable: true })
+  images: { type: string; url: string }[];
 }

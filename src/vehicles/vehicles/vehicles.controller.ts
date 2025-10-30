@@ -33,6 +33,20 @@ export class VehiclesController {
     );
   }
 
+  @Post('upload/images')
+  async manageCustomerVehicleImages(
+    @Headers() headers: Record<string, string>,
+    @Body() body: any,
+  ) {
+    const tenantId = headers['x-tenant-id'];
+    const businessUnitId = headers['x-business-unit-id'];
+    return await this.service.manageCustomerVehicleImages(
+      tenantId,
+      businessUnitId,
+      body,
+    );
+  }
+
   @Post(':platNo/:customerId')
   async deleteCustomerVehicle(
     @Headers() headers: Record<string, string>,

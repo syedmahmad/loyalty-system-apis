@@ -8,6 +8,7 @@ import { MakeEntity } from 'src/make/entities/make.entity';
 import { ModelEntity } from 'src/model/entities/model.entity';
 import { Log } from 'src/logs/entities/log.entity';
 import { VariantEntity } from 'src/variant/entities/variant.entity';
+import { OpenaiModule } from 'src/openai/openai.module';
 @Module({
   imports: [
     TypeOrmModule.forFeature([
@@ -18,6 +19,7 @@ import { VariantEntity } from 'src/variant/entities/variant.entity';
       VariantEntity,
       Log,
     ]),
+    OpenaiModule,
   ],
   controllers: [VehiclesController],
   providers: [VehiclesService],

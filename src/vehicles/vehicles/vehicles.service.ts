@@ -9,6 +9,7 @@ import { ModelEntity } from 'src/model/entities/model.entity';
 import { Log } from 'src/logs/entities/log.entity';
 import { decrypt } from 'src/helpers/encryption';
 import { VariantEntity } from 'src/variant/entities/variant.entity';
+import { OpenAIService } from 'src/openai/openai/openai.service';
 // import { FuelType } from 'src/variant/entities/variant.enum';
 // import { decrypt } from 'src/helpers/encryption';
 
@@ -32,6 +33,8 @@ export class VehiclesService {
 
     @InjectRepository(VariantEntity)
     private readonly variantRepository: Repository<VariantEntity>,
+
+    private readonly openAIService: OpenAIService,
   ) {}
 
   /**
@@ -211,6 +214,87 @@ export class VehiclesService {
         message: error?.message || 'Unexpected error while adding vehicle',
         result: {},
         errors: error?.response?.data || [error],
+      };
+    }
+  }
+
+  async manageCustomerVehicleImages(tenantId, businessUnitId, body) {
+    try {
+      const { customer_id, plate_no, images } = body;
+
+      if (
+        !customer_id ||
+        !plate_no ||
+        !Array.isArray(images) ||
+        images.length === 0
+      ) {
+        throw new Error('Missing customer_id, plate_no, or images.');
+      }
+
+      // 1. Validate customer
+      const customer = await this.customerRepo.findOne({
+        where: {
+          uuid: customer_id,
+          status: 1,
+          business_unit: { id: parseInt(businessUnitId) },
+          tenant: { id: parseInt(tenantId) },
+        },
+      });
+
+      if (!customer) throw new NotFoundException('Customer not found');
+
+      // 2. Find the vehicle
+      const vehicle = await this.vehiclesRepository.findOne({
+        where: {
+          customer: { id: customer.id },
+          plate_no,
+          status: 1,
+        },
+        relations: ['customer'],
+      });
+
+      if (!vehicle) throw new NotFoundException('Vehicle not found');
+
+      // const validatedImages: any[] = [];
+
+      // // 3. Validate each image using GPT Vision API
+      // for (const img of images) {
+      //   if (!img.url) continue;
+
+      //   const result = await this.openAIService.analyzeCarImage(img.url);
+
+      //   validatedImages.push({
+      //     type: img.type || result.type || 'unknown',
+      //     url: img.url,
+      //   });
+      // }
+
+      // 4. Save validated images into vehicle.images JSON field
+      vehicle.images = images;
+      await this.vehiclesRepository.save(vehicle);
+
+      // const vehicleAfterUpdate = await this.vehiclesRepository.findOne({
+      //   where: {
+      //     customer: { id: customer.id },
+      //     plate_no,
+      //     status: 1,
+      //   },
+      //   relations: ['customer'],
+      // });
+
+      return {
+        success: true,
+        message: 'Vehicle images saved successfully.',
+        // result: { vehicle: vehicleAfterUpdate },
+        errors: [],
+      };
+    } catch (error) {
+      console.error('manageCustomerVehicleImages Error:', error);
+      return {
+        success: false,
+        message: error.message || 'Failed to manage vehicle images',
+        result: {},
+        errors: [error],
       };
     }
   }

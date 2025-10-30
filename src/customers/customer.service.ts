@@ -3264,14 +3264,6 @@ export class CustomerService {
       throw new NotFoundException(`Customer not found`);
     }
 
-    if (customer.status == 0) {
-      throw new BadRequestException(`Customer is inactive`);
-    }
-
-    if (customer.status === 3) {
-      throw new NotFoundException('Customer is deleted');
-    }
-
     if (!files || files.length === 0) {
       throw new BadRequestException('No files uploaded');
     }
@@ -3291,17 +3283,34 @@ export class CustomerService {
         );
         const fileUrl = `${ociBaseUrl}/${encodeURIComponent(objectName)}`;
 
-        return {
-          originalName: file.originalname,
-          storedName: `${timestamp}-${file.originalname}`,
-          url: fileUrl,
-        };
+        // Verify image via OpenAI image analysis after upload, gracefully handle errors
+        let analysisResult = null;
+        try {
+          analysisResult = await this.openaiService.analyzeCarImage(fileUrl);
+          return {
+            url: fileUrl,
+            isValid: analysisResult?.isValid === true,
+            // Optionally include analysisResult for more detail if valid, or leave out if not required
+          };
+        } catch (error) {
+          // If OpenAI analysis throws due to invalid image, simply return isValid: false for this image
+          return {
+            // url: fileUrl,
+            isValid: false,
+          };
+        }
       }),
     );
 
+    // Provide a top-level check to see if all are valid or not
+    const allFilesValid = uploadedFiles.every((file: any) => file.isValid);
+
     return {
-      message: 'Files uploaded successfully',
+      message: allFilesValid
+        ? 'Files uploaded successfully'
+        : 'One or more images are not valid vehicle images',
       files: uploadedFiles,
+      allFilesValid,
     };
   }
 }
