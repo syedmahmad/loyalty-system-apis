@@ -59,6 +59,12 @@ export class Vehicle {
   @Column({ type: 'varchar', length: 32, nullable: true })
   transmission: string;
 
+  @Column({ type: 'varchar', length: 32, nullable: true })
+  transmission_en: string;
+
+  @Column({ type: 'varchar', length: 32, nullable: true })
+  transmission_ar: string;
+
   @Column({ type: 'varchar', length: 255, nullable: true })
   plate_no: string;
 
@@ -128,6 +134,9 @@ export class Vehicle {
 
   @Column({ type: 'varchar', length: 16, nullable: true })
   fuel_type_group_id: string;
+
+  @Column({ type: 'varchar', length: 64, nullable: true })
+  fuel_type_name_en: string;
 
   @Column({ type: 'varchar', length: 64, nullable: true })
   fuel_type_name_ar: string;

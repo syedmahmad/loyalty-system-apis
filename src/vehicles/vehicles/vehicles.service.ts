@@ -695,8 +695,13 @@ export class VehiclesService {
                 year: eachVehicle?.model_year
                   ? eachVehicle?.model_year
                   : eachVehicle.model_year,
-                fuel_type: variantInfo?.fuelType?.toString() ?? null,
-                transmission: variantInfo?.transmission?.toString() ?? null,
+                fuel_type: variantInfo?.fuelTypeId?.toString() ?? null,
+                fuel_type_name_en: variantInfo?.fuelType?.toString() ?? null,
+                fuel_type_name_ar: variantInfo?.fuelTypeAr?.toString() ?? null,
+                transmission: variantInfo?.transmissionId?.toString() ?? null,
+                transmission_en: variantInfo?.transmission?.toString() ?? null,
+                transmission_ar:
+                  variantInfo?.transmissionAr?.toString() ?? null,
                 // color: eachVehicle?.color ?? null,
                 // engine: eachVehicle?.engine ?? null,
                 // body_type: eachVehicle?.body_type ?? null,
