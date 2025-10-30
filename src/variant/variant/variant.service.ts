@@ -44,13 +44,23 @@ export class VariantService {
             ),
           ).then((res) =>
             (res?.data?.data || []).map(
-              ({ TrimId, Trim, IsActive, TransmissionTypeId, FuelTypeId }) => ({
+              ({
+                TrimId,
+                Trim,
+                IsActive,
+                TransmissionTypeId,
+                FuelTypeId,
+                Transmission,
+                FuelType,
+              }) => ({
                 variantId: TrimId,
                 model: { id: model.id },
                 name: Trim,
                 active: Number(IsActive),
-                transmission: TransmissionTypeId,
-                fuelType: FuelTypeId,
+                transmissionId: TransmissionTypeId,
+                transmission: Transmission,
+                fuelTypeId: FuelTypeId,
+                fuelType: FuelType,
               }),
             ),
           ),
@@ -64,10 +74,14 @@ export class VariantService {
               },
             ),
           ).then((res) =>
-            (res?.data?.data || []).map(({ TrimId, Trim }) => ({
-              variantId: TrimId,
-              nameAr: Trim,
-            })),
+            (res?.data?.data || []).map(
+              ({ TrimId, Trim, Transmission, FuelType }) => ({
+                variantId: TrimId,
+                nameAr: Trim,
+                transmissionAr: Transmission,
+                fuelTypeAr: FuelType,
+              }),
+            ),
           ),
         ]);
 

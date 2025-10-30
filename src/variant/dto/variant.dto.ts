@@ -1,6 +1,6 @@
 import { Transform } from 'class-transformer';
 import { IsArray, IsInt, IsOptional, IsEnum } from 'class-validator';
-import { FuelType, Transmission } from '../entities/variant.enum';
+import { FuelTypes, Transmissions } from '../entities/variant.enum';
 
 /**
  * Data transfer object for retrieving vehicle variants/trims for specific models
@@ -37,8 +37,8 @@ export class GetVariantsDto {
         : undefined,
   )
   @IsArray()
-  @IsEnum(Transmission, { each: true })
-  transmission?: Transmission[];
+  @IsEnum(Transmissions, { each: true })
+  transmission?: Transmissions[];
 
   @IsOptional()
   @Transform(({ value }) =>
@@ -49,6 +49,6 @@ export class GetVariantsDto {
         : undefined,
   )
   @IsArray()
-  @IsEnum(FuelType, { each: true })
-  fuelType?: FuelType[];
+  @IsEnum(FuelTypes, { each: true })
+  fuelType?: FuelTypes[];
 }
