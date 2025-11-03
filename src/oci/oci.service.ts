@@ -6,6 +6,7 @@ import {
 } from 'oci-common';
 import * as objectstorage from 'oci-objectstorage';
 import { ConfigService } from '@nestjs/config';
+import { decrypt, encrypt } from 'src/helpers/encryption';
 
 @Injectable()
 export class OciService {
@@ -169,5 +170,13 @@ export class OciService {
     } catch (error) {
       throw error;
     }
+  }
+
+  async encryptHash(data: string) {
+    return await encrypt(data);
+  }
+
+  async decryptHash(data: string) {
+    return await decrypt(data);
   }
 }

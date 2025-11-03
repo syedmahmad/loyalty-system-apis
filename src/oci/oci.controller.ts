@@ -23,4 +23,22 @@ export class OciController {
     const data = await this.ociService.decryptData(body.data);
     return { data: data };
   }
+
+  @Post('encryptHash')
+  async encryptHash(
+    @Body()
+    body: any,
+  ): Promise<any> {
+    const data = await this.ociService.encryptHash(body.data);
+    return { data: data };
+  }
+
+  @Post('decryptHash')
+  async decryptHash(
+    @Body()
+    body: any,
+  ): Promise<any> {
+    const data = await this.ociService.decryptHash(body.data);
+    return { data: data };
+  }
 }
