@@ -13,6 +13,7 @@ import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
 import { CustomerSegmentMember } from 'src/customer-segment/entities/customer-segment-member.entity';
 import { Tenant } from 'src/tenants/entities/tenant.entity';
 import { DeviceToken } from 'src/petromin-it/notification/entities/device-token.entity';
+import { Vehicle } from 'src/vehicles/entities/vehicle.entity';
 
 @Entity()
 export class Customer {
@@ -165,4 +166,7 @@ export class Customer {
 
   @OneToMany(() => DeviceToken, (DeviceToken) => DeviceToken.customer)
   firebaseTokens: DeviceToken[];
+
+  @OneToMany(() => Vehicle, (Vehicle) => Vehicle.customer)
+  vehicles: Vehicle[];
 }

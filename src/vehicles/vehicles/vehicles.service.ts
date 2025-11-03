@@ -299,10 +299,17 @@ export class VehiclesService {
     }
   }
 
+  /**
+   * Returns the service list(s) for all vehicles of a customer.
+   * If plateNo is provided, returns only that vehicle. Otherwise, returns all vehicles.
+   *
+   * Previously picked only the first element from Resty.
+   * There is no need to pick only the first: instead, process all vehicles belonging to the customer.
+   */
   async getServiceList(bodyPayload) {
     const { customerId, plateNo, businessUnitId, tenantId } = bodyPayload;
     try {
-      // Step 1: Find customer
+      // Step 1: Find customer in local DB
       const customer = await this.customerRepo.findOne({
         where: {
           uuid: customerId,
@@ -326,7 +333,7 @@ export class VehiclesService {
         if (customerInfoFromResty.length) {
           // Only picking first customer for now
           customerVehicles = await this.getVehicleInfoFromResty({
-            customer_id: customerInfoFromResty[0].customer_id,
+            customer_id: customerInfoFromResty[0]?.customer_id, // resty works with his Ids, not our ids.
             loginInfo,
           });
 
@@ -339,6 +346,7 @@ export class VehiclesService {
               : customerVehicles;
 
             // Parallelize fetching vehicle services for performance
+            // mostly we will have only one vehicle, so we are not parallelizing here. as plateNo is provided, we are not fetching all vehicles.
             const allVehicleServices = (
               await Promise.all(
                 filteredVehicles.map(async (vehicle) => {
@@ -385,10 +393,10 @@ export class VehiclesService {
         }
       }
 
+      // Fetch feedbacks for all services, if any vehicleServices exist
       let feedbacks: any[] = [];
       if (vehicleServices.length) {
         try {
-          // The customer_id here is hardcoded, replace it if dynamic is needed
           const feedbackRes = await axios.get(
             `${process.env.DRAGON_WORKSHOPS_URL}/feedback?customer_id=${customerId}`,
             {
@@ -406,9 +414,9 @@ export class VehiclesService {
         }
       }
 
-      let updatedVehicleServices = [];
+      // Merge feedback onto each vehicle's services
+      let updatedVehicleServices: any[] = [];
       if (feedbacks.length) {
-        // Efficiently merge feedbacks by iterating once and using a map for lookups if many feedbacks/services.
         updatedVehicleServices = vehicleServices.map((vehicle) => ({
           ...vehicle,
           services: vehicle.services.map((service) => {
@@ -446,17 +454,18 @@ export class VehiclesService {
         };
       }
 
+      // TODO: if vechile re-add only then return services that are done after re-add, else do nothing.
       // If plateNo is provided, return single object instead of array
       if (plateNo) {
         return {
           success: true,
           message: 'Successfully fetched the data!',
-          result: finalResult[0], // Return first (and only) vehicle object
+          result: finalResult[0], // Return first matching vehicle object, as that's what API expects
           errors: [],
         };
       }
 
-      // Default case: return array of vehicles
+      // Otherwise, return the full array
       return {
         success: true,
         message: 'Successfully fetched the data!',
@@ -714,6 +723,13 @@ export class VehiclesService {
         }
 
         if (restyVehicles) {
+          // need to update logic here because
+          // what if same vehicle is already added by someone else.
+          // what if same vehicle is already added by the same customer.
+          // what if same vehicle present in local but it status in inactive.
+          // what if same customer deleted this vehicle, now not need to show him again.
+          // what if customer deleted his account of his vehicle and wanted join us agian. In this case
+          // we need to add his vehicle again.
           // 2. Get local vehicles
           const localVehicles = await this.vehiclesRepository.find({
             where: { customer: { id: customer.id }, status: 1 },
@@ -730,6 +746,7 @@ export class VehiclesService {
               // in this case, we do nothing, will not include these vehicles.
               const deactivatedVehicle = await this.vehiclesRepository.findOne({
                 where: {
+                  // that is the culprit. but question is how to check this like there are possibility that other customer has same plate_no.
                   customer: { id: customer.id },
                   plate_no: eachVehicle.plate_no,
                   status: In([0, 3]), // look for deactivated or deleted vehicles

@@ -20,6 +20,7 @@ import { Wallet } from 'src/wallet/entities/wallet.entity';
 import { TiersService } from 'src/tiers/tiers/tiers.service';
 import { RestyCustomerProfileSelection } from 'src/customers/entities/resty_customer_profile_selection.entity';
 import { OpenAIService } from 'src/openai/openai/openai.service';
+import { Vehicle } from 'src/vehicles/entities/vehicle.entity';
 
 @Injectable()
 export class CustomerProfileService {
@@ -39,6 +40,9 @@ export class CustomerProfileService {
     private readonly openaiService: OpenAIService,
     @InjectRepository(RestyCustomerProfileSelection)
     private readonly restyCustomerProfileSelectionRepo: Repository<RestyCustomerProfileSelection>,
+
+    @InjectRepository(Vehicle)
+    private vehiclesRepository: Repository<Vehicle>,
   ) {}
 
   async getProfile(customerId: string, language_code: string = 'en') {
@@ -330,6 +334,7 @@ export class CustomerProfileService {
   async confirmAccountDeletion(customerId: string, dto: RequestDeletionDto) {
     const customerInfo = await this.customerRepo.findOne({
       where: { uuid: customerId, status: 1 },
+      relations: ['vehicles'],
     });
 
     if (!customerInfo) throw new NotFoundException('Customer not found');
@@ -345,6 +350,11 @@ export class CustomerProfileService {
       reason_for_deletion: dto.reason_for_deletion,
       reason_for_deletion_other: dto.reason_for_deletion_other,
     });
+
+    for (const vehicle of customerInfo.vehicles) {
+      vehicle.status = 3; // Set status to deelte
+      await this.vehiclesRepository.save(vehicle);
+    }
 
     // need to delete this as well, so rety things will clear if any.
     await this.restyCustomerProfileSelectionRepo.delete({

@@ -32,13 +32,13 @@ export class CustomerProfileController {
     return await this.profileService.updateProfile(id, dto);
   }
 
-  @Post('delete-request')
-  async requestDeletion(
-    @Param('id') id: string,
-    @Body() dto: RequestDeletionDto,
-  ) {
-    return await this.profileService.requestAccountDeletion(id, dto);
-  }
+  // @Post('delete-request')
+  // async requestDeletion(
+  //   @Param('id') id: string,
+  //   @Body() dto: RequestDeletionDto,
+  // ) {
+  //   return await this.profileService.requestAccountDeletion(id, dto);
+  // }
 
   @Post('refer-by')
   async referBy(@Body() dto: ReferByDto) {
