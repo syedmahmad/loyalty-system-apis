@@ -302,6 +302,7 @@ export class RestyService {
         relations: ['tenant', 'business_unit'],
       });
 
+      // creating new customer with status 2. becasue need to give points
       if (!customer) {
         const businessUnitId = parseInt(process.env.NCMC_PETROMIN_BU!, 10);
         const tenantId = parseInt(process.env.NCMC_PETROMIN_TENANT!, 10);
