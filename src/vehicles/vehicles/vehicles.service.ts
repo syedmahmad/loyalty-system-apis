@@ -730,7 +730,9 @@ export class VehiclesService {
           // what if same customer deleted this vehicle, now not need to show him again.
           // what if customer deleted his account of his vehicle and wanted join us agian. In this case
           // we need to add his vehicle again.
-          // 2. Get local vehicles
+
+          // 2. Get local vehicles, if customer re-add vehicles, these will come here, don't need to check
+          // edither he has deleted or not.
           const localVehicles = await this.vehiclesRepository.find({
             where: { customer: { id: customer.id }, status: 1 },
           });
@@ -742,19 +744,25 @@ export class VehiclesService {
             // add them in local vehicles but
             // do not again add deleted or inactive vehicles.
             if (!localVinSet.has(eachVehicle.plate_no)) {
-              // we have deleted or inactive vehicles but resty does not have delted or inactive funcitonlaity
+              // we have deleted or inactive vehicles but resty does not have deleted or inactive funcitonlaity
               // in this case, we do nothing, will not include these vehicles.
-              const deactivatedVehicle = await this.vehiclesRepository.findOne({
+              // Find all vehicles with this plate_no and status (deactivated/deleted), regardless of customer,
+              // and also get associated customer(s) for each vehicle.
+              const deactivatedVehicles = await this.vehiclesRepository.find({
                 where: {
-                  // that is the culprit. but question is how to check this like there are possibility that other customer has same plate_no.
-                  customer: { id: customer.id },
                   plate_no: eachVehicle.plate_no,
                   status: In([0, 3]), // look for deactivated or deleted vehicles
                 },
+                relations: ['customer'], // get all customer(s) related to these vehicles
               });
 
-              if (deactivatedVehicle) {
-                continue; // Skip adding this vehicle as it's deactivated
+              if (deactivatedVehicles.length > 0) {
+                const customerMobileHash = deactivatedVehicles.map(
+                  (v) => v.customer.hashed_number,
+                );
+                if (customerMobileHash.includes(customer.hashed_number)) {
+                  continue; // Skip adding this vehicle as it's deactivated by the same customer.
+                }
               }
               // Fetch make, model, and variant info in parallel
               const [makeInfo, modelInfo] = await Promise.all([

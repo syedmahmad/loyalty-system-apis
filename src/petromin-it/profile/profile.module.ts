@@ -12,6 +12,7 @@ import { CouponsModule } from 'src/coupons/coupons.module';
 import { TiersModule } from 'src/tiers/tiers.module';
 import { RestyCustomerProfileSelection } from 'src/customers/entities/resty_customer_profile_selection.entity';
 import { OpenaiModule } from 'src/openai/openai.module';
+import { Vehicle } from 'src/vehicles/entities/vehicle.entity';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { OpenaiModule } from 'src/openai/openai.module';
       Referral,
       Wallet,
       RestyCustomerProfileSelection,
+      Vehicle,
     ]),
     CustomerModule,
     OciModule,
