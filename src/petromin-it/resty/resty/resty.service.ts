@@ -4,7 +4,18 @@ import { Repository } from 'typeorm';
 import { RestyInvoicesInfo } from '../entities/resty_invoices_info.entity';
 import { VehicleServiceJob } from '../entities/vehicle_service_job.entity';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { restyLatestInvoices } from './invoices.data';
+import { Customer } from 'src/customers/entities/customer.entity';
+import { encrypt } from 'src/helpers/encryption';
+import { VehiclesService } from 'src/vehicles/vehicles/vehicles.service';
+import { Wallet } from 'src/wallet/entities/wallet.entity';
+import { Rule } from 'src/rules/entities/rules.entity';
+import { TiersService } from 'src/tiers/tiers/tiers.service';
+import { WalletService } from 'src/wallet/wallet/wallet.service';
+import { v4 as uuidv4 } from 'uuid';
+import {
+  WalletTransactionStatus,
+  WalletTransactionType,
+} from 'src/wallet/entities/wallet-transaction.entity';
 
 @Injectable()
 export class RestyService {
@@ -15,6 +26,16 @@ export class RestyService {
     private readonly vehicleServiceJobRepo: Repository<VehicleServiceJob>,
     @InjectRepository(RestyInvoicesInfo)
     private readonly restyInvoicesInfo: Repository<RestyInvoicesInfo>,
+    @InjectRepository(Customer)
+    private readonly customerRepo: Repository<Customer>,
+    @InjectRepository(Wallet)
+    private readonly walletRepo: Repository<Wallet>,
+    @InjectRepository(Rule)
+    private readonly rulesRepo: Repository<Rule>,
+
+    private readonly vehicleService: VehiclesService,
+    private readonly tierService: TiersService,
+    private readonly walletService: WalletService,
   ) {}
 
   /**
@@ -156,6 +177,49 @@ export class RestyService {
     return this.vehicleServiceJobRepo.save(record);
   }
 
+  /**
+   * Get new invoice rows from vw_pe_masterdata based on last stored invoice date
+   */
+  async getNewInvoicesAfterLastSync(): Promise<any[]> {
+    const lastTimestamp = await this.getLatestTimestamp();
+
+    if (!lastTimestamp) {
+      console.log('⚠️ No previous timestamp found — fetching all data');
+      return this.restyIncoicesInfoRepo.query(`
+      SELECT * FROM vw_pe_masterdata
+      ORDER BY STR_TO_DATE(InvoiceDate, '%Y-%m-%d %H:%i:%s') ASC
+    `);
+    }
+
+    console.log('🔎 Fetching data after:', lastTimestamp);
+
+    const result = await this.restyIncoicesInfoRepo.query(
+      `
+      SELECT *
+      FROM vw_pe_masterdata
+      WHERE STR_TO_DATE(InvoiceDate, '%Y-%m-%d %H:%i:%s') > STR_TO_DATE(?, '%Y-%m-%d %H:%i:%s')
+      ORDER BY STR_TO_DATE(InvoiceDate, '%Y-%m-%d %H:%i:%s') ASC
+    `,
+      [lastTimestamp],
+    );
+
+    return result;
+  }
+
+  formatDateToMySQL(dateString: string): string {
+    const date = new Date(dateString);
+
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0'); // months are 0-indexed
+    const day = String(date.getDate()).padStart(2, '0');
+
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const seconds = String(date.getSeconds()).padStart(2, '0');
+
+    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+  }
+
   // I have multiple invoices in databse and in each invoice have multiple items, with same invoice of user entries.
   // There could be multiple invoices for each customer and there could be multiple customers data in this array.
 
@@ -166,95 +230,193 @@ export class RestyService {
   // there could be multiple customers invoices with multiple items.Final array could be like that but you can
   // give me better optimise json if you want.
 
-  // @Cron(CronExpression.EVERY_10_SECONDS)
+  @Cron(CronExpression.EVERY_DAY_AT_2AM)
   async processLatestInvoices() {
     console.log('processLatestInvoices :::');
 
-    const invoices = restyLatestInvoices;
-    const total = invoices.length;
-    if (total > 0) {
-      const invoicesMap = new Map<string, any>();
+    // 🔹 Step 1: Fetch only new data
+    const invoices = await this.getNewInvoicesAfterLastSync();
 
-      for (const row of invoices) {
-        const invoiceKey = row.InvoiceID;
+    if (!invoices || invoices.length === 0) {
+      console.log('✅ No new invoices found after last sync.');
+      return;
+    }
 
-        // If this invoice isn't already in our map, add it
-        if (!invoicesMap.has(invoiceKey)) {
-          invoicesMap.set(invoiceKey, {
-            CustomerID: row.customermaster_id,
-            CustomerName: row.CustomerName,
-            CustomerMobile: row.Mobile,
-            Email: row.Email,
-            StatusFlag: row.StatusFlag,
-            Nationality: row.Nationality,
-            BirthDate: row.BirthDate,
-            LocationName: row.LocationName,
-            MakeName: row.MakeName,
-            ModelName: row.ModelName,
-            VehicleYear: row.VehicleYear,
-            VehicleTransmissionTypeID: row.VehicleTransmissionTypeID,
-            VIN: row.VIN,
-            PlateNumber: row.PlateNumber,
-            BranchCode: row.BranchCode,
-            BranchName: row.BranchName,
-            City: row.City,
-            InvoiceID: row.InvoiceID,
-            InvoiceDate: new Date(row.InvoiceDate).toUTCString(),
-            InvoiceNumber: row.InvoiceNumber,
-            InvoiceSubTotalAmount:
-              row.InvoiceBeforeTaxAmount?.toFixed(4) ?? '0.0000',
-            InvoiceTotalAmount: row.InvoiceTotalAmount?.toFixed(4) ?? '0.0000',
-            InvoiceTotalDiscountAmount:
-              row.InvoiceDiscountAmount?.toFixed(4) ?? '0.0000',
-            Latitude: row.Latitude?.toString() ?? '',
-            Longitude: row.Longitude?.toString() ?? '',
-            Mileage: row.WorkOrderMileage,
-            Items: [],
-          });
-        }
+    console.log(`🧾 Found ${invoices.length} new records to process.`);
 
-        // Build item object from this row
-        const item = {
-          ItemBeforeTaxAmount: row.ItemBeforeTaxAmount?.toFixed(4) ?? '0.0000',
-          ItemGroup: row.ItemGroup ?? null,
-          ServiceBeforeTaxAmount:
-            row.ServiceBeforeTaxAmount?.toFixed(4) ?? '0.0000',
-          ServiceItem: row.ItemName ?? null,
-          ServiceName: row.ServiceName ?? null,
-        };
+    // 🔹 Step 2: Group and process
+    const invoicesMap = new Map<string, any>();
 
-        // Push item into the corresponding invoice's Items array
-        invoicesMap.get(invoiceKey).Items.push(item);
+    for (const row of invoices) {
+      const invoiceKey = row.InvoiceID;
+
+      if (!invoicesMap.has(invoiceKey)) {
+        invoicesMap.set(invoiceKey, {
+          CustomerID: row.customermaster_id,
+          CustomerName: row.CustomerName,
+          CustomerMobile: row.Mobile,
+          Email: row.Email,
+          StatusFlag: row.StatusFlag,
+          Nationality: row.Nationality,
+          BirthDate: row.BirthDate,
+          LocationName: row.LocationName,
+          MakeName: row.MakeName,
+          ModelName: row.ModelName,
+          VehicleYear: row.VehicleYear,
+          VehicleTransmissionTypeID: row.VehicleTransmissionTypeID,
+          VIN: row.VIN,
+          PlateNumber: row.PlateNumber,
+          BranchCode: row.BranchCode,
+          BranchName: row.BranchName,
+          City: row.City,
+          InvoiceID: row.InvoiceID,
+          InvoiceDate: new Date(row.InvoiceDate).toUTCString(),
+          InvoiceNumber: row.InvoiceNumber,
+          InvoiceSubTotalAmount: Number(row.InvoiceBeforeTaxAmount || 0),
+          InvoiceTotalAmount: Number(row.InvoiceTotalAmount || 0),
+          InvoiceTotalDiscountAmount: Number(row.InvoiceDiscountAmount || 0),
+          Latitude: row.Latitude ?? '',
+          Longitude: row.Longitude ?? '',
+          Mileage: row.WorkOrderMileage,
+          Items: [],
+        });
       }
 
-      // Return grouped and formatted invoices
-      const processedInvocies = Array.from(invoicesMap.values());
+      invoicesMap.get(invoiceKey).Items.push({
+        ItemBeforeTaxAmount: Number(row.ItemBeforeTaxAmount || 0),
+        ItemGroup: row.ItemGroup,
+        ServiceBeforeTaxAmount: Number(row.ServiceBeforeTaxAmount || 0),
+        ServiceItem: row.ItemName,
+        ServiceName: row.ServiceName,
+      });
+    }
 
-      // Bulk create instead of inserting one by one
-      const invoiceEntities = processedInvocies.map((singleInvoice) =>
-        this.restyInvoicesInfo.create({
+    const processedInvoices = Array.from(invoicesMap.values());
+
+    // 🔹 Step 3: Build all entities in memory (bulk)
+    const invoiceEntities: RestyInvoicesInfo[] = [];
+
+    for (const singleInvoice of processedInvoices) {
+      let customer = await this.customerRepo.findOne({
+        where: { hashed_number: encrypt(singleInvoice.CustomerMobile) },
+        relations: ['tenant', 'business_unit'],
+      });
+
+      if (!customer) {
+        const businessUnitId = parseInt(process.env.NCMC_PETROMIN_BU!, 10);
+        const tenantId = parseInt(process.env.NCMC_PETROMIN_TENANT!, 10);
+
+        const newCustomer = this.customerRepo.create({
+          tenant: { id: tenantId },
+          business_unit: { id: businessUnitId },
+          hashed_number: encrypt(singleInvoice.CustomerMobile),
+          uuid: uuidv4(),
+          status: 2,
+        });
+
+        const savedCustomer = await this.customerRepo.save(newCustomer);
+
+        await this.walletService.createWallet({
+          customer_id: savedCustomer.id,
+          business_unit_id: businessUnitId,
+          tenant_id: tenantId,
+        });
+
+        customer = savedCustomer;
+      }
+
+      let points = 0;
+
+      // 🔹 Calculate reward points if applicable
+      const wallet = await this.walletRepo.findOne({
+        where: { customer: { id: customer.id } },
+      });
+
+      const businessUnitId = customer.business_unit.id;
+      const earningRule = await this.rulesRepo.findOne({
+        where: {
+          business_unit: { id: businessUnitId },
+          rule_type: 'spend and earn',
+          reward_condition: 'perAmount',
+        },
+        relations: ['tiers'],
+      });
+
+      if (earningRule) {
+        const minAmountSpent =
+          parseInt(earningRule.min_amount_spent as any) === 0
+            ? 1
+            : parseInt(earningRule.min_amount_spent as any);
+        const multiplier = singleInvoice.InvoiceTotalAmount / minAmountSpent;
+        let rewardPoints = multiplier * earningRule.reward_points;
+
+        const currentCustomerTier =
+          await this.tierService.getCurrentCustomerTier(customer.id);
+        if (currentCustomerTier?.tier) {
+          const matchingRuleTier = earningRule.tiers.find(
+            (rt) => rt.tier.id === currentCustomerTier.tier.id,
+          );
+          if (
+            matchingRuleTier?.point_conversion_rate &&
+            matchingRuleTier?.point_conversion_rate !== 1
+          ) {
+            rewardPoints +=
+              rewardPoints * matchingRuleTier.point_conversion_rate;
+          }
+        }
+
+        points = rewardPoints;
+
+        // add transaction
+        try {
+          await this.walletService.addTransaction(
+            {
+              wallet_id: wallet.id,
+              business_unit_id: businessUnitId,
+              type: WalletTransactionType.EARN,
+              status: WalletTransactionStatus.ACTIVE,
+              amount: singleInvoice.InvoiceTotalAmount,
+              points_balance: points,
+              source_type: 'invoice',
+              description: `Points earned for invoice ${singleInvoice.InvoiceNumber}`,
+              created_by: 0,
+              prev_available_points: wallet.available_balance,
+            },
+            0,
+            true,
+          );
+        } catch (err) {
+          console.log('⚠️ Error adding wallet transaction:', err);
+        }
+      }
+
+      // ✅ Collect invoice entity (do NOT save yet)
+      invoiceEntities.push(
+        this.restyIncoicesInfoRepo.create({
           customer_id: singleInvoice.CustomerID,
           phone: singleInvoice.CustomerMobile,
           invoice_no: singleInvoice.InvoiceNumber,
           invoice_id: singleInvoice.InvoiceID,
-          invoice_amount: singleInvoice.InvoiceTotalAmount,
-          invoice_date: singleInvoice.InvoiceDate,
+          invoice_amount: Number(singleInvoice.InvoiceTotalAmount),
+          invoice_date: this.formatDateToMySQL(singleInvoice.InvoiceDate),
           vehicle_plate_number: singleInvoice.PlateNumber,
           vehicle_vin: singleInvoice.VIN,
-          vehicle_info: singleInvoice.VehicleInfo,
-          // Ensure claim-related fields remain null/empty
-          is_claimed: null,
-          clamined_points: null,
-          claim_id: null,
-          claim_date: null,
+          is_claimed: true,
+          clamined_points: Math.round(points),
+          claim_id: uuidv4(),
+          claim_date: new Date().toISOString(),
           free_items: null,
           sync_log_id: null,
         }),
       );
+    }
 
-      await this.restyInvoicesInfo.save(invoiceEntities);
-
-      console.dir(processedInvocies, { depth: null });
+    // 🔹 Step 4: Bulk save all invoices in one go
+    if (invoiceEntities.length > 0) {
+      await this.restyIncoicesInfoRepo.save(invoiceEntities);
+      console.log(`✅ Bulk inserted ${invoiceEntities.length} invoices.`);
+    } else {
+      console.log('✅ No new invoice entities to save.');
     }
   }
 }
