@@ -6,7 +6,6 @@ import { VehicleServiceJob } from '../entities/vehicle_service_job.entity';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { Customer } from 'src/customers/entities/customer.entity';
 import { encrypt } from 'src/helpers/encryption';
-import { VehiclesService } from 'src/vehicles/vehicles/vehicles.service';
 import { Wallet } from 'src/wallet/entities/wallet.entity';
 import { Rule } from 'src/rules/entities/rules.entity';
 import { TiersService } from 'src/tiers/tiers/tiers.service';
@@ -16,6 +15,7 @@ import {
   WalletTransactionStatus,
   WalletTransactionType,
 } from 'src/wallet/entities/wallet-transaction.entity';
+import { NotificationService } from 'src/petromin-it/notification/notification/notifications.service';
 
 @Injectable()
 export class RestyService {
@@ -33,7 +33,7 @@ export class RestyService {
     @InjectRepository(Rule)
     private readonly rulesRepo: Repository<Rule>,
 
-    private readonly vehicleService: VehiclesService,
+    private readonly notificationService: NotificationService,
     private readonly tierService: TiersService,
     private readonly walletService: WalletService,
   ) {}
@@ -388,6 +388,15 @@ export class RestyService {
         } catch (err) {
           console.log('⚠️ Error adding wallet transaction:', err);
         }
+
+        await this.notificationService.addNotification({
+          customer_id: customer.id,
+          notification_type: 'earn_points',
+          notification_details: {
+            title: 'Earned Points',
+            body: `Congratulations! You've earned ${points} points for invoice ${singleInvoice.InvoiceNumber}`,
+          },
+        });
       }
 
       // ✅ Collect invoice entity (do NOT save yet)

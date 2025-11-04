@@ -11,6 +11,16 @@ import {
 import { Customer } from 'src/customers/entities/customer.entity';
 import { Notification } from 'src/petromin-it/notification/entities/notification.entity';
 
+interface CreateNotificationDto {
+  customer_id?: number | null;
+  notification_type: string;
+  reference_id?: number | null;
+  notification_details?: { title: string; body: string };
+  send_by?: number | null;
+  scheduled_at?: Date | null;
+  user_ids?: number[] | null;
+}
+
 @Injectable()
 export class NotificationService {
   constructor(
@@ -209,5 +219,29 @@ export class NotificationService {
       success: true,
       message: 'Notification marked as read successfully',
     };
+  }
+
+  /**
+   * Add a new notification record.
+   */
+  async addNotification(data: CreateNotificationDto): Promise<Notification> {
+    try {
+      const notification = this.notificationRepo.create({
+        customer_id: data.customer_id ?? null,
+        notification_type: data.notification_type,
+        reference_id: data.reference_id ?? null,
+        is_read: false,
+        read_at: null,
+        notification_details: data.notification_details ?? null,
+        send_by: data.send_by ?? null,
+        scheduled_at: data.scheduled_at ?? null,
+        user_ids: data.user_ids ?? null,
+      });
+
+      return await this.notificationRepo.save(notification);
+    } catch (error) {
+      console.error('❌ Failed to create notification:', error);
+      throw new Error('Failed to create notification');
+    }
   }
 }
