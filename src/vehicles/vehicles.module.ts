@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Vehicle } from './entities/vehicle.entity';
 import { VehiclesController } from './vehicles/vehicles.controller';
@@ -8,7 +8,7 @@ import { MakeEntity } from 'src/make/entities/make.entity';
 import { ModelEntity } from 'src/model/entities/model.entity';
 import { Log } from 'src/logs/entities/log.entity';
 import { VariantEntity } from 'src/variant/entities/variant.entity';
-import { OpenaiModule } from 'src/openai/openai.module';
+import { AuthModule } from 'src/petromin-it/auth/auth.module';
 @Module({
   imports: [
     TypeOrmModule.forFeature([
@@ -19,7 +19,8 @@ import { OpenaiModule } from 'src/openai/openai.module';
       VariantEntity,
       Log,
     ]),
-    OpenaiModule,
+
+    forwardRef(() => AuthModule),
   ],
   controllers: [VehiclesController],
   providers: [VehiclesService],

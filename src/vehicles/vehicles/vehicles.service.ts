@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  forwardRef,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { Vehicle } from '../entities/vehicle.entity';
@@ -9,10 +14,7 @@ import { ModelEntity } from 'src/model/entities/model.entity';
 import { Log } from 'src/logs/entities/log.entity';
 import { decrypt } from 'src/helpers/encryption';
 import { VariantEntity } from 'src/variant/entities/variant.entity';
-import { OpenAIService } from 'src/openai/openai/openai.service';
-// import { FuelType } from 'src/variant/entities/variant.enum';
-// import { decrypt } from 'src/helpers/encryption';
-
+import { AuthService } from 'src/petromin-it/auth/auth/auth.service';
 @Injectable()
 export class VehiclesService {
   constructor(
@@ -34,7 +36,8 @@ export class VehiclesService {
     @InjectRepository(VariantEntity)
     private readonly variantRepository: Repository<VariantEntity>,
 
-    private readonly openAIService: OpenAIService,
+    @Inject(forwardRef(() => AuthService))
+    private readonly authService: AuthService,
   ) {}
 
   /**
@@ -66,6 +69,7 @@ export class VehiclesService {
           business_unit: { id: parsedBusinessUnitId },
           tenant: { id: parsedTenantId },
         },
+        relations: ['business_unit', 'tenant'],
       });
 
       if (!customer) throw new NotFoundException('Customer not found');
@@ -135,6 +139,9 @@ export class VehiclesService {
           ...prePareData,
           plate_no: plate_no ?? null,
         });
+
+        // give rewards points when someone adds new car
+        await this.authService.rewardPoints(customer, 'Add New Car Points');
       }
 
       vehicle = await this.vehiclesRepository.save(vehicle);

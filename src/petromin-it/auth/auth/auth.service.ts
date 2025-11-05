@@ -349,7 +349,7 @@ export class AuthService {
   /**
    * Reward points for customer and log result
    */
-  private async rewardPoints(customer: Customer, event: string) {
+  async rewardPoints(customer: Customer, event: string) {
     const payload = {
       customer_id: customer.uuid,
       event,

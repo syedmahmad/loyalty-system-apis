@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthController } from 'src/petromin-it/auth/auth/auth.controller';
 import { AuthService } from 'src/petromin-it/auth/auth/auth.service';
@@ -24,9 +24,10 @@ import { RestyCustomerProfileSelection } from 'src/customers/entities/resty_cust
     ]),
     CustomerModule,
     WalletModule,
-    VehicleModule,
+    forwardRef(() => VehicleModule),
   ],
   controllers: [AuthController],
   providers: [AuthService, QrcodesService, OciService],
+  exports: [AuthService],
 })
 export class AuthModule {}
