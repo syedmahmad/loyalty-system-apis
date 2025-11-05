@@ -826,7 +826,7 @@ export class CustomerService {
 
         const saveNotificationPayload = {
           title: 'Points Earned',
-          body: `Earned ${rewardPoints} points ${event}`,
+          body: `Earned ${rewardPoints} points against this event: ${event}`,
           customer_id: customer.id,
         };
 
