@@ -1,7 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import * as admin from 'firebase-admin';
 import { v4 as uuidv4 } from 'uuid';
 import { DeviceToken } from 'src/petromin-it/notification/entities/device-token.entity';
 import { RegisterToken } from 'src/petromin-it/notification/dto/notifications.dto';
@@ -28,18 +27,7 @@ export class NotificationService {
     private readonly customerRepo: Repository<Customer>,
     @InjectRepository(DeviceToken)
     private readonly tokenRepo: Repository<DeviceToken>,
-  ) {
-    // Initialize Firebase Admin only once
-    if (!admin.apps.length) {
-      admin.initializeApp({
-        credential: admin.credential.cert({
-          projectId: process.env.FIREBASE_PROJECT_ID,
-          clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-          privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-        }),
-      });
-    }
-  }
+  ) {}
 
   /**
    * Registers or updates a device token for a customer.
