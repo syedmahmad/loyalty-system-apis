@@ -12,6 +12,7 @@ import { Rule } from 'src/rules/entities/rules.entity';
 import { VehicleModule } from 'src/vehicles/vehicles.module';
 import { TiersModule } from 'src/tiers/tiers.module';
 import { WalletModule } from 'src/wallet/wallet.module';
+import { NotificationModule } from '../notification/notification.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { WalletModule } from 'src/wallet/wallet.module';
     ]),
     VehicleModule,
     TiersModule,
+    NotificationModule,
     WalletModule,
   ],
   controllers: [RestyController],
