@@ -59,7 +59,7 @@ export class AuthService {
       let customer = await this.customerRepo.findOne({
         where: {
           hashed_number: hashedPhone,
-          status: In([0, 1]), // only active customer
+          status: In([0, 1, 2]), // only active customer
           business_unit: { id: parseInt(businessUnitId) },
           tenant: { id: parseInt(tenantId) },
         },
@@ -184,7 +184,7 @@ export class AuthService {
       const customer = await this.customerRepo.findOne({
         where: {
           hashed_number: hashedPhone,
-          status: In([0, 1]), // only active customer
+          status: In([0, 1, 2]), // only active customer
           business_unit: { id: +businessUnitId },
           tenant: { id: +tenantId },
         },
