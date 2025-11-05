@@ -4,12 +4,10 @@ import { Repository } from 'typeorm';
 import * as admin from 'firebase-admin';
 import { v4 as uuidv4 } from 'uuid';
 import { DeviceToken } from 'src/petromin-it/notification/entities/device-token.entity';
-import {
-  RegisterToken,
-  SendNotification,
-} from 'src/petromin-it/notification/dto/notifications.dto';
+import { RegisterToken } from 'src/petromin-it/notification/dto/notifications.dto';
 import { Customer } from 'src/customers/entities/customer.entity';
 import { Notification } from 'src/petromin-it/notification/entities/notification.entity';
+import axios from 'axios';
 
 interface CreateNotificationDto {
   customer_id?: number | null;
@@ -91,55 +89,78 @@ export class NotificationService {
     }
   }
 
-  async sendToUser(data: SendNotification) {
-    const { customer_id, title, body } = data;
-
-    const customer = await this.customerRepo.findOne({
-      where: { uuid: customer_id, status: 1 },
-    });
-
-    if (!customer) {
-      throw new NotFoundException(`Customer not found`);
-    }
-
-    // Always save the notification to the database first
+  async sendToUser(
+    payload: any,
+    saveNotificationPayload: {
+      title: string;
+      body: string;
+      customer_id: number;
+    },
+  ) {
+    // const { customer_id, title, body } = data;
+    // const customer = await this.customerRepo.findOne({
+    //   where: { uuid: customer_id, status: 1 },
+    // });
+    // if (!customer) {
+    //   throw new NotFoundException(`Customer not found`);
+    // }
+    // // Always save the notification to the database first
     await this.notificationRepo.save({
-      notification_details: { title, body },
-      customer_id: customer.id,
+      notification_details: {
+        title: saveNotificationPayload.title,
+        body: saveNotificationPayload.body,
+      },
+      customer_id: saveNotificationPayload.customer_id,
       notification_type: 'general',
       uuid: uuidv4(),
     });
-
-    // Now try to send to device(s) if tokens exist
-    const tokens = await this.tokenRepo.find({
-      where: { customer: { id: customer.id } },
-    });
-
-    if (!tokens.length) {
-      // Notification is saved, but no device token to send to
-      return {
-        success: true,
-        message: `Notification saved, but device token does not exist. It will be available in notification history.`,
-      };
-    }
-
-    const messages = tokens.map((t) => ({
-      token: t.token,
-      notification: { title, body },
-    }));
+    // // Now try to send to device(s) if tokens exist
+    // const tokens = await this.tokenRepo.find({
+    //   where: { customer: { id: customer.id } },
+    // });
+    // if (!tokens.length) {
+    //   // Notification is saved, but no device token to send to
+    //   return {
+    //     success: true,
+    //     message: `Notification saved, but device token does not exist. It will be available in notification history.`,
+    //   };
+    // }
+    // const messages = tokens.map((t) => ({
+    //   token: t.token,
+    //   notification: { title, body },
+    // }));
+    // try {
+    //   await Promise.all(messages.map((msg) => admin.messaging().send(msg)));
+    //   return {
+    //     success: true,
+    //     message: `Notification Sent!`,
+    //   };
+    // } catch (error: any) {
+    //   return {
+    //     success: false,
+    //     message: `Notification saved, but failed to send to device(s)!`,
+    //   };
+    // }
 
     try {
-      await Promise.all(messages.map((msg) => admin.messaging().send(msg)));
+      // Send notification request
+      await axios.post(
+        process.env.NCMC_COMMUNICATION_NOTIFICATION_ENDPOINT,
+        payload,
+        {
+          headers: {
+            Authorization: `Bearer ${process.env.NCMC_COMMUNICATION_TOKEN}`,
+            'Content-Type': 'application/json',
+          },
+        },
+      );
 
-      return {
-        success: true,
-        message: `Notification Sent!`,
-      };
-    } catch (error: any) {
-      return {
-        success: false,
-        message: `Notification saved, but failed to send to device(s)!`,
-      };
+      console.log('Notification sent successfully');
+    } catch (err) {
+      console.error(
+        'Error while sending notification:',
+        err.response?.data || err.message,
+      );
     }
   }
 

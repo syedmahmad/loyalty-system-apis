@@ -63,6 +63,8 @@ import { NotificationService } from 'src/petromin-it/notification/notification/n
 import { CustomerPreference } from 'src/petromin-it/preferences/entities/customer-preference.entity';
 import { OpenAIService } from 'src/openai/openai/openai.service';
 import { BUSINESS_UNITS_WITH_UUID } from './type/type';
+import axios from 'axios';
+import { DeviceToken } from 'src/petromin-it/notification/entities/device-token.entity';
 
 @Injectable()
 export class CustomerService {
@@ -102,6 +104,8 @@ export class CustomerService {
     private readonly campaignRepository: Repository<Campaign>,
     @InjectRepository(Coupon)
     private readonly couponRepo: Repository<Coupon>,
+    @InjectRepository(DeviceToken)
+    private readonly deviceTokenRepo: Repository<DeviceToken>,
 
     @InjectRepository(UserCoupon)
     private userCouponRepo: Repository<UserCoupon>,
@@ -797,14 +801,47 @@ export class CustomerService {
     });
 
     if (customerPreferences.push_notification) {
+      const deviceToken = this.deviceTokenRepo.findOne({
+        where: { customer: { id: customer.id } },
+      });
+
+      const templateId = process.env.EARNED_POINTS_TEMPLATE_ID;
+
       try {
-        await this.notificationService.sendToUser({
-          customer_id: customer.uuid,
-          title: `${rewardPoints} Points Earned`,
+        // Prepare data payload
+        const payload = {
+          template_id: templateId,
+          language_code: 'en', // or 'ar'
+          business_name: 'PETROMINit',
+          to: [
+            {
+              user_device_token: deviceToken,
+              dynamic_fields: {
+                rewardPoints: rewardPoints.toString(),
+                event: event,
+              },
+            },
+          ],
+        };
+
+        const saveNotificationPayload = {
+          title: 'Points Earned',
           body: `Earned ${rewardPoints} points ${event}`,
-        });
+          customer_id: customer.id,
+        };
+
+        // Send notification request
+        await this.notificationService.sendToUser(
+          payload,
+          saveNotificationPayload,
+        );
+
+        console.log('Notification sent successfully');
       } catch (err) {
-        console.error('Error while sending notification', err);
+        console.error(
+          'Error while sending notification:',
+          err.response?.data || err.message,
+        );
       }
     }
 

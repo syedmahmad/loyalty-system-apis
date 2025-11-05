@@ -35,10 +35,10 @@ import { Campaign } from 'src/campaigns/entities/campaign.entity';
 import { CampaignTier } from 'src/campaigns/entities/campaign-tier.entity';
 import { CouponSyncLog } from './entities/coupon-sync-logs.entity';
 import { CouponUsage } from './entities/coupon-usages.entity';
-import { Notification } from 'src/petromin-it/notification/entities/notification.entity';
 import { NotificationModule } from 'src/petromin-it/notification/notification.module';
 import { OpenaiModule } from 'src/openai/openai.module';
 import { CustomerPreference } from 'src/petromin-it/preferences/entities/customer-preference.entity';
+import { DeviceToken } from 'src/petromin-it/notification/entities/device-token.entity';
 @Module({
   imports: [
     TypeOrmModule.forFeature([
@@ -60,6 +60,7 @@ import { CustomerPreference } from 'src/petromin-it/preferences/entities/custome
       WalletOrder,
       QrCode,
       Rule,
+      DeviceToken,
       CampaignCustomerSegment,
       CampaignRule,
       CampaignCoupons,

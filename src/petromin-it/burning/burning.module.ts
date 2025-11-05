@@ -17,6 +17,7 @@ import { WalletSettings } from 'src/wallet/entities/wallet-settings.entity';
 import { NotificationModule } from '../notification/notification.module';
 import { OpenaiModule } from 'src/openai/openai.module';
 import { CustomerPreference } from '../preferences/entities/customer-preference.entity';
+import { DeviceToken } from 'src/petromin-it/notification/entities/device-token.entity';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { CustomerPreference } from '../preferences/entities/customer-preference.
       Tenant,
       Rule,
       CustomerPreference,
+      DeviceToken,
     ]),
     OciModule,
     WalletModule,

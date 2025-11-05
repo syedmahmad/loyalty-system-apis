@@ -20,6 +20,7 @@ import { WalletService } from 'src/wallet/wallet/wallet.service';
 import { NotificationService } from 'src/petromin-it/notification/notification/notifications.service';
 import { OpenAIService } from 'src/openai/openai/openai.service';
 import { CustomerPreference } from 'src/petromin-it/preferences/entities/customer-preference.entity';
+import { DeviceToken } from 'src/petromin-it/notification/entities/device-token.entity';
 
 @Injectable()
 export class BurningService {
@@ -38,6 +39,9 @@ export class BurningService {
 
     @InjectRepository(CustomerPreference)
     private readonly customerPreferencesRepo: Repository<CustomerPreference>,
+
+    @InjectRepository(DeviceToken)
+    private readonly deviceTokenRepo: Repository<DeviceToken>,
 
     private readonly tiersService: TiersService,
     private readonly walletService: WalletService,
@@ -444,14 +448,45 @@ export class BurningService {
       });
 
       if (customerPreferences && customerPreferences?.push_notification) {
+        const deviceToken = this.deviceTokenRepo.findOne({
+          where: { customer: { id: customer.id } },
+        });
+
+        const templateId = process.env.BURNED_POINTS_TEMPLATE_ID;
+
         try {
-          await this.notificationService.sendToUser({
-            customer_id: customer.uuid,
+          // Prepare data payload
+          const payload = {
+            template_id: templateId,
+            language_code: 'en', // or 'ar'
+            business_name: 'PETROMINit',
+            to: [
+              {
+                user_device_token: deviceToken,
+                dynamic_fields: {
+                  appliedBurnPoints: appliedBurnPoints.toString(),
+                  discountAmount: discountAmount.toString(),
+                },
+              },
+            ],
+          };
+
+          const saveNotificationPayload = {
             title: 'Points Burned',
             body: `You've Burned ${appliedBurnPoints} points and got a discount of ${discountAmount} SAR`,
-          });
+            customer_id: customer.id,
+          };
+
+          // Send notification request
+          await this.notificationService.sendToUser(
+            payload,
+            saveNotificationPayload,
+          );
         } catch (err) {
-          console.error('Error while sending notification', err);
+          console.error(
+            'Error while sending notification:',
+            err.response?.data || err.message,
+          );
         }
       }
 

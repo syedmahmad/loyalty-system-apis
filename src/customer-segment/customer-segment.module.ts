@@ -32,6 +32,7 @@ import { CouponType } from 'src/coupon_type/entities/coupon_type.entity';
 import { NotificationModule } from 'src/petromin-it/notification/notification.module';
 import { OpenaiModule } from 'src/openai/openai.module';
 import { CustomerPreference } from 'src/petromin-it/preferences/entities/customer-preference.entity';
+import { DeviceToken } from 'src/petromin-it/notification/entities/device-token.entity';
 
 @Module({
   imports: [
@@ -51,6 +52,7 @@ import { CustomerPreference } from 'src/petromin-it/preferences/entities/custome
       CustomerActivity,
       CampaignCoupons,
       Campaign,
+      DeviceToken,
       Coupon,
       UserCoupon,
       Tier,
