@@ -801,7 +801,7 @@ export class CustomerService {
     });
 
     if (customerPreferences.push_notification) {
-      const deviceToken = this.deviceTokenRepo.findOne({
+      const deviceToken = await this.deviceTokenRepo.findOne({
         where: { customer: { id: customer.id } },
       });
 
@@ -815,7 +815,7 @@ export class CustomerService {
           business_name: 'PETROMINit',
           to: [
             {
-              user_device_token: deviceToken,
+              user_device_token: deviceToken.token,
               dynamic_fields: {
                 rewardPoints: rewardPoints.toString(),
                 event: event,

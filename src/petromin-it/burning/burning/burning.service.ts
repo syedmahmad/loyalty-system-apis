@@ -448,7 +448,7 @@ export class BurningService {
       });
 
       if (customerPreferences && customerPreferences?.push_notification) {
-        const deviceToken = this.deviceTokenRepo.findOne({
+        const deviceToken = await this.deviceTokenRepo.findOne({
           where: { customer: { id: customer.id } },
         });
 
@@ -462,7 +462,7 @@ export class BurningService {
             business_name: 'PETROMINit',
             to: [
               {
-                user_device_token: deviceToken,
+                user_device_token: deviceToken.token,
                 dynamic_fields: {
                   appliedBurnPoints: appliedBurnPoints.toString(),
                   discountAmount: discountAmount.toString(),
