@@ -448,7 +448,7 @@ export class BurningService {
       });
 
       if (customerPreferences && customerPreferences?.push_notification) {
-        const deviceToken = await this.deviceTokenRepo.findOne({
+        const deviceTokens = await this.deviceTokenRepo.find({
           where: { customer: { id: customer.id } },
           order: { createdAt: 'DESC' },
         });
@@ -461,15 +461,13 @@ export class BurningService {
             template_id: templateId,
             language_code: 'en', // or 'ar'
             business_name: 'PETROMINit',
-            to: [
-              {
-                user_device_token: deviceToken.token,
-                dynamic_fields: {
-                  appliedBurnPoints: appliedBurnPoints.toString(),
-                  discountAmount: discountAmount.toString(),
-                },
+            to: deviceTokens.map((token) => ({
+              user_device_token: token.token,
+              dynamic_fields: {
+                appliedBurnPoints: appliedBurnPoints.toString(),
+                discountAmount: discountAmount.toString(),
               },
-            ],
+            })),
           };
 
           const saveNotificationPayload = {

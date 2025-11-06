@@ -802,7 +802,7 @@ export class CustomerService {
 
     if (customerPreferences.push_notification) {
       // There could be duplicate entries or multiple, so fetch the last one (most recently created)
-      const deviceToken = await this.deviceTokenRepo.findOne({
+      const deviceTokens = await this.deviceTokenRepo.find({
         where: { customer: { id: customer.id } },
         order: { createdAt: 'DESC' },
       });
@@ -815,15 +815,13 @@ export class CustomerService {
           template_id: templateId,
           language_code: 'en', // or 'ar'
           business_name: 'PETROMINit',
-          to: [
-            {
-              user_device_token: deviceToken.token,
-              dynamic_fields: {
-                rewardPoints: rewardPoints.toString(),
-                event: event,
-              },
+          to: deviceTokens.map((token) => ({
+            user_device_token: token.token,
+            dynamic_fields: {
+              rewardPoints: rewardPoints.toString(),
+              event: event,
             },
-          ],
+          })),
         };
 
         const saveNotificationPayload = {
