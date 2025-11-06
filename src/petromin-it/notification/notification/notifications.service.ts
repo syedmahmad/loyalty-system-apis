@@ -72,7 +72,8 @@ export class NotificationService {
           // Idempotent: Do not create a duplicate
         } else {
           // This device token exists for another customer; reassign the device to this customer
-          existingToken.customer = customer;
+          existingToken.customer.id = customer.id;
+          // existingToken.customer.id = customer.id;
           existingToken.platform = platform;
           await this.tokenRepo.save(existingToken);
         }
