@@ -56,34 +56,30 @@ export class NotificationService {
     }
 
     try {
-      /**
-       * Search for an existing token record for this device.
-       * This could be for this customer or another customer if user switches account.
-       */
-      const existingToken = await this.tokenRepo.findOne({ where: { token } });
+      // Check if this device token already exists in DB
+      const existingToken = await this.tokenRepo.findOne({
+        where: { token },
+        relations: ['customer'],
+      });
 
       if (existingToken) {
-        if (existingToken.customer.id === customer.id) {
-          // Same customer, update platform if needed
+        // If token is already associated with this customer, just update platform if needed
+        if (
+          existingToken.customer &&
+          existingToken.customer.id === customer.id
+        ) {
           if (existingToken.platform !== platform) {
             existingToken.platform = platform;
             await this.tokenRepo.save(existingToken);
           }
-          // Idempotent: Do not create a duplicate
         } else {
-          // This device token exists for another customer; reassign the device to this customer
-          existingToken.customer.id = customer.id;
-          // existingToken.customer.id = customer.id;
+          // Token exists but assigned to a different customer - reassign it to this one!
+          existingToken.customer = customer;
           existingToken.platform = platform;
           await this.tokenRepo.save(existingToken);
         }
       } else {
-        /**
-         * New device for this customer.
-         * Remove all tokens for this customer with this token (defensive), then add.
-         * (Could also allow multiple tokens per customer for different devices.)
-         * But merging the two approaches: allow one token per device, many tokens per customer (for multiple devices).
-         */
+        // Token doesn't exist - create new for this customer/device
         await this.tokenRepo.save(
           this.tokenRepo.create({
             customer,
@@ -93,12 +89,8 @@ export class NotificationService {
         );
       }
 
-      // Defensive: Remove any accidental duplicates (in rare race condition), keeping only one per (token)
-      // await this.tokenRepo
-      //   .createQueryBuilder()
-      //   .delete()
-      //   .where("token = :token AND id NOT IN (SELECT min(id) FROM device_tokens WHERE token = :token)", { token })
-      //   .execute();
+      // NOTE: Do NOT remove other tokens of this customer.
+      // We now allow each customer to have multiple device tokens (multi-device notification support).
 
       return {
         success: true,
