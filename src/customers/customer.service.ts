@@ -801,8 +801,10 @@ export class CustomerService {
     });
 
     if (customerPreferences.push_notification) {
+      // There could be duplicate entries or multiple, so fetch the last one (most recently created)
       const deviceToken = await this.deviceTokenRepo.findOne({
         where: { customer: { id: customer.id } },
+        order: { createdAt: 'DESC' },
       });
 
       const templateId = process.env.EARNED_POINTS_TEMPLATE_ID;

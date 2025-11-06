@@ -450,6 +450,7 @@ export class BurningService {
       if (customerPreferences && customerPreferences?.push_notification) {
         const deviceToken = await this.deviceTokenRepo.findOne({
           where: { customer: { id: customer.id } },
+          order: { createdAt: 'DESC' },
         });
 
         const templateId = process.env.BURNED_POINTS_TEMPLATE_ID;

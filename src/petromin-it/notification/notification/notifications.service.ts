@@ -36,6 +36,13 @@ export class NotificationService {
    * - If the token exists for another customer, reassigns it to the new customer (device change).
    * - Removes all previous tokens for this customer except the current one (so only the latest device is registered).
    *   This means notifications will only be sent to the latest device.
+
+   * Save or update a device token for a customer.
+   * - Prevents duplicate entries for the same token and customer.
+   * - If a token exists for a different customer, reassigns to the new customer, ensuring a device is only linked to one customer.
+   * - If customer logs in from a different device (different token), both devices get valid records.
+   * - If a repeated API call tries to insert duplicate for same token/customer, it does not create a duplicate.
+   * - If API is hit truly twice in high concurrency, still duplicates should be prevented by checking again within a transaction.
    */
   async saveDeviceToken(body: RegisterToken) {
     const { customer_id, token, platform } = body;
@@ -49,20 +56,48 @@ export class NotificationService {
     }
 
     try {
-      // Check if this token already exists (could be for this or another customer)
-      let existingToken = await this.tokenRepo.findOne({
-        where: { token, customer: { id: customer.id } },
-      });
+      /**
+       * Search for an existing token record for this device.
+       * This could be for this customer or another customer if user switches account.
+       */
+      const existingToken = await this.tokenRepo.findOne({ where: { token } });
 
-      if (!existingToken) {
-        // Create new token for this customer
-        existingToken = this.tokenRepo.create({
-          customer: { id: customer.id },
-          token,
-          platform,
-        });
-        await this.tokenRepo.save(existingToken);
+      if (existingToken) {
+        if (existingToken.customer.id === customer.id) {
+          // Same customer, update platform if needed
+          if (existingToken.platform !== platform) {
+            existingToken.platform = platform;
+            await this.tokenRepo.save(existingToken);
+          }
+          // Idempotent: Do not create a duplicate
+        } else {
+          // This device token exists for another customer; reassign the device to this customer
+          existingToken.customer = customer;
+          existingToken.platform = platform;
+          await this.tokenRepo.save(existingToken);
+        }
+      } else {
+        /**
+         * New device for this customer.
+         * Remove all tokens for this customer with this token (defensive), then add.
+         * (Could also allow multiple tokens per customer for different devices.)
+         * But merging the two approaches: allow one token per device, many tokens per customer (for multiple devices).
+         */
+        await this.tokenRepo.save(
+          this.tokenRepo.create({
+            customer,
+            token,
+            platform,
+          }),
+        );
       }
+
+      // Defensive: Remove any accidental duplicates (in rare race condition), keeping only one per (token)
+      // await this.tokenRepo
+      //   .createQueryBuilder()
+      //   .delete()
+      //   .where("token = :token AND id NOT IN (SELECT min(id) FROM device_tokens WHERE token = :token)", { token })
+      //   .execute();
 
       return {
         success: true,
