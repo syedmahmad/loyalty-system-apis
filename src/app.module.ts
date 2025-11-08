@@ -46,6 +46,7 @@ import { RestyInvoicesInfoModule } from 'src/petromin-it/resty/resty.module';
 import { TransactionSyncLogsSubscriber } from 'src/petromin-it/resty/subscribers/transaction-sync-logs.subscriber';
 import { GvrTransactionModule } from './gvr/gvr.module';
 import { OffersModule } from './offers/offers.module';
+import { MasterModule } from './master/master.module';
 
 @Module({
   imports: [
@@ -109,6 +110,7 @@ import { OffersModule } from './offers/offers.module';
     PreferencesModule,
     NotificationModule,
     OffersModule,
+    MasterModule,
   ],
   controllers: [AppController],
   providers: [AppService, AxiosLoggerInterceptor],

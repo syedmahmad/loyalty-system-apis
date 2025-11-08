@@ -9,8 +9,10 @@ import {
   ManyToOne,
   JoinColumn,
   BeforeInsert,
+  OneToMany,
 } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
+import { TierLocalEntity } from './tier-local.entity';
 
 @Entity('tiers')
 export class Tier {
@@ -103,4 +105,10 @@ export class Tier {
 
   @Column({ type: 'int', default: 1 })
   status: number; // 1 = active, 0 = inactive
+
+  @OneToMany(() => TierLocalEntity, (locale) => locale.tier, {
+    cascade: true,
+    eager: true,
+  })
+  locales: TierLocalEntity[];
 }

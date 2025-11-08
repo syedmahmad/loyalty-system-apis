@@ -17,6 +17,7 @@ import { UserCoupon } from 'src/wallet/entities/user-coupon.entity';
 import { WalletOrder } from 'src/wallet/entities/wallet-order.entity';
 import { Rule } from 'src/rules/entities/rules.entity';
 import { OpenaiModule } from 'src/openai/openai.module';
+import { TierLocalEntity } from './entities/tier-local.entity';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { OpenaiModule } from 'src/openai/openai.module';
       WalletOrder,
       Rule,
       WalletSettings,
+      TierLocalEntity
     ]),
     OpenaiModule,
   ],

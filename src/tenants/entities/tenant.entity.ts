@@ -6,7 +6,17 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   BeforeInsert,
+  ManyToOne,
+  JoinColumn,
+  // ManyToMany,
+  // JoinTable,
+  OneToMany,
 } from 'typeorm';
+import { CountryEntity } from 'src/master/country/entities/country.entity';
+// import { LanguageEntity } from 'src/master/language/entities/language.entity';
+// import { CurrencyEntity } from 'src/master/currency/entities/currency.entity';
+import { TenantLanguageEntity } from './tenant-language.entity';
+import { TenantCurrencyEntity } from './tenant-currency.entity';
 
 @Entity()
 export class Tenant {
@@ -25,6 +35,7 @@ export class Tenant {
   @Column({
     type: 'char',
     length: 36,
+    // unique: true,
   })
   uuid: string = uuidv4();
 
@@ -49,4 +60,18 @@ export class Tenant {
 
   @Column({ type: 'int', default: 1 })
   status: number; // 1 = active, 0 = inactive
+
+  @ManyToOne(() => CountryEntity, { eager: true })
+  @JoinColumn({ name: 'country_id' })
+  country: CountryEntity;
+
+  @OneToMany(() => TenantLanguageEntity, (tl) => tl.tenant, {
+    cascade: true,
+  })
+  languages: TenantLanguageEntity[];
+
+  @OneToMany(() => TenantCurrencyEntity, (tc) => tc.tenant, {
+    cascade: true,
+  })
+  currencies: TenantCurrencyEntity[];
 }
