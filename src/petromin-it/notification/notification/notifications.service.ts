@@ -188,6 +188,10 @@ export class NotificationService {
   ) {
     console.log('language_code', language_code);
 
+    if (!customer_id) {
+      throw new NotFoundException(`Customer not found`);
+    }
+
     const customer = await this.customerRepo.findOne({
       where: { uuid: customer_id, status: 1 },
     });

@@ -315,6 +315,7 @@ export class VehiclesService {
    */
   async getServiceList(bodyPayload) {
     const { customerId, plateNo, businessUnitId, tenantId } = bodyPayload;
+    if (!customerId) throw new NotFoundException('Customer not found');
     try {
       // Step 1: Find customer in local DB
       const customer = await this.customerRepo.findOne({
@@ -480,13 +481,13 @@ export class VehiclesService {
         errors: [],
       };
     } catch (error: any) {
-      const errResponse = error?.response;
-      return errResponse;
+      throw error;
     }
   }
 
   async getLastServiceFeedback(bodyPayload) {
     const { customerId, businessUnitId, tenantId } = bodyPayload;
+    if (!customerId) throw new NotFoundException('Customer not found');
     try {
       // Step 1: Find customer
       const customer = await this.customerRepo.findOne({
@@ -682,13 +683,7 @@ export class VehiclesService {
         errors: [],
       };
     } catch (error: any) {
-      console.error('getLastServiceFeedback Error:', error);
-      return {
-        success: false,
-        message: error?.message || 'Something went wrong',
-        result: {},
-        errors: [error],
-      };
+      throw error;
     }
   }
 
@@ -854,13 +849,7 @@ export class VehiclesService {
         errors: [],
       };
     } catch (error) {
-      console.error('getCustomerVehicle Error:', error);
-      return {
-        success: false,
-        message: error.message || 'Something went wrong',
-        result: {},
-        errors: [error],
-      };
+      throw error;
     }
   }
 
