@@ -23,6 +23,7 @@ import { WalletSettings } from 'src/wallet/entities/wallet-settings.entity';
 import { WalletTransaction } from 'src/wallet/entities/wallet-transaction.entity';
 import * as dayjs from 'dayjs';
 import { OpenAIService } from 'src/openai/openai/openai.service';
+import { TierLocalEntity } from '../entities/tier-local.entity';
 
 @Injectable()
 export class TiersService {
@@ -65,39 +66,25 @@ export class TiersService {
     private readonly openaiService: OpenAIService,
   ) {}
 
-  async create(dto: CreateTierDto, user: string): Promise<Tier> {
+  async create(dto: CreateTierDto, user: string) {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
     queryRunner.data = { user };
 
     try {
-      // 1. Create and save the Tier
-      const tier = this.tiersRepository.create({
-        ...dto,
-        status: 1,
-      }); // Default to active status
-
-      tier.benefits = dto.benefits;
-      const savedTier = await queryRunner.manager.save(tier);
-
-      // 2. Optionally create RuleTarget records
-      // if (dto.rule_targets?.length) {
-      //   const createdBy = dto.created_by || user;
-
-      //   const targets = dto.rule_targets.map((rt) =>
-      //     this.ruleTargetRepository.create({
-      //       rule_id: rt.rule_id,
-      //       target_type: 'tier',
-      //       target_id: savedTier.id,
-      //       created_by: createdBy,
-      //       updated_by: createdBy,
-      //     }),
-      //   );
-
-      //   await queryRunner.manager.save(targets);
-      // }
-
+      const { locales, id, ...rest } = dto;
+      const tierToSave = this.tiersRepository.create({
+        ...(id && { id }),
+        ...rest,
+        locales: locales?.map((locale) => ({
+          name: locale.name,
+          description: locale.description,
+          benefits: locale.benefits || [],
+          language: { id: locale.languageId },
+        })) as any,
+      });
+      const savedTier = await this.tiersRepository.save(tierToSave);
       await queryRunner.commitTransaction();
       return savedTier;
     } catch (err) {
@@ -379,7 +366,6 @@ export class TiersService {
         tier.business_unit = bu;
       }
 
-      tier.benefits = dto.benefits;
       Object.assign(tier, dto);
       const updatedTier = await queryRunner.manager.save(tier);
 

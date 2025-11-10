@@ -33,10 +33,10 @@ export class Tier {
   @Column()
   business_unit_id: number;
 
-  @Column()
+  @Column({ nullable: true })
   name: string; // e.g., Bronze, Silver, Gold
 
-  @Column()
+  @Column({ nullable: true })
   name_ar: string; // e.g., Bronze, Silver, Gold
 
   @Column('int', { default: 1 })
@@ -55,7 +55,7 @@ export class Tier {
     type: 'char',
     length: 36,
   })
-  uuid: string = uuidv4();
+  uuid: string;
 
   @BeforeInsert()
   assignUuid() {

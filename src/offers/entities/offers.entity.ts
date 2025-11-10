@@ -14,6 +14,7 @@ import {
 import { v4 as uuidv4 } from 'uuid';
 import { ActiveStatus } from '../type/types';
 import { OfferCustomerSegment } from './offer-customer-segments.entity';
+import { OfferLocalEntity } from './offer-locale.entity';
 
 class ImageLang {
   en?: string;
@@ -36,18 +37,6 @@ export class OffersEntity {
 
   @Column()
   tenant_id: number;
-
-  @Column()
-  offer_title: string;
-
-  @Column({ nullable: true })
-  offer_title_ar: string;
-
-  @Column({ nullable: true })
-  offer_subtitle: string;
-
-  @Column({ nullable: true })
-  offer_subtitle_ar: string;
 
   @Column({ nullable: true })
   station_type: string;
@@ -133,4 +122,10 @@ export class OffersEntity {
 
   @Column({ type: 'simple-json', nullable: true })
   images?: Images;
+
+  @OneToMany(() => OfferLocalEntity, (locale) => locale.offer, {
+    cascade: true,
+    eager: true,
+  })
+  locales: OfferLocalEntity[];
 }

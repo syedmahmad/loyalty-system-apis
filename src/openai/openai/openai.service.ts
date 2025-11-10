@@ -1,5 +1,21 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import OpenAI from 'openai';
+import { z } from 'zod';
+
+const translatedText = z.object({
+  translatedText: z.record(
+    z.string(),
+    z.union([z.string(), z.object({}), z.array(z.string())]),
+  ),
+});
+
+interface TranslateTextParams {
+  text: string | object | string[];
+  targetLanguage: string | string[];
+  sourceLanguage?: string;
+  model?: string;
+  temperature?: number;
+}
 
 @Injectable()
 export class OpenAIService {
@@ -114,6 +130,51 @@ export class OpenAIService {
           error?.message || 'Unable to analyze this image.'
         }`,
       );
+    }
+  }
+
+  /**
+   * Translates text to one or more target languages
+   * Supports various input formats (string, object, array)
+   *
+   * @param params Translation parameters including a text and target languages
+   * @returns Object containing translations for each requested language
+   */
+  async translateText(params: TranslateTextParams) {
+    try {
+      const { text, targetLanguage, sourceLanguage } = params;
+      const languages = Array.isArray(targetLanguage)
+        ? targetLanguage
+        : [targetLanguage];
+      const textToTranslate =
+        typeof text === 'string' ? text : JSON.stringify(text);
+      const sourceLanguagePart = sourceLanguage ? `from ${sourceLanguage}` : '';
+
+      const response = await this.openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        temperature: 0.7,
+        messages: [
+          {
+            role: 'system',
+            content: `Translate the text ${sourceLanguagePart} into ${languages.join(', ')}. Use appropriate local tone, cultural context, and regional expressions for each target language. Adapt formality levels and cultural nuances while maintaining the original meaning. Return JSON: {"translatedText": {"langCode": "translation"}}. Use language codes as keys.`,
+          },
+          {
+            role: 'user',
+            content: textToTranslate,
+          },
+        ],
+        response_format: { type: 'json_object' },
+      });
+
+      if (response.choices[0].message.refusal) {
+        throw new BadRequestException(response.choices[0].message.refusal);
+      }
+
+      return translatedText.parse(
+        JSON.parse(response.choices[0].message.content),
+      );
+    } catch (error) {
+      return { error: 'Translation failed', raw: error };
     }
   }
 }

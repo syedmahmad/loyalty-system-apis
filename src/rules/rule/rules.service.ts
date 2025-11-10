@@ -13,6 +13,7 @@ import {
   WalletTransactionType,
 } from 'src/wallet/entities/wallet-transaction.entity';
 import { Customer } from 'src/customers/entities/customer.entity';
+import { RuleLocaleEntity } from '../entities/rule-locale.entity';
 
 @Injectable()
 export class RulesService {
@@ -34,6 +35,9 @@ export class RulesService {
 
     @InjectRepository(Customer)
     private readonly customerRepo: Repository<Customer>,
+
+    @InjectRepository(RuleLocaleEntity)
+    private readonly ruleLocaleRepository: Repository<RuleLocaleEntity>,
 
     @InjectDataSource()
     private readonly dataSource: DataSource,
@@ -79,6 +83,11 @@ export class RulesService {
         dynamic_conditions: dto?.dynamic_conditions || null,
         is_priority: dto?.is_priority,
         business_unit_id: dto?.business_unit_id,
+        locales: dto?.locales?.map((locale) => ({
+          name: locale.name,
+          description: locale.description,
+          language: { id: locale.languageId },
+        })) as any,
       });
 
       const savedRule = await queryRunner.manager.save(rule);
@@ -423,6 +432,27 @@ export class RulesService {
               rule,
               tier: { id: t.tier_id },
               point_conversion_rate: t.point_conversion_rate ?? 1,
+            });
+            await manager.save(newRuleTier);
+          }
+        }
+      }
+
+      if (dto.locales) {
+        for (const locale of dto.locales) {
+          const existing = await manager.findOne(RuleLocaleEntity, {
+            where: { rule: { id: rule.id }, id: locale.id },
+          });
+
+          if (existing) {
+            existing.name = locale.name ?? existing.name;
+            existing.description = locale.description ?? existing.description;
+            await manager.save(existing);
+          } else {
+            const newRuleTier = manager.create(RuleLocaleEntity, {
+              rule,
+              name: locale.name ?? null,
+              description: locale.description ?? null,
             });
             await manager.save(newRuleTier);
           }

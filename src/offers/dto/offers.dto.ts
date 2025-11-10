@@ -44,7 +44,53 @@ export class ImagesDto {
   mobile: ImageLangDto;
 }
 
+export class CreateOfferLocalizationDto {
+  @IsOptional()
+  @IsInt()
+  @IsNotEmpty()
+  id?: number;
+
+  @IsNotEmpty()
+  @IsString()
+  languageId: string;
+
+  @IsNotEmpty()
+  @IsString()
+  title: string;
+
+  @IsOptional()
+  @IsString()
+  subtitle?: string;
+
+  @IsOptional()
+  @IsString()
+  description?: string;
+
+  @IsOptional()
+  @IsString()
+  term_and_condition?: string;
+
+  @IsOptional()
+  @IsString()
+  desktop_image?: string;
+
+  @IsOptional()
+  @IsString()
+  mobile_image?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => BenefitDto)
+  benefits?: BenefitDto[];
+}
+
 export class CreateOfferDto {
+  @IsInt()
+  @IsNotEmpty()
+  @IsOptional()
+  id?: number;
+
   @IsInt()
   tenant_id: number;
 
@@ -125,6 +171,12 @@ export class CreateOfferDto {
 
   @IsInt()
   all_users: number;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CreateOfferLocalizationDto)
+  locales?: CreateOfferLocalizationDto[];
 }
 
 export class UpdateOfferDto extends PartialType(CreateOfferDto) {

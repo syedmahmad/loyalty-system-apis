@@ -135,11 +135,23 @@ export class CouponsService {
 
     try {
       queryRunner.data = { user };
-      const repo = queryRunner.manager.getRepository(Coupon);
-      const coupon = repo.create(dto);
-
-      coupon.benefits = dto.benefits;
-      const savedCoupon = await repo.save(coupon);
+      const { locales, id, ...rest } = dto;
+      const coupon = this.couponRepo.create({
+        ...(id && { id }),
+        ...rest,
+        locales: locales?.map((locale) => ({
+          language: { id: locale.languageId },
+          title: locale.title,
+          description: locale.description,
+          term_and_condition: locale.term_and_condition,
+          desktop_image: locale.desktop_image,
+          mobile_image: locale.mobile_image,
+          general_error: locale.general_error,
+          exception_error: locale.exception_error,
+          benefits: locale.benefits,
+        })) as any,
+      });
+      const savedCoupon = await this.couponRepo.save(coupon);
 
       // Assign customer segments
       if (dto.customer_segment_ids?.length && dto.all_users == 0) {
@@ -425,8 +437,7 @@ export class CouponsService {
 
       if (!coupon) throw new Error(`Coupon with id ${id} not found`);
 
-      coupon.benefits = dto.benefits;
-      repo.merge(coupon, dto);
+      Object.assign(coupon, dto);
       await repo.save(coupon); // ✅ This triggers audit events and updates
 
       // === CUSTOMER SEGMENTS SYNC ===

@@ -11,6 +11,7 @@ import { RuleTier } from './entities/rules-tier';
 import { OpenaiModule } from 'src/openai/openai.module';
 import { WalletTransaction } from 'src/wallet/entities/wallet-transaction.entity';
 import { Customer } from 'src/customers/entities/customer.entity';
+import { RuleLocaleEntity } from './entities/rule-locale.entity';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { Customer } from 'src/customers/entities/customer.entity';
       WalletTransaction,
       RuleTier,
       Customer,
+      RuleLocaleEntity
     ]),
     OpenaiModule,
   ],

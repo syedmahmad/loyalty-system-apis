@@ -3,7 +3,6 @@ import { CouponType } from 'src/coupon_type/entities/coupon_type.entity';
 import { Tenant } from 'src/tenants/entities/tenant.entity';
 import {
   BeforeInsert,
-  BeforeUpdate,
   Column,
   CreateDateColumn,
   Entity,
@@ -16,6 +15,7 @@ import {
 import { v4 as uuidv4 } from 'uuid';
 import { ActiveStatus } from '../type/types';
 import { CouponCustomerSegment } from './coupon-customer-segments.entity';
+import { CouponLocaleEntity } from './coupon-locale.entity';
 
 class ImageLang {
   en?: string;
@@ -39,7 +39,7 @@ export class Coupon {
   @Column()
   tenant_id: number;
 
-  @Column()
+  @Column({ nullable: true })
   coupon_title: string;
 
   @Column({ nullable: true })
@@ -225,4 +225,10 @@ export class Coupon {
 
   @Column({ type: 'simple-json', nullable: true })
   images?: Images;
+
+  @OneToMany(() => CouponLocaleEntity, (locale) => locale.coupon, {
+    cascade: true,
+    eager: true,
+  })
+  locales: CouponLocaleEntity[];
 }

@@ -14,6 +14,7 @@ import { Tenant } from 'src/tenants/entities/tenant.entity';
 import { v4 as uuidv4 } from 'uuid';
 import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
 import { RuleTier } from './rules-tier';
+import { RuleLocaleEntity } from './rule-locale.entity';
 
 @Entity({ name: 'rules' })
 export class Rule {
@@ -34,10 +35,10 @@ export class Rule {
   @Column({ nullable: true })
   business_unit_id?: number;
 
-  @Column({ type: 'varchar' })
+  @Column({ type: 'varchar', nullable: true })
   name: string;
 
-  @Column({ type: 'varchar' })
+  @Column({ type: 'varchar', nullable: true })
   name_ar: string;
 
   @Column({ type: 'varchar', nullable: true })
@@ -136,4 +137,10 @@ export class Rule {
 
   @OneToMany(() => RuleTier, (rt) => rt.rule, { cascade: true })
   tiers: RuleTier[];
+
+  @OneToMany(() => RuleLocaleEntity, (locale) => locale.rule, {
+    cascade: true,
+    eager: true,
+  })
+  locales: RuleLocaleEntity[];
 }

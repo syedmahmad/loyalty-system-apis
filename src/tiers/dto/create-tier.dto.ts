@@ -1,6 +1,59 @@
-import { IsInt, IsString, IsOptional, Min } from 'class-validator';
+import { Type } from 'class-transformer';
+import {
+  IsInt,
+  IsString,
+  IsOptional,
+  Min,
+  IsArray,
+  ValidateNested,
+  IsNotEmpty,
+} from 'class-validator';
+
+export class BenefitDto {
+  @IsOptional()
+  @IsString()
+  icon?: string;
+
+  @IsOptional()
+  @IsString()
+  name_en?: string;
+
+  @IsOptional()
+  @IsString()
+  name_ar?: string;
+}
+
+export class CreateTierLocalizationDto {
+  @IsOptional()
+  @IsInt()
+  @IsNotEmpty()
+  id?: number;
+
+  @IsNotEmpty()
+  @IsString()
+  languageId: string;
+
+  @IsNotEmpty()
+  @IsString()
+  name: string;
+
+  @IsOptional()
+  @IsString()
+  description?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => BenefitDto)
+  benefits?: BenefitDto[];
+}
 
 export class CreateTierDto {
+  @IsInt()
+  @IsNotEmpty()
+  @IsOptional()
+  id?: number;
+
   @IsInt()
   tenant_id: number;
 
@@ -36,6 +89,12 @@ export class CreateTierDto {
   description_ar?: string;
 
   created_by?: number;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CreateTierLocalizationDto)
+  locales?: CreateTierLocalizationDto[];
 
   // rule_targets?: {
   //   rule_id: number;

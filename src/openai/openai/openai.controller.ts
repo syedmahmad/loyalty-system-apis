@@ -1,5 +1,6 @@
 import { Body, Controller, Post } from '@nestjs/common';
 import { OpenAIService } from './openai.service';
+import { TranslationDto } from '../dto/translation.dto';
 
 @Controller('openai')
 export class OpenAiController {
@@ -15,5 +16,10 @@ export class OpenAiController {
   async translateToEnglish(@Body() body: { value: string }) {
     const translated = await this.openaiService.translateToEnglish(body.value);
     return { status: true, data: translated };
+  }
+
+  @Post('translate-text')
+  async translateText(@Body() translationDto: TranslationDto): Promise<any> {
+    return this.openaiService.translateText(translationDto);
   }
 }
