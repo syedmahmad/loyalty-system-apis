@@ -1069,6 +1069,7 @@ export class VehiclesService {
     businessUnitId: string,
     platNo: string,
     customerId: string,
+    reason_for_deletion: string,
   ) {
     try {
       const customer = await this.customerRepo.findOne({
@@ -1098,6 +1099,8 @@ export class VehiclesService {
       }
 
       vehicle.status = 3; // Set status to deelte
+      vehicle.delete_requested_at = new Date();
+      vehicle.reason_for_deletion = reason_for_deletion;
       await this.vehiclesRepository.save(vehicle);
 
       return {
