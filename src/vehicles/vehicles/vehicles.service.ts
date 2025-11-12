@@ -565,6 +565,25 @@ export class VehiclesService {
         };
       }
 
+      // This code checks whether the vehicle associated with the last recorded service is still an active vehicle for the customer.
+      // It first fetches the list of active vehicles for the customer from the local database (status: 1).
+      // Then it creates a set of the plate numbers for these active vehicles.
+      // If the plate number from the most recent service (lastService.plate_no) is not found among the customer's current active vehicles,
+      // it returns a response indicating there is no service history available for this customer.
+      // Otherwise, it allows the process to continue and return the last service information.
+      const localVehicles = await this.vehiclesRepository.find({
+        where: { customer: { id: customer.id }, status: 1 },
+      });
+      const localPlatNoSet = new Set(localVehicles.map((v) => v.plate_no));
+      if (!localPlatNoSet.has(lastService?.plate_no)) {
+        return {
+          success: true,
+          message: 'No service history available for this customer',
+          result: null,
+          errors: [],
+        };
+      }
+
       // Step 5: Fetch feedback for the last service
       let feedback = null;
       try {
