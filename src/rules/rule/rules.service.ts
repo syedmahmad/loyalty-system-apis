@@ -58,8 +58,6 @@ export class RulesService extends BaseService {
         dto.created_by && dto.created_by !== 0 ? dto.created_by : 2;
 
       const rule = this.ruleRepository.create({
-        name: dto.name,
-        name_ar: dto.name_ar,
         slug: dto.slug,
         rule_type: dto.rule_type,
         tenant_id: dto.client_id,
@@ -69,8 +67,6 @@ export class RulesService extends BaseService {
         max_redeemption_points_limit: dto.max_redeemption_points_limit,
         points_conversion_factor: dto.points_conversion_factor,
         max_burn_percent_on_invoice: dto.max_burn_percent_on_invoice,
-        description: dto.description,
-        description_ar: dto.description,
         validity_after_assignment: dto.validity_after_assignment
           ? dto.validity_after_assignment
           : 0,
@@ -135,25 +131,32 @@ export class RulesService extends BaseService {
     if (!customer) throw new NotFoundException('Customer not found');
 
     // Get all active event-based earn rules
-    const rules = await this.ruleRepository.find({
-      select: [
-        'uuid',
-        'name',
-        'name_ar',
-        'reward_points',
-        'event_triggerer',
-        'description',
-        'description_ar',
-        'validity_after_assignment',
-        'status',
-      ],
-      where: {
-        tenant: { id: parseInt(tenant_id) },
-        business_unit: { id: parseInt(business_unit_id) },
-        rule_type: 'event based earn',
-        status: 1,
-      },
-    });
+    const queryBuilder = this.ruleRepository
+      .createQueryBuilder('rule')
+      .select([
+        'rule.uuid',
+        'rule.reward_points',
+        'rule.event_triggerer',
+        'rule.validity_after_assignment',
+        'rule.status',
+      ])
+      .leftJoinAndSelect('rule.locales', 'locale')
+      .leftJoinAndSelect('locale.language', 'language')
+      .where('rule.rule_type = :ruleType', { ruleType: 'event based earn' })
+      .andWhere('rule.status = :status', { status: 1 })
+      .andWhere('rule.tenant_id = :tenantId', { tenantId: parseInt(tenant_id) })
+      .andWhere('rule.business_unit_id = :businessUnitId', {
+        businessUnitId: parseInt(business_unit_id),
+      })
+      .orderBy('rule.created_at', 'DESC');
+
+    if (language_code) {
+      queryBuilder.andWhere('language.code = :language_code', {
+        language_code,
+      });
+    }
+
+    const rules = await queryBuilder.getMany();
 
     // Get rules that the customer has already earned
     const earnedTransactions = await this.walletTransactionRepository.find({
@@ -174,7 +177,7 @@ export class RulesService extends BaseService {
 
     // Filter out rules that customer has already earned
     const availableRules = rules.filter(
-      (rule) => !earnedRuleNames.has(rule.name),
+      (rule) => !earnedRuleNames.has(rule?.locales?.[0]?.name),
     );
 
     // The error message "Unknown column 'distinctAlias.Rule_id' in 'field list'" suggests that TypeORM is generating a query asking for 'Rule_id',
@@ -185,12 +188,8 @@ export class RulesService extends BaseService {
     const spendAndEarn = await this.ruleRepository.find({
       select: [
         'uuid',
-        'name',
-        'name_ar',
         'reward_points',
         'event_triggerer',
-        'description',
-        'description_ar',
         'validity_after_assignment',
         'status',
       ],
@@ -202,24 +201,18 @@ export class RulesService extends BaseService {
       },
     });
 
-    availableRules.push(spendAndEarn[0]);
+    if (spendAndEarn.length) {
+      availableRules.push(spendAndEarn[0]);
+    }
 
     // Map results and only return the correct language fields
     return await Promise.all(
       availableRules.map(async (rule) => ({
-        uuid: rule.uuid,
-        name:
-          language_code === 'ar'
-            ? await this.openaiService.translateToArabic(rule.name)
-            : rule.name,
+        uuid: rule?.uuid,
+        name: rule?.locales?.[0]?.name,
+        description: rule?.locales?.[0]?.description,
         reward_points: rule.reward_points,
         event_triggerer: rule.event_triggerer,
-        description:
-          language_code === 'ar'
-            ? rule.description !== ''
-              ? await this.openaiService.translateToArabic(rule.description)
-              : null
-            : rule.description,
         validity_after_assignment: rule.validity_after_assignment,
         status: rule.status,
       })),
@@ -290,8 +283,6 @@ export class RulesService extends BaseService {
     return this.ruleRepository.find({
       select: [
         'uuid',
-        'name',
-        'name_ar',
         'slug',
         'rule_type',
         'condition_type',
@@ -303,8 +294,6 @@ export class RulesService extends BaseService {
         'max_redeemption_points_limit',
         'points_conversion_factor',
         'max_burn_percent_on_invoice',
-        'description',
-        'description_ar',
         'validity_after_assignment',
         'frequency',
         'burn_type',
@@ -326,8 +315,6 @@ export class RulesService extends BaseService {
     const rule = await this.ruleRepository.findOne({
       select: [
         'id',
-        'name',
-        'name_ar',
         'slug',
         'rule_type',
         'condition_type',
@@ -339,8 +326,6 @@ export class RulesService extends BaseService {
         'max_redeemption_points_limit',
         'points_conversion_factor',
         'max_burn_percent_on_invoice',
-        'description',
-        'description_ar',
         'validity_after_assignment',
         'frequency',
         'burn_type',
@@ -374,8 +359,6 @@ export class RulesService extends BaseService {
       const rule = await manager.findOne(Rule, { where: { uuid } });
       if (!rule) throw new Error('Rule not found');
 
-      rule.name = dto.name ?? rule.name;
-      rule.name_ar = dto.name_ar ?? rule.name_ar;
       rule.slug = dto.slug ?? rule.slug;
       rule.rule_type = dto.rule_type ?? rule.rule_type;
       rule.min_amount_spent = dto.min_amount_spent ?? rule.min_amount_spent;
@@ -387,8 +370,6 @@ export class RulesService extends BaseService {
         dto.points_conversion_factor ?? rule.points_conversion_factor;
       rule.max_burn_percent_on_invoice =
         dto.max_burn_percent_on_invoice ?? rule.max_burn_percent_on_invoice;
-      rule.description = dto.description ?? rule.description;
-      rule.description_ar = dto.description_ar ?? rule.description_ar;
       rule.condition_type = dto.condition_type ?? rule.condition_type;
       rule.condition_operator =
         dto.condition_operator ?? rule.condition_operator;

@@ -147,7 +147,7 @@ export class BurningService {
    *  5. Create burn transaction in the wallet.
    *  6. Return structured response with details.
    */
-  async burnTransaction(body) {
+  async burnTransaction(body, langCode = 'en') {
     //#region Step 1: Extract request body
     const {
       customer_id,
@@ -197,13 +197,22 @@ export class BurningService {
       //#endregion
 
       //#region Step 4: Get active burn rules
-      const rules = await this.ruleRepo.find({
-        where: {
-          rule_type: 'burn',
-          tenant: { id: customer.tenant.id },
-          business_unit: { id: customer.business_unit.id },
-        },
-      });
+      const query = this.ruleRepo
+        .createQueryBuilder('rule')
+        .leftJoinAndSelect('rule.locales', 'locale') // join locales
+        .leftJoinAndSelect('locale.language', 'language') // join language table
+        .where('rule.rule_type = :ruleType', { ruleType: 'burn' })
+        .andWhere('rule.tenant_id = :tenantId', {
+          tenantId: customer.tenant.id,
+        })
+        .andWhere('rule.business_unit_id = :businessUnitId', {
+          businessUnitId: customer.business_unit.id,
+        });
+
+      if (langCode) {
+        query.andWhere('language.code = :langCode', { langCode });
+      }
+      const rules = await query.getMany();
 
       if (!rules.length) {
         throw new NotFoundException(`Rules not found`);
@@ -257,7 +266,7 @@ export class BurningService {
         amount: transaction_amount,
         point_balance: pointsToBurn,
         status: WalletTransactionStatus.NOT_CONFIRMED,
-        source_type: matchedRule.name,
+        source_type: matchedRule?.locales?.[0].name,
         source_id: matchedRule.id,
         description: remarks
           ? remarks

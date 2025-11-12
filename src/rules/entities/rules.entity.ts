@@ -36,12 +36,6 @@ export class Rule {
   business_unit_id?: number;
 
   @Column({ type: 'varchar', nullable: true })
-  name: string;
-
-  @Column({ type: 'varchar', nullable: true })
-  name_ar: string;
-
-  @Column({ type: 'varchar', nullable: true })
   slug: string;
 
   @Column({ type: 'varchar' })
@@ -73,12 +67,6 @@ export class Rule {
 
   @Column({ type: 'float', nullable: true })
   max_burn_percent_on_invoice: number; // for burn
-
-  @Column({ type: 'text', nullable: true })
-  description: string;
-
-  @Column({ type: 'text', nullable: true })
-  description_ar: string;
 
   @Column('int', { nullable: true })
   validity_after_assignment: number;

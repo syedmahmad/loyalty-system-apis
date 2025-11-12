@@ -58,14 +58,6 @@ export class CreateRuleDto {
 
   @IsString()
   @IsNotEmpty()
-  name: string;
-
-  @IsString()
-  @IsNotEmpty()
-  name_ar: string;
-
-  @IsString()
-  @IsNotEmpty()
   slug: string;
 
   @IsString()
@@ -116,14 +108,6 @@ export class CreateRuleDto {
   @IsOptional()
   @IsString()
   condition_value?: string;
-
-  @IsOptional()
-  @IsString()
-  description?: string;
-
-  @IsOptional()
-  @IsString()
-  description_ar?: string;
 
   @IsOptional()
   @IsNumber()

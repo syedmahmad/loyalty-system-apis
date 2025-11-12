@@ -486,7 +486,7 @@ export class CustomerService {
     return this.customeractivityRepo.save(customerActivity);
   }
 
-  async earnPoints(bodyPayload: CustomerEarnDto) {
+  async earnPoints(bodyPayload: CustomerEarnDto, langCode = 'en') {
     const { customer_id, campaign_type, campaign_id } = bodyPayload;
 
     // Step 1: Get Customer & Wallet Info
@@ -509,10 +509,14 @@ export class CustomerService {
     }
 
     // Step 2: handling CampaignRuleEarning, SimpleRuleEarning and CampaignCouponEarning
-    return this.handleCampaignEarning({ ...bodyPayload, wallet });
+    return this.handleCampaignEarning({
+      ...bodyPayload,
+      wallet,
+      langCode: langCode,
+    });
   }
 
-  async earnWithEvent(bodyPayload: EarnWithEvent) {
+  async earnWithEvent(bodyPayload: EarnWithEvent, langCode = 'en') {
     const { customer_id, event, BUId, metadata, tenantId } = bodyPayload;
 
     // 1. Find customer by uuid
@@ -528,17 +532,23 @@ export class CustomerService {
     // 2. Find earning rule by event name (case-insensitive)
     let rule;
     if (event) {
-      rule = await this.ruleRepo.findOne({
-        where: {
-          status: 1,
-          name: event,
-          rule_type: Not('burn'),
-          // event_triggerer: 'event based earn',
-        },
-      });
+      const query = this.ruleRepo
+        .createQueryBuilder('rule')
+        .leftJoinAndSelect('rule.locales', 'locale')
+        .leftJoinAndSelect('locale.language', 'language')
+        .where('rule.status = :status', { status: 1 })
+        .andWhere('rule.rule_type != :ruleType', { ruleType: 'burn' })
+        .andWhere('locale.name = :event', { event });
+
+      if (langCode) {
+        query.andWhere('language.code = :langCode', { langCode });
+      }
+
+      const rule = await query.getOne();
+
       if (rule.reward_points === 0) {
         throw new BadRequestException(
-          `There is no rewards points to aginst this ${rule.name}`,
+          `There is no rewards points to aginst this ${rule?.locales?.[0]?.name}`,
         );
       }
       if (!rule)
@@ -856,7 +866,7 @@ export class CustomerService {
     };
   }
 
-  async burnWithEvent(bodyPayload: BurnWithEvent) {
+  async burnWithEvent(bodyPayload: BurnWithEvent, langCode = 'en') {
     const { customer_id, metadata, event, tenantId } = bodyPayload;
 
     if (!metadata.amount) {
@@ -880,9 +890,19 @@ export class CustomerService {
 
     let rule;
     if (event) {
-      rule = await this.ruleRepo.findOne({
-        where: { name: event, status: 1, rule_type: 'burn' },
-      });
+      const query = this.ruleRepo
+        .createQueryBuilder('rule')
+        .leftJoinAndSelect('rule.locales', 'locale')
+        .leftJoinAndSelect('locale.language', 'language')
+        .where('rule.status = :status', { status: 1 })
+        .andWhere('rule.rule_type = :ruleType', { ruleType: 'burn' })
+        .andWhere('locale.name = :event', { event });
+
+      if (langCode) {
+        query.andWhere('language.code = :langCode', { langCode });
+      }
+      rule = await query.getOne();
+
       if (!rule)
         throw new NotFoundException('Burn rule not found for this campaign');
     } else {
@@ -1051,6 +1071,7 @@ export class CustomerService {
       campaign_id,
       coupon_info,
       metadata,
+      langCode,
     } = payload;
     const { amount } = order ?? {};
 
@@ -1064,6 +1085,7 @@ export class CustomerService {
           wallet,
           campaign_id,
           total_amount: amount,
+          langCode,
         });
 
         if (!matchedRule) {
@@ -1086,7 +1108,11 @@ export class CustomerService {
             matchedRule.rule_type === 'dynamic rule'
               ? matchedRule.condition_type
               : matchedRule.event_triggerer,
-          description: `Earned ${matchedRule.reward_points} points (${matchedRule.name})`,
+          description: `Earned ${matchedRule.reward_points} points${
+            matchedRule?.locales?.[0]?.name
+              ? ` (${matchedRule.locales[0].name})`
+              : ''
+          }`,
           validityAfterAssignment: matchedRule.validity_after_assignment,
           order,
         });
@@ -1096,7 +1122,7 @@ export class CustomerService {
           activity_type: 'rule',
           campaign_uuid,
           rule_id: matchedRule.id,
-          rule_name: matchedRule.name,
+          rule_name: matchedRule?.locales?.[0]?.name,
           amount: matchedRule.reward_points || 0,
         });
 
@@ -1127,11 +1153,11 @@ export class CustomerService {
     }
   }
 
-  async handleRuleEarning(payload) {
+  async handleRuleEarning(payload, langCode = 'en') {
     const { wallet, rule_info, order } = payload;
 
     // Step 1: Resolve matching rule
-    const matchedRule = await this.getRule(rule_info.uuid, order);
+    const matchedRule = await this.getRule(rule_info.uuid, order, langCode);
     if (!matchedRule) {
       throw new BadRequestException('No earning rule found for this event.');
     }
@@ -1152,7 +1178,11 @@ export class CustomerService {
         matchedRule.rule_type === 'dynamic rule'
           ? matchedRule.condition_type
           : matchedRule.event_triggerer,
-      description: `Earned ${matchedRule.reward_points} points (${matchedRule.name})`,
+      description: `Earned ${matchedRule.reward_points} points${
+        matchedRule?.locales?.[0]?.name
+          ? ` (${matchedRule.locales[0].name})`
+          : ''
+      }`,
       validityAfterAssignment: matchedRule.validity_after_assignment,
       order,
     });
@@ -1161,7 +1191,7 @@ export class CustomerService {
       customer_uuid: wallet.customer.uuid,
       activity_type: 'rule',
       rule_id: matchedRule.id,
-      rule_name: matchedRule.name,
+      rule_name: matchedRule?.locales?.[0]?.name || '',
       amount: matchedRule.reward_points || 0,
     });
 
@@ -1171,15 +1201,21 @@ export class CustomerService {
     };
   }
 
-  async getRule(uuid, order) {
+  async getRule(uuid, order, langCode = 'en') {
     const { amount } = order ?? {};
-    const rule = await this.ruleRepo.findOne({
-      where: {
-        status: 1,
-        uuid: uuid,
-        rule_type: Not('burn'),
-      },
-    });
+    const query = this.ruleRepo
+      .createQueryBuilder('rule')
+      .leftJoinAndSelect('rule.locales', 'locale')
+      .leftJoinAndSelect('locale.language', 'language')
+      .where('rule.status = :status', { status: 1 })
+      .andWhere('rule.uuid = :uuid', { uuid })
+      .andWhere('rule.rule_type != :ruleType', { ruleType: 'burn' });
+
+    if (langCode) {
+      query.andWhere('language.code = :langCode', { langCode });
+    }
+
+    const rule = await query.getOne();
 
     if (rule?.rule_type === 'spend and earn' && !amount) {
       throw new BadRequestException(`Amount is required`);
@@ -1331,7 +1367,8 @@ export class CustomerService {
   }
 
   async handleCampaignRules(bodyPayload) {
-    const { total_amount, rule_info, wallet, campaign_id } = bodyPayload;
+    const { total_amount, rule_info, wallet, campaign_id, langCode } =
+      bodyPayload;
     try {
       const today = new Date();
       const campaign = await this.campaignRepository.findOne({
@@ -1382,16 +1419,20 @@ export class CustomerService {
           }
         }
 
-        const campaignRule = await this.campaignRuleRepo.findOne({
-          where: {
-            campaign: { id: campaignId },
-            rule: {
-              status: 1,
-              uuid: rule_info.uuid,
-            },
-          },
-          relations: ['rule'],
-        });
+        const query = this.campaignRuleRepo
+          .createQueryBuilder('campaignRule')
+          .leftJoinAndSelect('campaignRule.rule', 'rule')
+          .leftJoinAndSelect('rule.locales', 'locale')
+          .leftJoinAndSelect('locale.language', 'language')
+          .where('campaignRule.campaign = :campaignId', { campaignId })
+          .andWhere('rule.status = :status', { status: 1 })
+          .andWhere('rule.uuid = :uuid', { uuid: rule_info.uuid });
+
+        if (langCode) {
+          query.andWhere('language.code = :langCode', { langCode });
+        }
+
+        const campaignRule = await query.getOne();
         const rule = campaignRule?.rule;
 
         let conversionRate = 1;
