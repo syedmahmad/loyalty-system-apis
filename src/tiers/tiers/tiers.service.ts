@@ -95,12 +95,13 @@ export class TiersService {
     }
   }
 
-  async findAll(client_id: number, name: string, userId: number, bu: number) {
-    // const ruleTargets = await this.ruleTargetRepository.find({
-    //   where: { target_type: 'tier' },
-    //   relations: { rule: true },
-    // });
-
+  async findAll(
+    client_id: number,
+    name: string,
+    userId: number,
+    bu: number,
+    langCode = 'en',
+  ) {
     const user = await this.userRepository.findOne({ where: { id: userId } });
     if (!user) {
       throw new BadRequestException('User not found against user-token');
@@ -108,11 +109,9 @@ export class TiersService {
 
     const privileges: any[] = user.user_privileges || [];
 
-    // get tenant name from DB (we'll need this to match privileges like `NATC_Service Center`)
     const tenant = await this.tenantRepository.findOne({
       where: { id: client_id },
     });
-
     if (!tenant) {
       throw new BadRequestException('Tenant not found');
     }
@@ -121,51 +120,52 @@ export class TiersService {
 
     const isSuperAdmin = privileges.some((p: any) => p.name === 'all_tenants');
 
-    // check for global business unit access for this tenant
     const hasGlobalBusinessUnitAccess = privileges.some(
       (p) =>
         p.module === 'businessUnits' &&
         p.name === `${tenantName}_All Business Unit`,
     );
 
-    let optionalWhereClause = {};
+    // Base query
+    const queryBuilder = this.tiersRepository
+      .createQueryBuilder('tier')
+      .leftJoinAndSelect('tier.business_unit', 'business_unit')
+      .leftJoinAndSelect(
+        'tier.locales',
+        'locale',
+        'locale.language_id IS NOT NULL',
+      )
+      .leftJoinAndSelect('locale.language', 'language')
+      .where('tier.status = :status', { status: 1 })
+      .andWhere('tier.tenant_id = :tenant_id', { tenant_id: client_id })
+      .orderBy('tier.created_at', 'DESC');
+
+    if (langCode) {
+      queryBuilder.andWhere('language.code = :langCode', { langCode });
+    }
 
     if (name) {
-      optionalWhereClause = {
-        name: ILike(`%${name}%`),
-      };
-    }
-
-    if (hasGlobalBusinessUnitAccess || isSuperAdmin) {
-      const tiers = await this.tiersRepository.find({
-        where: {
-          tenant_id: client_id,
-          status: 1,
-          ...(bu ? { business_unit_id: bu } : {}),
-          ...optionalWhereClause,
-        },
-        relations: { business_unit: true },
-        order: { created_at: 'DESC' },
+      queryBuilder.andWhere(`locale.name LIKE :name`, {
+        name: `%${name.trim()}%`,
       });
+    }
 
+    if (bu) {
+      queryBuilder.andWhere('tier.business_unit_id = :bu', { bu });
+    }
+
+    // Case 1: Super Admin or Global Access
+    if (hasGlobalBusinessUnitAccess || isSuperAdmin) {
+      const tiers = await queryBuilder.getMany();
       return {
-        tiers: tiers.map((tier) => {
-          // const targets = ruleTargets
-          //   .filter((rt) => rt.target_id === tier.id)
-          //   .map((rt) => ({
-          //     id: rt.id,
-          //     rule_id: rt.rule_id,
-          //   }));
-          return {
-            ...tier,
-            benefits: tier.benefits,
-            // rule_targets: targets
-          };
-        }),
+        tiers: tiers.map((tier) => ({
+          ...tier,
+          benefits: tier.benefits,
+        })),
       };
     }
 
-    // if no global access, extract specific tier names from privileges
+    // Case 2: Limited Access (specific business units)
     const accessibleBusinessUnitNames = privileges
       .filter(
         (p) =>
@@ -176,48 +176,37 @@ export class TiersService {
       .map((p) => p.name.replace(`${tenantName}_`, ''));
 
     if (!accessibleBusinessUnitNames.length) {
-      return []; // No access
+      return { tiers: [] };
     }
 
-    const businessUnits = await this.businessUnitRepository.find({
-      where: {
-        status: 1,
-        tenant_id: client_id,
-        name: In(accessibleBusinessUnitNames),
-      },
-    });
+    const businessUnits = await this.businessUnitRepository
+      .createQueryBuilder('bu')
+      .where('bu.status = :status', { status: 1 })
+      .andWhere('bu.tenant_id = :tenant_id', { tenant_id: client_id })
+      .andWhere('bu.name IN (:...names)', {
+        names: accessibleBusinessUnitNames,
+      })
+      .getMany();
 
-    const availableBusinessUnitIds = businessUnits.map((unit) => unit.id);
+    const availableBusinessUnitIds = businessUnits.map((b) => b.id);
 
-    const specificTiers = await this.tiersRepository.find({
-      where: {
-        // business_unit_id: In(availableBusinessUnitIds),
-        ...(bu
-          ? { business_unit_id: bu }
-          : { business_unit_id: In(availableBusinessUnitIds) }), // 👈 handle bu filter
-        status: 1,
-        tenant_id: client_id,
-        ...optionalWhereClause,
-      },
-      relations: { business_unit: true },
-      order: { created_at: 'DESC' },
-    });
+    if (!availableBusinessUnitIds.length) {
+      return { tiers: [] };
+    }
+
+    if (!bu) {
+      queryBuilder.andWhere('tier.business_unit_id IN (:...buIds)', {
+        buIds: availableBusinessUnitIds,
+      });
+    }
+
+    const specificTiers = await queryBuilder.getMany();
 
     return {
-      tiers: specificTiers.map((tier) => {
-        // const targets = ruleTargets
-        //   .filter((rt) => rt.target_id === tier.id)
-        //   .map((rt) => ({
-        //     id: rt.id,
-        //     rule_id: rt.rule_id,
-        //   }));
-
-        return {
-          ...tier,
-          benefits: tier.benefits,
-          // rule_targets: targets
-        };
-      }),
+      tiers: specificTiers.map((tier) => ({
+        ...tier,
+        benefits: tier.benefits,
+      })),
     };
   }
 

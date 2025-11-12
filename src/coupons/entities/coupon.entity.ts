@@ -39,12 +39,6 @@ export class Coupon {
   @Column()
   tenant_id: number;
 
-  @Column({ nullable: true })
-  coupon_title: string;
-
-  @Column({ nullable: true })
-  coupon_title_ar: string;
-
   @Column()
   code: string;
 
@@ -118,71 +112,13 @@ export class Coupon {
   }[];
 
   @Column({ type: 'simple-json', nullable: true })
-  errors: {
-    general_error_message_en?: string;
-    general_error_message_ar?: string;
-    exception_error_message_en?: string;
-    exception_error_message_ar?: string;
-  };
-
-  @Column({ type: 'simple-json', nullable: true })
   complex_coupon: any;
-
-  // @Column({ nullable: true, type: 'text' })
-  // benefits: string;
-
-  @Column({ nullable: true, type: 'text' })
-  private _benefits: string;
-
-  get benefits(): string[] {
-    if (!this._benefits) return [''];
-    try {
-      const parsed = JSON.parse(this._benefits);
-      return Array.isArray(parsed) ? parsed : [parsed];
-    } catch {
-      return [this._benefits];
-    }
-  }
-
-  set benefits(value: string[] | string) {
-    if (Array.isArray(value)) {
-      this._benefits = JSON.stringify(value);
-    } else {
-      this._benefits = JSON.stringify([value]);
-    }
-  }
 
   @Column({ type: 'tinyint', default: ActiveStatus.ACTIVE })
   status: number; // 0 = inactive, 1 = active, 2 = deleted
 
   @Column({ nullable: true })
   discount_type: string;
-
-  @Column({ nullable: true })
-  description_en: string;
-
-  @Column({ nullable: true })
-  description_ar: string;
-
-  @Column({
-    nullable: true,
-    type: 'text',
-    transformer: {
-      to: (value: string) => value, // when saving
-      from: (value: string) => (value ? value.replace(/\r?\n|\r/g, '') : value), // when reading
-    },
-  })
-  terms_and_conditions_en: string;
-
-  @Column({
-    nullable: true,
-    type: 'text',
-    transformer: {
-      to: (value: string) => value, // when saving
-      from: (value: string) => (value ? value.replace(/\r?\n|\r/g, '') : value), // when reading
-    },
-  })
-  terms_and_conditions_ar: string;
 
   @OneToMany(() => CouponCustomerSegment, (cs) => cs.coupon)
   customerSegments: CouponCustomerSegment[];
@@ -222,9 +158,6 @@ export class Coupon {
 
   @UpdateDateColumn()
   updated_at: Date;
-
-  @Column({ type: 'simple-json', nullable: true })
-  images?: Images;
 
   @OneToMany(() => CouponLocaleEntity, (locale) => locale.coupon, {
     cascade: true,

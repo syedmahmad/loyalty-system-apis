@@ -54,6 +54,7 @@ import { CouponSyncLog } from '../entities/coupon-sync-logs.entity';
 import { CouponUsage } from '../entities/coupon-usages.entity';
 import { CouponType, CouponTypeName } from '../type/types';
 import { Tier } from 'src/tiers/entities/tier.entity';
+import { LanguageEntity } from 'src/master/language/entities/language.entity';
 
 @Injectable()
 export class CouponsService {
@@ -126,6 +127,9 @@ export class CouponsService {
 
     @InjectRepository(CouponUsage)
     private couponUsageRepo: Repository<CouponUsage>,
+
+    @InjectRepository(LanguageEntity)
+    private languageRepo: Repository<LanguageEntity>,
   ) {}
 
   async create(dto: CreateCouponDto, user: string) {
@@ -230,7 +234,7 @@ export class CouponsService {
     }
   }
 
-  async findAll(
+  async findAllOld(
     client_id: number,
     name: string,
     limit: number,
@@ -281,7 +285,7 @@ export class CouponsService {
       whereClause = name
         ? [
             { ...baseConditions, code: ILike(`%${name}%`) },
-            { ...baseConditions, coupon_title: ILike(`%${name}%`) },
+            { ...baseConditions },
           ]
         : [baseConditions];
     } else {
@@ -351,15 +355,127 @@ export class CouponsService {
     };
   }
 
+  async findAll(
+    client_id: number,
+    name: string,
+    limit: number,
+    userId: number,
+    business_unit_id: number,
+    page: number = 1,
+    pageSize: number = 10,
+    langCode: string = 'en',
+  ) {
+    const take = pageSize;
+    const skip = (page - 1) * take;
+
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new BadRequestException('User not found against user-token');
+    }
+
+    const privileges: any[] = user.user_privileges || [];
+
+    const tenant = await this.tenantRepository.findOne({
+      where: { id: client_id },
+    });
+    if (!tenant) {
+      throw new BadRequestException('Tenant not found');
+    }
+
+    const tenantName = tenant.name;
+
+    const isSuperAdmin = privileges.some((p: any) => p.name === 'all_tenants');
+    const hasGlobalAccess = privileges.some(
+      (p) =>
+        p.module === 'businessUnits' &&
+        p.name === `${tenantName}_All Business Unit`,
+    );
+
+    const query = this.couponsRepository
+      .createQueryBuilder('coupon')
+      .leftJoinAndSelect('coupon.business_unit', 'business_unit')
+      .leftJoinAndSelect('coupon.locales', 'locale_coupon')
+      .leftJoinAndSelect('locale_coupon.language', 'language')
+      .leftJoinAndSelect('coupon.customerSegments', 'customerSegments')
+      .leftJoinAndSelect('customerSegments.segment', 'segment')
+      .where('coupon.status != :status', { status: 2 })
+      .andWhere('coupon.tenant_id = :tenantId', { tenantId: client_id });
+
+    if (
+      business_unit_id &&
+      typeof business_unit_id === 'string' &&
+      business_unit_id !== '1'
+    ) {
+      query.andWhere('coupon.business_unit_id = :businessUnitId', {
+        businessUnitId: business_unit_id,
+      });
+    }
+
+    if (langCode) {
+      query.andWhere('language.code = :langCode', { langCode });
+    }
+
+    if (name && name.trim() !== '') {
+      query.andWhere('locale_coupon.title LIKE :search', {
+        search: `%${name}%`,
+      });
+    }
+
+    if (!hasGlobalAccess && !isSuperAdmin) {
+      const accessibleBusinessUnitNames = privileges
+        .filter(
+          (p) =>
+            p.module === 'businessUnits' &&
+            p.name.startsWith(`${tenantName}_`) &&
+            p.name !== `${tenantName}_All Business Unit`,
+        )
+        .map((p) => p.name.replace(`${tenantName}_`, ''));
+
+      if (!accessibleBusinessUnitNames.length) {
+        return {
+          data: [],
+          total: 0,
+          page,
+          pageSize,
+          totalPages: 0,
+        };
+      }
+
+      const businessUnits = await this.businessUnitRepository.find({
+        where: {
+          status: 1,
+          tenant_id: client_id,
+          name: In(accessibleBusinessUnitNames),
+        },
+      });
+
+      const availableBusinessUnitIds = businessUnits.map((unit) => unit.id);
+      if (availableBusinessUnitIds.length) {
+        query.andWhere('coupon.business_unit_id IN (:...ids)', {
+          ids: availableBusinessUnitIds,
+        });
+      }
+    }
+
+    query.orderBy('coupon.created_at', 'DESC').skip(skip).take(take);
+
+    const [data, total] = await query.getManyAndCount();
+
+    return {
+      data,
+      total,
+      page,
+      pageSize,
+      totalPages: Math.ceil(total / pageSize),
+    };
+  }
+
   async findAllThirdParty(tenant_id: string, name: string, limit: number) {
     const baseConditions = { status: Not(2), tenant_id: tenant_id };
     let whereClause = {};
 
     whereClause = name
-      ? [
-          { ...baseConditions, code: ILike(`%${name}%`) },
-          { ...baseConditions, coupon_title: ILike(`%${name}%`) },
-        ]
+      ? [{ ...baseConditions, code: ILike(`%${name}%`) }, { ...baseConditions }]
       : [baseConditions];
 
     const coupons = await this.couponsRepository.find({
@@ -420,9 +536,7 @@ export class CouponsService {
     });
 
     if (!coupon) throw new NotFoundException('Coupon not found');
-
-    const benefits = coupon.benefits;
-    return { ...coupon, benefits };
+    return { ...coupon };
   }
 
   async update(id: number, dto: UpdateCouponDto, user: string) {
@@ -712,7 +826,7 @@ export class CouponsService {
     };
   }
 
-  async redeem(bodyPayload) {
+  async redeem(bodyPayload, language_code: string = 'en') {
     const { customer_id, campaign_id, metadata, order } = bodyPayload;
     const amount = metadata.products.reduce(
       (sum, product) => sum + product.amount,
@@ -729,6 +843,14 @@ export class CouponsService {
 
     if (customer && customer.status === 0) {
       throw new NotFoundException('Customer is inactive');
+    }
+
+    const language = await this.languageRepo.findOne({
+      where: { code: language_code },
+    });
+
+    if (!language) {
+      throw new BadRequestException('Invalid language code');
     }
 
     const wallet = await this.walletService.getSingleCustomerWalletInfoById(
@@ -839,8 +961,18 @@ export class CouponsService {
     } else {
       coupon = await this.couponsRepository.findOne({
         where: { code: metadata.coupon_code },
+        relations: ['locales', 'locales.language'],
       });
       if (!coupon) throw new NotFoundException('Coupon not found');
+
+      const filteredLocales = coupon.locales?.filter(
+        (locale) => locale.language?.id === language.id,
+      );
+
+      coupon = {
+        ...coupon,
+        locales: filteredLocales,
+      };
 
       // Segment validation
       hasSegments = await this.couponSegmentRepository.find({
@@ -944,7 +1076,7 @@ export class CouponsService {
       wallet,
       amount: earnPoints,
       sourceType: 'coupon',
-      description: `Redeemed ${earnPoints} amount (${coupon.coupon_title})`,
+      description: `Redeemed ${earnPoints} amount (${coupon.locales?.[0]?.title || ''})`,
       validityAfterAssignment: coupon.validity_after_assignment,
       order,
     });
@@ -1754,9 +1886,8 @@ export class CouponsService {
     }
   }
 
-  async getCustomerCoupons(body, language_code: string = 'en') {
+  async getCustomerCoupons(body, language_code: string = 'bn') {
     const { customerId, bUId, product } = body;
-
     let customer;
     if (customerId) {
       customer = await this.customerRepo.findOne({
@@ -1779,6 +1910,14 @@ export class CouponsService {
       userCouponsObj['customer'] = { id: customer.id };
     }
 
+    const language = await this.languageRepo.findOne({
+      where: { code: language_code },
+    });
+
+    if (!language) {
+      throw new BadRequestException('Invalid language code');
+    }
+
     const userCoupons = await this.userCouponRepo.find({
       where: userCouponsObj,
       order: { redeemed_at: 'DESC' },
@@ -1790,16 +1929,25 @@ export class CouponsService {
     if (userCoupons.length) {
       for (let index = 0; index <= userCoupons.length - 1; index++) {
         const eachUserCoupon = userCoupons[index];
-        const singleCoupon = await this.couponsRepository.findOne({
+        let singleCoupon: any = await this.couponsRepository.findOne({
           where: [
             { id: eachUserCoupon.coupon_id },
             { id: eachUserCoupon.issued_from_id },
           ],
+          relations: ['locales', 'locales.language'],
         });
 
         if (!singleCoupon) {
           continue;
         }
+
+        const filteredLocales = singleCoupon.locales?.filter(
+          (locale) => locale.language?.id === language.id,
+        );
+        singleCoupon = {
+          ...singleCoupon,
+          locales: filteredLocales,
+        };
 
         const services = [];
         const products = [];
@@ -1851,19 +1999,10 @@ export class CouponsService {
           expired.push({
             uuid: singleCoupon.uuid,
             code: singleCoupon.code,
-            title:
-              language_code === 'ar'
-                ? singleCoupon.coupon_title_ar
-                : singleCoupon.coupon_title,
+            title: singleCoupon?.locales?.[0].title,
+            description: singleCoupon?.locales?.[0].description,
+            terms_and_conditions: singleCoupon?.locales?.[0].term_and_condition,
             discount: `${singleCoupon.discount_price}${singleCoupon.discount_type === 'fixed' ? ' SAR' : '% Off'}`,
-            description:
-              language_code === 'ar'
-                ? singleCoupon.description_ar
-                : singleCoupon.description_en,
-            terms_and_conditions:
-              language_code === 'ar'
-                ? singleCoupon.terms_and_conditions_ar
-                : singleCoupon.terms_and_conditions_en,
             expiry_date: singleCoupon.date_to,
             services,
             products,
@@ -1872,19 +2011,10 @@ export class CouponsService {
           available.push({
             uuid: singleCoupon.uuid,
             code: singleCoupon.code,
-            title:
-              language_code === 'ar'
-                ? singleCoupon.coupon_title_ar
-                : singleCoupon.coupon_title,
+            title: singleCoupon?.locales?.[0].title,
+            description: singleCoupon?.locales?.[0].description,
+            terms_and_conditions: singleCoupon?.locales?.[0].term_and_condition,
             discount: `${singleCoupon.discount_price}${singleCoupon.discount_type === 'fixed' ? ' SAR' : '% Off'}`,
-            description:
-              language_code === 'ar'
-                ? singleCoupon.description_ar
-                : singleCoupon.description_en,
-            terms_and_conditions:
-              language_code === 'ar'
-                ? singleCoupon.terms_and_conditions_ar
-                : singleCoupon.terms_and_conditions_en,
             expiry_date: singleCoupon.date_to,
             services,
             products,
@@ -1897,11 +2027,21 @@ export class CouponsService {
       where: [
         { all_users: 1, status: 1, business_unit: { id: parseInt(bUId) } },
       ],
+      relations: ['locales', 'locales.language'],
     });
 
     if (couponsForAllUser.length) {
       for (let index = 0; index <= couponsForAllUser.length - 1; index++) {
-        const singleCoupon = couponsForAllUser[index];
+        let singleCoupon: any = couponsForAllUser[index];
+
+        const filteredLocales = singleCoupon.locales?.filter(
+          (locale) => locale.language?.id === language.id,
+        );
+        singleCoupon = {
+          ...singleCoupon,
+          locales: filteredLocales,
+        };
+
         const exists = available.some((c) => c.code === singleCoupon.code);
         if (exists) {
           continue;
@@ -1918,7 +2058,7 @@ export class CouponsService {
             CouponTypeName.PRODUCT_SPECIFIC,
           ].includes(singleCoupon.coupon_type_id)
         ) {
-          const conditionTypes = singleCoupon.conditions.map((c) => c.type);
+          const conditionTypes = singleCoupon?.conditions.map((c) => c.type);
           if (singleCoupon.coupon_type_id == CouponTypeName.PRODUCT_SPECIFIC) {
             products.push(...conditionTypes);
           }
@@ -1953,71 +2093,25 @@ export class CouponsService {
         }
 
         if (singleCoupon.date_to && singleCoupon.date_to < today) {
-          // expired.push({
-          //   uuid: singleCoupon.uuid,
-          //   code: singleCoupon.code,
-          //   title: singleCoupon.coupon_title,
-          //   title_ar: singleCoupon.coupon_title_ar,
-          //   discount: `${singleCoupon.discount_price}${singleCoupon.discount_type === 'fixed' ? ' SAR' : '% Off'}`,
-          //   description_en: singleCoupon.description_en,
-          //   description_ar: singleCoupon.description_ar,
-          //   terms_and_conditions_en: singleCoupon.terms_and_conditions_en,
-          //   terms_and_conditions_ar: singleCoupon.terms_and_conditions_ar,
-          //   expiry_date: singleCoupon.date_to,
-          //   services,
-          //   products,
-          // });
           expired.push({
             uuid: singleCoupon.uuid,
             code: singleCoupon.code,
-            title:
-              language_code === 'ar'
-                ? singleCoupon.coupon_title_ar
-                : singleCoupon.coupon_title,
+            title: singleCoupon?.locales?.[0].title,
+            description: singleCoupon?.locales?.[0].description,
+            terms_and_conditions: singleCoupon?.locales?.[0].term_and_condition,
             discount: `${singleCoupon.discount_price}${singleCoupon.discount_type === 'fixed' ? ' SAR' : '% Off'}`,
-            description:
-              language_code === 'ar'
-                ? singleCoupon.description_ar
-                : singleCoupon.description_en,
-            terms_and_conditions:
-              language_code === 'ar'
-                ? singleCoupon.terms_and_conditions_ar
-                : singleCoupon.terms_and_conditions_en,
             expiry_date: singleCoupon.date_to,
             services,
             products,
           });
         } else {
-          // available.push({
-          //   uuid: singleCoupon.uuid,
-          //   code: singleCoupon.code,
-          //   title: singleCoupon.coupon_title,
-          //   title_ar: singleCoupon.coupon_title_ar,
-          //   discount: `${singleCoupon.discount_price}${singleCoupon.discount_type === 'fixed' ? ' SAR' : '% Off'}`,
-          //   description_en: singleCoupon.description_en,
-          //   description_ar: singleCoupon.description_ar,
-          //   terms_and_conditions_en: singleCoupon.terms_and_conditions_en,
-          //   terms_and_conditions_ar: singleCoupon.terms_and_conditions_ar,
-          //   expiry_date: singleCoupon.date_to,
-          //   services,
-          //   products,
-          // });
           available.push({
             uuid: singleCoupon.uuid,
             code: singleCoupon.code,
-            title:
-              language_code === 'ar'
-                ? singleCoupon.coupon_title_ar
-                : singleCoupon.coupon_title,
+            title: singleCoupon?.locales?.[0].title,
+            description: singleCoupon?.locales?.[0].description,
+            terms_and_conditions: singleCoupon?.locales?.[0].term_and_condition,
             discount: `${singleCoupon.discount_price}${singleCoupon.discount_type === 'fixed' ? ' SAR' : '% Off'}`,
-            description:
-              language_code === 'ar'
-                ? singleCoupon.description_ar
-                : singleCoupon.description_en,
-            terms_and_conditions:
-              language_code === 'ar'
-                ? singleCoupon.terms_and_conditions_ar
-                : singleCoupon.terms_and_conditions_en,
             expiry_date: singleCoupon.date_to,
             services,
             products,
@@ -2052,7 +2146,7 @@ export class CouponsService {
         });
         if (coupon) {
           successCoupons.push(eachCoupon);
-          const phoneNumber = eachCoupon.customer_phone;
+          const phoneNumber = eachCoupon.customer_phone_no;
           const customer = await this.findCustomerByFullPhone(phoneNumber);
           if (customer) {
             const couponUsageObj = {
@@ -2152,20 +2246,32 @@ export class CouponsService {
 
       fs.createReadStream(filePath)
         .pipe(fastcsv.parse({ headers: true }))
-        .on('data', (row) => {
+        .on('data', async (row) => {
           try {
             // Create a fresh coupon for each row
+            const { locales, id, conditions, complex_coupon, ...rest } = body;
+            const parsedLocales =
+              typeof locales === 'string' ? JSON.parse(locales) : locales;
             const singleCoupon = repo.create({
-              ...body,
+              ...(id && { id }),
+              ...rest,
               code: row.coupon_code,
-              conditions: body.conditions ? JSON.parse(body.conditions) : null,
-              complex_coupon: body.complex_coupon
-                ? JSON.parse(body.complex_coupon)
+              conditions: conditions ? JSON.parse(conditions) : null,
+              complex_coupon: complex_coupon
+                ? JSON.parse(complex_coupon)
                 : null,
-              errors: body.errors ? JSON.parse(body.errors) : {},
-              benefits: body.benefits ? JSON.parse(body.benefits) : [],
+              locales: parsedLocales?.map((locale) => ({
+                language: { id: locale.languageId },
+                title: locale.title,
+                description: locale.description,
+                term_and_condition: locale.term_and_condition,
+                desktop_image: locale.desktop_image,
+                mobile_image: locale.mobile_image,
+                general_error: locale.general_error,
+                exception_error: locale.exception_error,
+                benefits: locale.benefits,
+              })) as any,
             });
-
             coupons.push(singleCoupon);
           } catch (err) {
             console.error('Invalid row:', row, err);
@@ -2178,9 +2284,11 @@ export class CouponsService {
               const uploadedCoupons = await repo.save(coupons);
 
               if (uploadedCoupons.length) {
-                const customerSegmentIds = JSON.parse(
+                const customerSegmentIds = Array.isArray(
                   body.customer_segment_ids,
-                );
+                )
+                  ? body.customer_segment_ids
+                  : JSON.parse(body.customer_segment_ids || '[]');
 
                 if (customerSegmentIds?.length && body.all_users == 0) {
                   // Fetch all customers that belong to the given customer segments
@@ -2304,7 +2412,7 @@ export class CouponsService {
     });
   }
 
-  async getCustomerAssignedCoupons(body, search) {
+  async getCustomerAssignedCoupons(body, search, language_code: string = 'en') {
     const { customerId, bUId, page = 1, limit = 10 } = body;
 
     const customer = await this.customerRepo.findOne({
@@ -2329,6 +2437,14 @@ export class CouponsService {
       throw new NotFoundException('Customer is deleted');
     }
 
+    const language = await this.languageRepo.findOne({
+      where: { code: language_code },
+    });
+
+    if (!language) {
+      throw new BadRequestException('Invalid language code');
+    }
+
     const userCouponsWhereClouse = {
       customer: { id: customer.id },
       status: In([CouponStatus.EXPIRED, CouponStatus.ISSUED]),
@@ -2347,20 +2463,28 @@ export class CouponsService {
     const today = new Date();
 
     for (const eachUserCoupon of userCoupons) {
-      const singleCoupon = await this.couponsRepository.findOne({
+      let singleCoupon: any = await this.couponsRepository.findOne({
         where: [
           { id: eachUserCoupon.coupon_id },
           { id: eachUserCoupon.issued_from_id },
         ],
+        relations: ['locales', 'locales.language'],
       });
+
+      const filteredLocales = singleCoupon.locales?.filter(
+        (locale) => locale.language?.id === language.id,
+      );
+      singleCoupon = {
+        ...singleCoupon,
+        locales: filteredLocales,
+      };
 
       if (!singleCoupon) continue;
 
       coupons.push({
         uuid: singleCoupon.uuid,
         code: singleCoupon.code,
-        title: singleCoupon.coupon_title,
-        title_ar: singleCoupon.coupon_title_ar,
+        title: singleCoupon?.locales?.[0].title,
         expiry_date: singleCoupon.date_to,
         status:
           singleCoupon.date_to && singleCoupon.date_to < today
@@ -2371,20 +2495,28 @@ export class CouponsService {
 
     let where: any = [{ all_users: 1, status: 1 }];
     if (search) {
-      where = [
-        { all_users: 1, status: 1, code: ILike(`%${search}%`) },
-        { all_users: 1, status: 1, coupon_title: ILike(`%${search}%`) },
-      ];
+      where = [{ all_users: 1, status: 1, code: ILike(`%${search}%`) }];
     }
 
-    const couponsForAllUser = await this.couponsRepository.find({ where });
+    let couponsForAllUser: any = await this.couponsRepository.find({
+      where,
+      relations: ['locales', 'locales.language'],
+    });
+
+    couponsForAllUser = couponsForAllUser
+      .map((coupon) => ({
+        ...coupon,
+        locales: coupon.locales.filter(
+          (locale) => locale.language?.id === language.id,
+        ),
+      }))
+      .filter((coupon) => coupon.locales.length > 0);
 
     for (const singleCoupon of couponsForAllUser) {
       coupons.push({
         uuid: singleCoupon.uuid,
         code: singleCoupon.code,
-        title: singleCoupon.coupon_title,
-        title_ar: singleCoupon.coupon_title_ar,
+        title: singleCoupon?.locales?.[0].title,
         expiry_date: singleCoupon.date_to,
         status:
           singleCoupon.date_to && singleCoupon.date_to < today
@@ -2554,7 +2686,10 @@ export class CouponsService {
 
       switch (selectedCouponType) {
         case CouponType.SERVICE_BASED:
-          result['services'] = dynamicRows.map((row) => ({ name: row.type }));
+          result['services'] = dynamicRows.map((row) => ({
+            name: row.type,
+            value: row.value,
+          }));
           break;
 
         case CouponType.PRODUCT_SPECIFIC:
@@ -2638,7 +2773,7 @@ export class CouponsService {
           break;
 
         case CouponTypeName.SERVICE_BASED:
-          add('serivices', { name: coupon.type });
+          add('serivices', { name: coupon.type, value: coupon.value });
           break;
 
         case CouponTypeName.DISCOUNT:

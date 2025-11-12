@@ -1629,10 +1629,10 @@ export class CustomerService {
         coupon.number_of_times_used >= coupon.usage_limit
       ) {
         const errMsgEn =
-          coupon.errors?.general_error_message_en ||
+          // coupon.errors?.general_error_message_en ||
           'Coupon usage limit reached';
         const errMsgAr =
-          coupon.errors?.general_error_message_ar ||
+          // coupon.errors?.general_error_message_ar ||
           'تم الوصول إلى الحد الأقصى لاستخدام القسيمة';
 
         throw new BadRequestException(`${errMsgEn} / ${errMsgAr}`);
@@ -1735,7 +1735,7 @@ export class CustomerService {
         wallet,
         amount: earnPoints,
         sourceType: 'coupon',
-        description: `Redeemed ${earnPoints} amount (${coupon.coupon_title})`,
+        description: `Redeemed ${earnPoints} amount (${coupon.code})`,
         validityAfterAssignment: coupon.validity_after_assignment,
         order,
       });

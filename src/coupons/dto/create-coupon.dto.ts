@@ -181,6 +181,9 @@ export class CreateCouponDto {
   conditions?: ConditionDto[];
 
   @IsOptional()
+  complex_coupon?: any;
+
+  @IsOptional()
   images: ImagesDto;
 
   @IsOptional()

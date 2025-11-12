@@ -73,32 +73,6 @@ export class OffersEntity {
   @Column({ type: 'tinyint', default: ActiveStatus.ACTIVE })
   status: number; // 0 = inactive, 1 = active, 2 = deleted
 
-  @Column({ nullable: true })
-  description_en: string;
-
-  @Column({ nullable: true })
-  description_ar: string;
-
-  @Column({
-    nullable: true,
-    type: 'text',
-    transformer: {
-      to: (value: string) => value, // when saving
-      from: (value: string) => (value ? value.replace(/\r?\n|\r/g, '') : value), // when reading
-    },
-  })
-  terms_and_conditions_en: string;
-
-  @Column({
-    nullable: true,
-    type: 'text',
-    transformer: {
-      to: (value: string) => value, // when saving
-      from: (value: string) => (value ? value.replace(/\r?\n|\r/g, '') : value), // when reading
-    },
-  })
-  terms_and_conditions_ar: string;
-
   @OneToMany(() => OfferCustomerSegment, (cs) => cs.offer)
   customerSegments: OfferCustomerSegment[];
 

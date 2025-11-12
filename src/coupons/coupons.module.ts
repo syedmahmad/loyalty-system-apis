@@ -40,6 +40,7 @@ import { OpenaiModule } from 'src/openai/openai.module';
 import { CustomerPreference } from 'src/petromin-it/preferences/entities/customer-preference.entity';
 import { DeviceToken } from 'src/petromin-it/notification/entities/device-token.entity';
 import { CouponLocaleEntity } from './entities/coupon-locale.entity';
+import { LanguageEntity } from 'src/master/language/entities/language.entity';
 @Module({
   imports: [
     TypeOrmModule.forFeature([
@@ -72,6 +73,7 @@ import { CouponLocaleEntity } from './entities/coupon-locale.entity';
       CouponUsage,
       CustomerPreference,
       CouponLocaleEntity,
+      LanguageEntity
     ]),
     NotificationModule,
     OpenaiModule,

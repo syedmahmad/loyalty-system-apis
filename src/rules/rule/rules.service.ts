@@ -14,9 +14,10 @@ import {
 } from 'src/wallet/entities/wallet-transaction.entity';
 import { Customer } from 'src/customers/entities/customer.entity';
 import { RuleLocaleEntity } from '../entities/rule-locale.entity';
+import { BaseService } from 'src/core/services/base.service';
 
 @Injectable()
-export class RulesService {
+export class RulesService extends BaseService {
   constructor(
     @InjectRepository(Rule)
     private readonly ruleRepository: Repository<Rule>,
@@ -42,7 +43,9 @@ export class RulesService {
     @InjectDataSource()
     private readonly dataSource: DataSource,
     private readonly openaiService: OpenAIService,
-  ) {}
+  ) {
+    super();
+  }
 
   async create(dto: CreateRuleDto, user: string): Promise<Rule> {
     const queryRunner = this.dataSource.createQueryRunner();
@@ -223,58 +226,46 @@ export class RulesService {
     );
   }
 
-  findAll(client_id: number, name: string, bu: number) {
-    let optionalWhereClause: Record<string, any> = {};
+  async findAll(client_id: number, name: string, bu: number, langCode = 'en') {
+    const queryBuilder = this.ruleRepository
+      .createQueryBuilder('rules')
+      .where('rules.status = :status', { status: 1 })
+      .orderBy('rules.created_at', 'DESC');
 
-    if (name) {
-      optionalWhereClause = [
-        { name: ILike(`%${name}%`) },
-        { rule_type: ILike(`%${name}%`) },
-      ];
+    if (client_id) {
+      queryBuilder.andWhere('rules.tenant_id = :tenant_id', {
+        tenant_id: client_id,
+      });
     }
 
-    return this.ruleRepository.find({
-      relations: { business_unit: true, tiers: true },
-      select: [
-        'id',
-        'name',
-        'name_ar',
-        'slug',
-        'rule_type',
-        'condition_type',
-        'condition_operator',
-        'condition_value',
-        'min_amount_spent',
-        'reward_points',
-        'event_triggerer',
-        'max_redeemption_points_limit',
-        'points_conversion_factor',
-        'max_burn_percent_on_invoice',
-        'description',
-        'description_ar',
-        'validity_after_assignment',
-        'frequency',
-        'burn_type',
-        'status',
-        'uuid',
-        'reward_condition',
-        'dynamic_conditions',
-        'is_priority',
-        'business_unit_id',
-      ],
-      where: name
-        ? optionalWhereClause.map((condition) => ({
-            tenant_id: client_id,
-            status: 1,
-            ...(bu ? { business_unit_id: bu } : {}),
-            ...condition,
-          }))
-        : {
-            tenant_id: client_id,
-            status: 1,
-            ...(bu ? { business_unit_id: bu } : {}),
-          },
-    });
+    if (bu) {
+      queryBuilder.andWhere('rules.business_unit_id = :business_unit_id', {
+        business_unit_id: bu,
+      });
+    }
+
+    if (name) {
+      queryBuilder.andWhere(`locale.name LIKE :name`, {
+        name: `%${name.trim()}%`,
+      });
+    }
+
+    if (langCode) {
+      queryBuilder
+        .leftJoinAndSelect('rules.locales', 'locale')
+        .leftJoin('locale.language', 'language')
+        .andWhere('language.code = :langCode', { langCode: langCode });
+    } else {
+      queryBuilder
+        .leftJoinAndSelect('rules.locales', 'locale')
+        .leftJoinAndSelect('locale.language', 'language');
+    }
+    const rules = await queryBuilder.getMany();
+
+    return {
+      message: 'Rule retrieved successfully',
+      rules,
+    };
   }
 
   async findAllForThirdParty(tenant_id: string, name: string) {
