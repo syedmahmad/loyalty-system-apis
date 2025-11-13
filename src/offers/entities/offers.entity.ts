@@ -16,16 +16,6 @@ import { ActiveStatus } from '../type/types';
 import { OfferCustomerSegment } from './offer-customer-segments.entity';
 import { OfferLocalEntity } from './offer-locale.entity';
 
-class ImageLang {
-  en?: string;
-  ar?: string;
-}
-
-class Images {
-  desktop?: ImageLang;
-  mobile?: ImageLang;
-}
-
 @Entity('offers')
 export class OffersEntity {
   @PrimaryGeneratedColumn()
@@ -67,9 +57,6 @@ export class OffersEntity {
   @Column({ type: 'datetime', nullable: true })
   date_to: Date;
 
-  @Column({ type: 'simple-json', nullable: true })
-  benefits: { name_en: string; name_ar: string; icon: string }[];
-
   @Column({ type: 'tinyint', default: ActiveStatus.ACTIVE })
   status: number; // 0 = inactive, 1 = active, 2 = deleted
 
@@ -93,9 +80,6 @@ export class OffersEntity {
 
   @UpdateDateColumn()
   updated_at: Date;
-
-  @Column({ type: 'simple-json', nullable: true })
-  images?: Images;
 
   @OneToMany(() => OfferLocalEntity, (locale) => locale.offer, {
     cascade: true,
