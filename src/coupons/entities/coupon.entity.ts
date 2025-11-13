@@ -17,16 +17,6 @@ import { ActiveStatus } from '../type/types';
 import { CouponCustomerSegment } from './coupon-customer-segments.entity';
 import { CouponLocaleEntity } from './coupon-locale.entity';
 
-class ImageLang {
-  en?: string;
-  ar?: string;
-}
-
-class Images {
-  desktop?: ImageLang;
-  mobile?: ImageLang;
-}
-
 @Entity('coupons')
 export class Coupon {
   @PrimaryGeneratedColumn()

@@ -186,6 +186,7 @@ export class LoyaltyAnalyticsService {
     const chartMap = new Map<string, { earn: number; burn: number }>();
 
     for (const tx of transactions) {
+      if (!tx.created_at) continue;
       const dateKey = tx.created_at.toISOString().split('T')[0]; // yyyy-mm-dd
       const current = chartMap.get(dateKey) || { earn: 0, burn: 0 };
 
@@ -287,14 +288,17 @@ export class LoyaltyAnalyticsService {
     }));
   }
 
-  async getCouponBarData(startDate, endDate) {
+  async getCouponBarData(startDate, endDate, language_code = 'en') {
     const qb = this.walletTransactionRepository
       .createQueryBuilder('tx')
       .innerJoin('coupons', 'c', 'tx.source_id = c.id')
-      .select('c.coupon_title', 'couponName')
+      .leftJoin('locale_coupon', 'cl', 'cl.coupon_id = c.id')
+      .leftJoinAndSelect('cl.language', 'language')
+      .select('cl.title', 'couponName')
       .addSelect('COUNT(*)', 'count')
       .addSelect('SUM(tx.amount)', 'totalAmount')
-      .where('tx.source_type = :sourceType', { sourceType: 'coupon' });
+      .where('tx.source_type = :sourceType', { sourceType: 'coupon' })
+      .andWhere('language.code = :language_code', { language_code });
 
     if (startDate && endDate) {
       qb.andWhere('tx.created_at BETWEEN :start AND :end', {
@@ -303,7 +307,7 @@ export class LoyaltyAnalyticsService {
       });
     }
 
-    qb.groupBy('c.coupon_title');
+    qb.groupBy('cl.title');
 
     const usageData = await qb.getRawMany();
 
