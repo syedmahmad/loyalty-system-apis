@@ -177,6 +177,10 @@ export class CreateOfferDto {
   @ValidateNested({ each: true })
   @Type(() => CreateOfferLocalizationDto)
   locales?: CreateOfferLocalizationDto[];
+
+  @IsNumber()
+  @IsOptional()
+  show_in_app?: number;
 }
 
 export class UpdateOfferDto extends PartialType(CreateOfferDto) {
