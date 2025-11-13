@@ -5,18 +5,19 @@ import {
 } from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
+import { CustomerSegmentMember } from 'src/customer-segment/entities/customer-segment-member.entity';
+import { CustomerSegment } from 'src/customer-segment/entities/customer-segment.entity';
+import { Customer } from 'src/customers/entities/customer.entity';
+import { LanguageEntity } from 'src/master/language/entities/language.entity';
 import { OciService } from 'src/oci/oci.service';
 import { Tenant } from 'src/tenants/entities/tenant.entity';
 import { User } from 'src/users/entities/user.entity';
-import { DataSource, ILike, In, Not, Repository } from 'typeorm';
+import { DataSource, In, Not, Repository } from 'typeorm';
 import { CreateOfferDto, UpdateOfferDto } from '../dto/offers.dto';
-import { OffersEntity } from '../entities/offers.entity';
-import { ActiveStatus, OfferStatus } from '../type/types';
-import { CustomerSegment } from 'src/customer-segment/entities/customer-segment.entity';
 import { OfferCustomerSegment } from '../entities/offer-customer-segments.entity';
-import { CustomerSegmentMember } from 'src/customer-segment/entities/customer-segment-member.entity';
+import { OffersEntity } from '../entities/offers.entity';
 import { UserOffer } from '../entities/user-offer.entity';
-import { Customer } from 'src/customers/entities/customer.entity';
+import { ActiveStatus, OfferStatus } from '../type/types';
 
 @Injectable()
 export class OffersService {
@@ -48,6 +49,9 @@ export class OffersService {
     @InjectRepository(UserOffer)
     private userOfferRepo: Repository<UserOffer>,
 
+    @InjectRepository(LanguageEntity)
+    private languageRepo: Repository<LanguageEntity>,
+
     @InjectDataSource()
     private readonly dataSource: DataSource,
 
@@ -58,15 +62,27 @@ export class OffersService {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
+    queryRunner.data = { user };
 
     try {
-      queryRunner.data = { user };
-      const repo = queryRunner.manager.getRepository(OffersEntity);
-      const offer = repo.create(dto);
-      const savedOffer = await repo.save(offer);
+      const { locales, id, ...rest } = dto;
+      const offer = this.offerRepository.create({
+        ...(id && { id }),
+        ...rest,
+        locales: locales?.map((locale) => ({
+          language: { id: locale.languageId },
+          title: locale.title,
+          subtitle: locale.subtitle,
+          description: locale.description,
+          term_and_condition: locale.term_and_condition,
+          desktop_image: locale.desktop_image,
+          mobile_image: locale.mobile_image,
+          benefits: locale.benefits,
+        })) as any,
+      });
+      const savedOffer = await this.offerRepository.save(offer);
 
-      // Assign customer segments
-      if (dto.customer_segment_ids?.length && dto.all_users == 0) {
+      if (dto.customer_segment_ids?.length && dto.all_users === 0) {
         const segments = await this.segmentRepository.findBy({
           id: In(dto.customer_segment_ids),
         });
@@ -87,7 +103,6 @@ export class OffersService {
           offerSegmentEntities,
         );
 
-        // Fetch all customers that belong to the given customer segments
         const customerFromSegments =
           await this.customerSegmentMemberRepository.find({
             where: {
@@ -98,33 +113,26 @@ export class OffersService {
         if (customerFromSegments.length) {
           const userOffers: UserOffer[] = [];
 
-          // Loop through each customer that belongs to the segments
-          for (let index = 0; index < customerFromSegments.length; index++) {
-            const eachCustomer = customerFromSegments[index];
-
-            // Ensure the customer exists in the customer table
+          for (const eachCustomer of customerFromSegments) {
             const customer = await this.customerRepo.findOne({
               where: { id: eachCustomer.customer_id, status: 1 },
               relations: ['business_unit'],
             });
 
-            // Skip if the customer does not exist
-            if (!customer) {
-              continue;
-            }
+            if (!customer) continue;
 
-            const userOffer = this.userOfferRepo.create({
-              status: OfferStatus.ISSUED,
-              customer: { id: customer.id },
-              business_unit: { id: customer.business_unit.id },
-              issued_from_type: 'offer',
-              issued_from_id: savedOffer.id,
-              offer_id: savedOffer?.id,
-            });
-            userOffers.push(userOffer);
+            userOffers.push(
+              this.userOfferRepo.create({
+                status: OfferStatus.ISSUED,
+                customer: { id: customer.id },
+                business_unit: { id: customer.business_unit.id },
+                issued_from_type: 'offer',
+                issued_from_id: savedOffer.id,
+                offer_id: savedOffer.id,
+              }),
+            );
           }
 
-          // Save all the created userOffer in one go (bulk insert)
           if (userOffers.length) {
             await queryRunner.manager.save(UserOffer, userOffers);
           }
@@ -150,7 +158,7 @@ export class OffersService {
     business_unit_id: number,
     page: number = 1,
     pageSize: number = 10,
-    langCode: string = 'en',
+    langCode: string = 'bn',
   ) {
     const take = pageSize;
     const skip = (page - 1) * take;
@@ -177,43 +185,25 @@ export class OffersService {
         p.name === `${tenantName}_All Business Unit`,
     );
 
-    const baseConditions = {
-      status: Not(2),
-      tenant_id: client_id,
-      ...(business_unit_id &&
+    const query = this.offerRepository
+      .createQueryBuilder('offer')
+      .leftJoinAndSelect('offer.business_unit', 'business_unit')
+      .leftJoinAndSelect('offer.locales', 'locale')
+      .leftJoinAndSelect('locale.language', 'language')
+      .where('offer.status != :status', { status: 2 })
+      .andWhere('offer.tenant_id = :tenantId', { tenantId: client_id });
+
+    if (
+      business_unit_id &&
       typeof business_unit_id === 'string' &&
       business_unit_id !== '1'
-        ? { business_unit_id }
-        : {}),
-    };
-    let whereClause = {};
-
-    const removeExtraFields = ['id'];
-
-    // Language-specific field removal
-    if (langCode === 'en') {
-      removeExtraFields.push(
-        'offer_title_ar',
-        'description_ar',
-        'terms_and_conditions_ar',
-        'name_ar',
-        'ar',
-      );
-    } else if (langCode === 'ar') {
-      removeExtraFields.push(
-        'offer_title',
-        'description_en',
-        'terms_and_conditions_en',
-        'name_en',
-        'en',
-      );
+    ) {
+      query.andWhere('offer.business_unit_id = :businessUnitId', {
+        businessUnitId: business_unit_id,
+      });
     }
 
-    if (hasGlobalAccess || isSuperAdmin) {
-      whereClause = name
-        ? [{ ...baseConditions, offer_title: ILike(`%${name}%`) }]
-        : [baseConditions];
-    } else {
+    if (!hasGlobalAccess && !isSuperAdmin) {
       const accessibleBusinessUnitNames = privileges
         .filter(
           (p) =>
@@ -223,7 +213,15 @@ export class OffersService {
         )
         .map((p) => p.name.replace(`${tenantName}_`, ''));
 
-      if (!accessibleBusinessUnitNames.length) return [];
+      if (!accessibleBusinessUnitNames.length) {
+        return {
+          data: [],
+          total: 0,
+          page,
+          pageSize,
+          totalPages: 0,
+        };
+      }
 
       const businessUnits = await this.businessUnitRepository.find({
         where: {
@@ -235,40 +233,28 @@ export class OffersService {
 
       const availableBusinessUnitIds = businessUnits.map((unit) => unit.id);
 
-      const [data, total] = await this.offerRepository.findAndCount({
-        where: {
-          ...whereClause,
-          ...(business_unit_id &&
-          typeof business_unit_id === 'string' &&
-          business_unit_id !== '1'
-            ? { business_unit_id: business_unit_id }
-            : { business_unit: In(availableBusinessUnitIds) }),
-        },
-        relations: { business_unit: true },
-        order: { created_at: 'DESC' },
-        take,
-        skip,
-      });
-
-      // const offers = this.omitExtraFields(data);
-      const offers = this.omitExtraFields(data, removeExtraFields);
-      return {
-        data: offers,
-        total,
-        page,
-        pageSize,
-        totalPages: Math.ceil(total / pageSize),
-      };
+      if (availableBusinessUnitIds.length) {
+        query.andWhere('offer.business_unit_id IN (:...ids)', {
+          ids: availableBusinessUnitIds,
+        });
+      }
     }
 
-    const [data, total] = await this.offerRepository.findAndCount({
-      where: whereClause,
-      relations: ['business_unit'],
-      order: { created_at: 'DESC' },
-      take,
-      skip,
-    });
-    // const offers = this.omitExtraFields(data);
+    if (langCode) {
+      query.andWhere('language.code = :langCode', { langCode });
+    }
+
+    if (name && name.trim() !== '') {
+      query.andWhere('locale.title LIKE :search', {
+        search: `%${name.trim()}%`,
+      });
+    }
+
+    query.orderBy('offer.created_at', 'DESC').skip(skip).take(take);
+
+    const [data, total] = await query.getManyAndCount();
+
+    const removeExtraFields = ['id'];
     const offers = this.omitExtraFields(data, removeExtraFields);
     return {
       data: offers,
@@ -330,7 +316,7 @@ export class OffersService {
       const offer = await repo.findOne({ where: { uuid: uuid } });
 
       if (!offer) throw new Error(`Offer with id ${uuid} not found`);
-      repo.merge(offer, dto);
+      Object.assign(offer, dto);
       await repo.save(offer);
 
       // === CUSTOMER SEGMENTS SYNC ===
@@ -492,6 +478,14 @@ export class OffersService {
       throw new BadRequestException('Tenant not found');
     }
 
+    const language = await this.languageRepo.findOne({
+      where: { code: langCode },
+    });
+
+    if (!language) {
+      throw new BadRequestException('Invalid language code');
+    }
+
     const baseConditions = {
       status: Not(2),
       tenant_id: tenant_id,
@@ -510,42 +504,49 @@ export class OffersService {
       'updated_by',
       'updated_at',
       'business_unit',
+      'language',
+      'createdAt',
+      'updatedAt',
+      'createdBy',
+      'updatedBy',
+      'deletedAt',
     ];
 
-    // Language-specific field removal
-    if (langCode === 'en') {
-      removeExtraFields.push(
-        'offer_title_ar',
-        'offer_subtitle_ar',
-        'description_ar',
-        'terms_and_conditions_ar',
-        'name_ar',
-        'ar',
-      );
-    } else if (langCode === 'ar') {
-      removeExtraFields.push(
-        'offer_title',
-        'offer_subtitle',
-        'description_en',
-        'terms_and_conditions_en',
-        'name_en',
-        'en',
-      );
-    }
-
-    whereClause = name
-      ? [{ ...baseConditions, offer_title: ILike(`%${name}%`) }]
-      : [baseConditions];
+    whereClause = [baseConditions];
 
     const [data, total] = await this.offerRepository.findAndCount({
       where: whereClause,
-      relations: ['business_unit'],
+      relations: ['business_unit', 'locales'],
       order: { created_at: 'DESC' },
       take,
       skip,
     });
 
-    const offers = this.omitExtraFields(data, removeExtraFields);
+    const filteredOffers = data
+      .map((offer) => {
+        const locale: any = offer.locales.find(
+          (loc) =>
+            loc.language?.code === langCode || loc.language.id === language.id,
+        );
+
+        const filtered =
+          locale?.benefits &&
+          locale?.benefits?.map((b) => ({
+            [`name_${langCode}`]: b[`name_${langCode}`],
+            icon: b.icon,
+          }));
+
+        return {
+          ...locale,
+          status: offer.status,
+          date_from: offer.date_from,
+          date_to: offer.date_to,
+          benefits: filtered || [],
+        };
+      })
+      .filter(Boolean);
+
+    const offers = this.omitExtraFields(filteredOffers, removeExtraFields);
     return {
       data: offers,
       total,
@@ -559,6 +560,14 @@ export class OffersService {
     tenant_id: number,
     langCode: string = 'en',
   ) {
+    const language = await this.languageRepo.findOne({
+      where: { code: langCode },
+    });
+
+    if (!language) {
+      throw new BadRequestException('Invalid language code');
+    }
+
     const offers = await this.offerRepository.find({
       where: {
         all_users: 1,
@@ -580,81 +589,46 @@ export class OffersService {
       'updated_by',
       'updated_at',
       'business_unit',
+      'language',
+      'createdAt',
+      'updatedAt',
+      'createdBy',
+      'updatedBy',
+      'deletedAt',
     ];
 
-    // language-based extra fields
-    if (langCode === 'en') {
-      removeExtraFields.push(
-        'offer_title_ar',
-        'offer_subtitle_ar',
-        'description_ar',
-        'terms_and_conditions_ar',
-        'name_ar',
-        'ar',
-      );
-    } else {
-      removeExtraFields.push(
-        'offer_title',
-        'offer_subtitle',
-        'description_en',
-        'terms_and_conditions_en',
-        'name_en',
-        'en',
-      );
-    }
-    console.log('allOffers/////////', offers[0].terms_and_conditions_en);
-    const allOffers = this.omitExtraFields(offers, removeExtraFields);
-
+    const allOffers = offers;
     const today = new Date();
     const available = [];
     const expired = [];
 
     for (const eachOffer of allOffers) {
-      // Normalize fields according to language
-      const normalized = {
-        offer_title:
-          langCode === 'en'
-            ? eachOffer.offer_title
-            : eachOffer.offer_title_ar || eachOffer.offer_title,
+      const locale: any = eachOffer.locales.find(
+        (loc) =>
+          loc.language?.code === langCode || loc.language.id === language.id,
+      );
 
-        offer_subtitle:
-          langCode === 'en'
-            ? eachOffer.offer_subtitle
-            : eachOffer.offer_subtitle_ar || eachOffer.offer_subtitle,
-        description:
-          langCode === 'en'
-            ? eachOffer.description_en
-            : eachOffer.description_ar || eachOffer.description_en,
-        terms_and_conditions:
-          langCode === 'en'
-            ? eachOffer.terms_and_conditions_en
-            : eachOffer.terms_and_conditions_ar ||
-              eachOffer.terms_and_conditions_en,
-        images: {
-          desktop:
-            langCode === 'en'
-              ? eachOffer.images?.desktop?.en
-              : eachOffer.images?.desktop?.ar || eachOffer.images?.desktop?.en,
-          mobile:
-            langCode === 'en'
-              ? eachOffer.images?.mobile?.en
-              : eachOffer.images?.mobile?.ar || eachOffer.images?.mobile?.en,
-        },
-        benefits: (eachOffer.benefits || []).map((b) => ({
-          name: langCode === 'en' ? b.name_en : b.name_ar || b.name_en,
-          icon: b.icon || '',
-        })),
+      const filtered =
+        locale?.benefits &&
+        locale?.benefits?.map((b) => ({
+          [`name_${langCode}`]: b[`name_${langCode}`],
+          icon: b.icon,
+        }));
+
+      const normalized = {
+        ...locale,
+        status: eachOffer.status,
         date_from: eachOffer.date_from,
         date_to: eachOffer.date_to,
-        status: eachOffer.status,
         station_type: eachOffer.station_type,
+        benefits: filtered || [],
       };
 
       // Sort into available or expired
       if (eachOffer.date_to && new Date(eachOffer.date_to) < today) {
-        expired.push(normalized);
+        expired.push(this.omitExtraFields(normalized, removeExtraFields));
       } else {
-        available.push(normalized);
+        available.push(this.omitExtraFields(normalized, removeExtraFields));
       }
     }
 

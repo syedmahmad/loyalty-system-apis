@@ -6,6 +6,7 @@ import {
   Min,
   IsArray,
   ValidateNested,
+  IsNotEmpty,
 } from 'class-validator';
 
 export class ConditionDto {
@@ -58,7 +59,71 @@ export class ImagesDto {
   mobile: ImageLangDto;
 }
 
+class BenefitDto {
+  @IsString()
+  @IsNotEmpty()
+  name_en: string;
+
+  @IsString()
+  @IsNotEmpty()
+  name_ar: string;
+
+  @IsString()
+  @IsOptional()
+  icon?: string;
+}
+
+export class CreateCouponLocalizationDto {
+  @IsOptional()
+  @IsInt()
+  @IsNotEmpty()
+  id?: number;
+
+  @IsNotEmpty()
+  @IsString()
+  languageId: string;
+
+  @IsNotEmpty()
+  @IsString()
+  title: string;
+
+  @IsOptional()
+  @IsString()
+  description?: string;
+
+  @IsOptional()
+  @IsString()
+  term_and_condition?: string;
+
+  @IsOptional()
+  @IsString()
+  desktop_image?: string;
+
+  @IsOptional()
+  @IsString()
+  mobile_image?: string;
+
+  @IsOptional()
+  @IsString()
+  general_error?: string;
+
+  @IsOptional()
+  @IsString()
+  exception_error?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => BenefitDto)
+  benefits?: BenefitDto[];
+}
+
 export class CreateCouponDto {
+  @IsOptional()
+  @IsInt()
+  @IsNotEmpty()
+  id?: number;
+
   @IsInt()
   tenant_id: number;
 
@@ -116,5 +181,14 @@ export class CreateCouponDto {
   conditions?: ConditionDto[];
 
   @IsOptional()
+  complex_coupon?: any;
+
+  @IsOptional()
   images: ImagesDto;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CreateCouponLocalizationDto)
+  locales?: CreateCouponLocalizationDto[];
 }

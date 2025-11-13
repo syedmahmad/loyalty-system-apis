@@ -9,8 +9,10 @@ import {
   ManyToOne,
   JoinColumn,
   BeforeInsert,
+  OneToMany,
 } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
+import { TierLocalEntity } from './tier-local.entity';
 
 @Entity('tiers')
 export class Tier {
@@ -31,10 +33,10 @@ export class Tier {
   @Column()
   business_unit_id: number;
 
-  @Column()
+  @Column({ nullable: true })
   name: string; // e.g., Bronze, Silver, Gold
 
-  @Column()
+  @Column({ nullable: true })
   name_ar: string; // e.g., Bronze, Silver, Gold
 
   @Column('int', { default: 1 })
@@ -53,7 +55,7 @@ export class Tier {
     type: 'char',
     length: 36,
   })
-  uuid: string = uuidv4();
+  uuid: string;
 
   @BeforeInsert()
   assignUuid() {
@@ -103,4 +105,10 @@ export class Tier {
 
   @Column({ type: 'int', default: 1 })
   status: number; // 1 = active, 0 = inactive
+
+  @OneToMany(() => TierLocalEntity, (locale) => locale.tier, {
+    cascade: true,
+    eager: true,
+  })
+  locales: TierLocalEntity[];
 }

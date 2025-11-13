@@ -14,6 +14,7 @@ import {
 import { v4 as uuidv4 } from 'uuid';
 import { ActiveStatus } from '../type/types';
 import { OfferCustomerSegment } from './offer-customer-segments.entity';
+import { OfferLocalEntity } from './offer-locale.entity';
 
 class ImageLang {
   en?: string;
@@ -36,18 +37,6 @@ export class OffersEntity {
 
   @Column()
   tenant_id: number;
-
-  @Column()
-  offer_title: string;
-
-  @Column({ nullable: true })
-  offer_title_ar: string;
-
-  @Column({ nullable: true })
-  offer_subtitle: string;
-
-  @Column({ nullable: true })
-  offer_subtitle_ar: string;
 
   @Column({ nullable: true })
   station_type: string;
@@ -84,32 +73,6 @@ export class OffersEntity {
   @Column({ type: 'tinyint', default: ActiveStatus.ACTIVE })
   status: number; // 0 = inactive, 1 = active, 2 = deleted
 
-  @Column({ nullable: true })
-  description_en: string;
-
-  @Column({ nullable: true })
-  description_ar: string;
-
-  @Column({
-    nullable: true,
-    type: 'text',
-    transformer: {
-      to: (value: string) => value, // when saving
-      from: (value: string) => (value ? value.replace(/\r?\n|\r/g, '') : value), // when reading
-    },
-  })
-  terms_and_conditions_en: string;
-
-  @Column({
-    nullable: true,
-    type: 'text',
-    transformer: {
-      to: (value: string) => value, // when saving
-      from: (value: string) => (value ? value.replace(/\r?\n|\r/g, '') : value), // when reading
-    },
-  })
-  terms_and_conditions_ar: string;
-
   @OneToMany(() => OfferCustomerSegment, (cs) => cs.offer)
   customerSegments: OfferCustomerSegment[];
 
@@ -133,4 +96,13 @@ export class OffersEntity {
 
   @Column({ type: 'simple-json', nullable: true })
   images?: Images;
+
+  @OneToMany(() => OfferLocalEntity, (locale) => locale.offer, {
+    cascade: true,
+    eager: true,
+  })
+  locales: OfferLocalEntity[];
+
+  @Column({ type: 'tinyint', default: 0 })
+  show_in_app: number; // 0 = hide in app, 1 = show in app
 }

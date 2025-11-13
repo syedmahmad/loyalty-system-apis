@@ -14,6 +14,7 @@ import { Tenant } from 'src/tenants/entities/tenant.entity';
 import { v4 as uuidv4 } from 'uuid';
 import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
 import { RuleTier } from './rules-tier';
+import { RuleLocaleEntity } from './rule-locale.entity';
 
 @Entity({ name: 'rules' })
 export class Rule {
@@ -33,12 +34,6 @@ export class Rule {
 
   @Column({ nullable: true })
   business_unit_id?: number;
-
-  @Column({ type: 'varchar' })
-  name: string;
-
-  @Column({ type: 'varchar' })
-  name_ar: string;
 
   @Column({ type: 'varchar', nullable: true })
   slug: string;
@@ -72,12 +67,6 @@ export class Rule {
 
   @Column({ type: 'float', nullable: true })
   max_burn_percent_on_invoice: number; // for burn
-
-  @Column({ type: 'text', nullable: true })
-  description: string;
-
-  @Column({ type: 'text', nullable: true })
-  description_ar: string;
 
   @Column('int', { nullable: true })
   validity_after_assignment: number;
@@ -136,4 +125,10 @@ export class Rule {
 
   @OneToMany(() => RuleTier, (rt) => rt.rule, { cascade: true })
   tiers: RuleTier[];
+
+  @OneToMany(() => RuleLocaleEntity, (locale) => locale.rule, {
+    cascade: true,
+    eager: true,
+  })
+  locales: RuleLocaleEntity[];
 }

@@ -8,6 +8,7 @@ import {
   IsNotEmpty,
   IsArray,
   ValidateNested,
+  IsInt,
 } from 'class-validator';
 
 class DynamicConditionDto {
@@ -30,14 +31,30 @@ class RuleTierDto {
   point_conversion_rate?: number = 1;
 }
 
-export class CreateRuleDto {
-  @IsString()
+export class CreateRuleLocalizationDto {
+  @IsOptional()
+  @IsInt()
   @IsNotEmpty()
+  id?: number;
+
+  @IsNotEmpty()
+  @IsString()
+  languageId: string;
+
+  @IsNotEmpty()
+  @IsString()
   name: string;
 
+  @IsOptional()
   @IsString()
+  description?: string;
+}
+
+export class CreateRuleDto {
+  @IsInt()
   @IsNotEmpty()
-  name_ar: string;
+  @IsOptional()
+  id?: number;
 
   @IsString()
   @IsNotEmpty()
@@ -93,14 +110,6 @@ export class CreateRuleDto {
   condition_value?: string;
 
   @IsOptional()
-  @IsString()
-  description?: string;
-
-  @IsOptional()
-  @IsString()
-  description_ar?: string;
-
-  @IsOptional()
   @IsNumber()
   validity_after_assignment: number;
 
@@ -137,4 +146,10 @@ export class CreateRuleDto {
   @ValidateNested({ each: true })
   @Type(() => RuleTierDto)
   tiers?: RuleTierDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CreateRuleLocalizationDto)
+  locales?: CreateRuleLocalizationDto[];
 }

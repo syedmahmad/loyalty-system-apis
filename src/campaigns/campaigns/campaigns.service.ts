@@ -736,7 +736,7 @@ export class CampaignsService {
     }
   }
 
-  async burnPoints(bodyPayload: BurnPoints) {
+  async burnPoints(bodyPayload: BurnPoints, langCode = 'en') {
     const { customer_id, order, rule_id: rule_uuid } = bodyPayload;
 
     const total_amount = Number(order.amount);
@@ -754,9 +754,18 @@ export class CampaignsService {
     const customer = customerInfo[0];
     if (!customer) throw new NotFoundException('Customer not found');
 
-    const rule = await this.ruleRepository.findOne({
-      where: { uuid: rule_uuid },
-    });
+    const query = this.ruleRepository
+      .createQueryBuilder('rule')
+      .leftJoinAndSelect('rule.locales', 'locale')
+      .leftJoinAndSelect('locale.language', 'language')
+      .where('rule.uuid = :uuid', { uuid: rule_uuid });
+
+    if (langCode) {
+      query.andWhere('language.code = :langCode', { langCode });
+    }
+
+    const rule = await query.getOne();
+
     if (!rule)
       throw new NotFoundException('Burn rule not found for this campaign');
 
@@ -805,7 +814,7 @@ export class CampaignsService {
       type: WalletTransactionType.BURN,
       amount: discountAmount,
       status: WalletTransactionStatus.ACTIVE,
-      source_type: rule.name,
+      source_type: rule?.locales?.[0]?.name || '',
       source_id: rule.id,
       description: `Burned ${pointsToBurn} points for discount of ${discountAmount} on amount ${total_amount}`,
     };
@@ -856,7 +865,10 @@ export class CampaignsService {
     };
   }
 
-  async burnPointsWithCampaign(bodyPayload: BurnWithCampaignDto) {
+  async burnPointsWithCampaign(
+    bodyPayload: BurnWithCampaignDto,
+    langCode = 'bn',
+  ) {
     const {
       customer_id,
       campaign_id: campaign_uuid,
@@ -933,17 +945,23 @@ export class CampaignsService {
     }
 
     // Step 4: Fetch burn rule
-    const campaignRule = await this.campaignRuleRepository.findOne({
-      where: {
-        campaign: { id: campaign.id },
-        rule: {
-          uuid: rule_uuid,
-          rule_type: 'burn',
-          status: 1,
-        },
-      },
-      relations: ['rule'],
-    });
+    const query = this.campaignRuleRepository
+      .createQueryBuilder('campaignRule')
+      .leftJoinAndSelect('campaignRule.rule', 'rule')
+      .leftJoinAndSelect('rule.locales', 'locale')
+      .leftJoinAndSelect('locale.language', 'language')
+      .where('campaignRule.campaign_id = :campaignId', {
+        campaignId: campaign.id,
+      })
+      .andWhere('rule.uuid = :ruleUuid', { ruleUuid: rule_uuid })
+      .andWhere('rule.rule_type = :ruleType', { ruleType: 'burn' })
+      .andWhere('rule.status = :status', { status: 1 });
+
+    if (langCode) {
+      query.andWhere('language.code = :langCode', { langCode });
+    }
+
+    const campaignRule = await query.getOne();
 
     const rule = campaignRule.rule;
     if (!rule)
@@ -1013,7 +1031,7 @@ export class CampaignsService {
       type: WalletTransactionType.BURN,
       amount: discountAmount,
       status: WalletTransactionStatus.ACTIVE,
-      source_type: rule.name,
+      source_type: rule?.locales?.[0]?.name || '',
       source_id: rule.id,
       description: `Burned ${pointsToBurn} points for discount of ${discountAmount} on amount ${total_amount}`,
     };

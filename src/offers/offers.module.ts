@@ -12,6 +12,8 @@ import { OfferCustomerSegment } from './entities/offer-customer-segments.entity'
 import { CustomerSegmentMember } from 'src/customer-segment/entities/customer-segment-member.entity';
 import { Customer } from 'src/customers/entities/customer.entity';
 import { UserOffer } from './entities/user-offer.entity';
+import { OfferLocalEntity } from './entities/offer-locale.entity';
+import { LanguageEntity } from 'src/master/language/entities/language.entity';
 
 @Module({
   imports: [
@@ -25,6 +27,8 @@ import { UserOffer } from './entities/user-offer.entity';
       CustomerSegmentMember,
       UserOffer,
       Customer,
+      OfferLocalEntity,
+      LanguageEntity,
     ]),
   ],
   controllers: [OffersController],
