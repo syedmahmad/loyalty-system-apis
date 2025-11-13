@@ -89,6 +89,13 @@ export class Vehicle {
   @Column({ type: 'tinyint', default: 1 })
   status: number;
 
+  // --- Account Deletion Tracking ---
+  @Column({ type: 'datetime', nullable: true })
+  delete_requested_at: Date;
+
+  @Column({ type: 'text', nullable: true })
+  reason_for_deletion: string;
+
   @ManyToOne(() => Customer, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'customer_id' })
   customer: Customer;
@@ -122,15 +129,6 @@ export class Vehicle {
 
   @UpdateDateColumn()
   updated_at: Date;
-
-  @Column({ type: 'varchar', length: 255, nullable: true })
-  reason_for_deactivation: string;
-
-  @Column({ type: 'varchar', length: 32, nullable: true })
-  class: string;
-
-  @Column({ type: 'varchar', length: 16, nullable: true })
-  deactivation_reason_group_id: string;
 
   @Column({ type: 'varchar', length: 16, nullable: true })
   fuel_type_group_id: string;

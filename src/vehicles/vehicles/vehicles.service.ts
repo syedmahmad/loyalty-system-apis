@@ -315,6 +315,7 @@ export class VehiclesService {
    */
   async getServiceList(bodyPayload) {
     const { customerId, plateNo, businessUnitId, tenantId } = bodyPayload;
+    if (!customerId) throw new NotFoundException('Customer not found');
     try {
       // Step 1: Find customer in local DB
       const customer = await this.customerRepo.findOne({
@@ -480,13 +481,13 @@ export class VehiclesService {
         errors: [],
       };
     } catch (error: any) {
-      const errResponse = error?.response;
-      return errResponse;
+      throw error;
     }
   }
 
   async getLastServiceFeedback(bodyPayload) {
     const { customerId, businessUnitId, tenantId } = bodyPayload;
+    if (!customerId) throw new NotFoundException('Customer not found');
     try {
       // Step 1: Find customer
       const customer = await this.customerRepo.findOne({
@@ -556,6 +557,25 @@ export class VehiclesService {
 
       // Step 4: If no services found, return empty result
       if (!lastService) {
+        return {
+          success: true,
+          message: 'No service history available for this customer',
+          result: null,
+          errors: [],
+        };
+      }
+
+      // This code checks whether the vehicle associated with the last recorded service is still an active vehicle for the customer.
+      // It first fetches the list of active vehicles for the customer from the local database (status: 1).
+      // Then it creates a set of the plate numbers for these active vehicles.
+      // If the plate number from the most recent service (lastService.plate_no) is not found among the customer's current active vehicles,
+      // it returns a response indicating there is no service history available for this customer.
+      // Otherwise, it allows the process to continue and return the last service information.
+      const localVehicles = await this.vehiclesRepository.find({
+        where: { customer: { id: customer.id }, status: 1 },
+      });
+      const localPlatNoSet = new Set(localVehicles.map((v) => v.plate_no));
+      if (!localPlatNoSet.has(lastService?.plate_no)) {
         return {
           success: true,
           message: 'No service history available for this customer',
@@ -682,13 +702,7 @@ export class VehiclesService {
         errors: [],
       };
     } catch (error: any) {
-      console.error('getLastServiceFeedback Error:', error);
-      return {
-        success: false,
-        message: error?.message || 'Something went wrong',
-        result: {},
-        errors: [error],
-      };
+      throw error;
     }
   }
 
@@ -854,13 +868,7 @@ export class VehiclesService {
         errors: [],
       };
     } catch (error) {
-      console.error('getCustomerVehicle Error:', error);
-      return {
-        success: false,
-        message: error.message || 'Something went wrong',
-        result: {},
-        errors: [error],
-      };
+      throw error;
     }
   }
 
@@ -1080,6 +1088,7 @@ export class VehiclesService {
     businessUnitId: string,
     platNo: string,
     customerId: string,
+    reason_for_deletion: string,
   ) {
     try {
       const customer = await this.customerRepo.findOne({
@@ -1109,6 +1118,8 @@ export class VehiclesService {
       }
 
       vehicle.status = 3; // Set status to deelte
+      vehicle.delete_requested_at = new Date();
+      vehicle.reason_for_deletion = reason_for_deletion;
       await this.vehiclesRepository.save(vehicle);
 
       return {

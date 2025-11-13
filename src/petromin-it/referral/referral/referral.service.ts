@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { Customer } from 'src/customers/entities/customer.entity';
@@ -17,17 +21,15 @@ export class ReferralService {
 
   async getReferralHistory(customerId: string) {
     // find the customer
+    if (!customerId) throw new NotFoundException(`Customer not found`);
+
     // Optimized: combine queries, reduce lookups, and use a map for referees
     const customer = await this.customerRepo.findOne({
       where: { uuid: customerId, status: 1 },
       select: ['id', 'name', 'email', 'phone', 'referral_code', 'status'],
     });
 
-    if (!customer) throw new BadRequestException('Customer not found');
-    if (customer.status === 0)
-      throw new BadRequestException('Customer is inactive');
-    if (customer.status === 3)
-      throw new BadRequestException('Customer is deleted');
+    if (!customer) throw new NotFoundException(`Customer not found`);
 
     // Get all referrals and referees in one go
     const referrals = await this.referralRepo.find({
