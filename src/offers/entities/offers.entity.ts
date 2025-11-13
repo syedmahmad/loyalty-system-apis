@@ -133,4 +133,7 @@ export class OffersEntity {
 
   @Column({ type: 'simple-json', nullable: true })
   images?: Images;
+
+  @Column({ type: 'tinyint', default: 0 })
+  show_in_app: number; // 0 = hide in app, 1 = show in app
 }
