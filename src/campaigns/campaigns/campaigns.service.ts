@@ -893,22 +893,30 @@ export class CampaignsService {
 
     const currentCustomerTier = await this.tierService.getCurrentCustomerTier(
       customer?.id,
+      langCode,
     );
 
     // Step 2: Fetch active campaign
-    const campaignInfo = await this.campaignRepository.findOne({
-      where: { uuid: campaign_uuid, status: 1 },
-      relations: [
-        'rules',
-        'rules.rule',
-        'tiers',
-        'tiers.tier',
-        'business_unit',
-        'coupons',
-        'customerSegments',
-        'customerSegments.segment',
-      ],
-    });
+    const campaignQuery = this.campaignRepository
+      .createQueryBuilder('campaign')
+      .leftJoinAndSelect('campaign.rules', 'campaignRules')
+      .leftJoinAndSelect('campaignRules.rule', 'rule')
+      .leftJoinAndSelect('campaign.tiers', 'campaignTiers')
+      .leftJoinAndSelect('campaignTiers.tier', 'tier')
+      .leftJoinAndSelect('tier.locales', 'locale')
+      .leftJoinAndSelect('locale.language', 'language')
+      .leftJoinAndSelect('campaign.business_unit', 'business_unit')
+      .leftJoinAndSelect('campaign.coupons', 'coupons')
+      .leftJoinAndSelect('campaign.customerSegments', 'customerSegments')
+      .leftJoinAndSelect('customerSegments.segment', 'segment')
+      .where('campaign.uuid = :campaign_uuid', { campaign_uuid })
+      .andWhere('campaign.status = :status', { status: 1 });
+
+    if (langCode) {
+      campaignQuery.andWhere('language.code = :langCode', { langCode });
+    }
+
+    const campaignInfo = await campaignQuery.getOne();
 
     const campaign = campaignInfo;
     if (!campaign) {
@@ -988,7 +996,7 @@ export class CampaignsService {
         return (
           ct.tier &&
           currentCustomerTier?.tier &&
-          ct.tier.name === currentCustomerTier.tier.name &&
+          ct.tier?.locales?.[0]?.name === currentCustomerTier.tier.name &&
           ct.tier.level === currentCustomerTier.tier.level
         );
       });

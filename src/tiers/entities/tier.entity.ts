@@ -33,12 +33,6 @@ export class Tier {
   @Column()
   business_unit_id: number;
 
-  @Column({ nullable: true })
-  name: string; // e.g., Bronze, Silver, Gold
-
-  @Column({ nullable: true })
-  name_ar: string; // e.g., Bronze, Silver, Gold
-
   @Column('int', { default: 1 })
   level: number; // Order or rank
 
@@ -63,33 +57,6 @@ export class Tier {
       this.uuid = uuidv4();
     }
   }
-
-  @Column({ nullable: true, type: 'text' })
-  private _benefits: string;
-
-  get benefits(): string[] {
-    if (!this._benefits) return [''];
-    try {
-      const parsed = JSON.parse(this._benefits);
-      return Array.isArray(parsed) ? parsed : [parsed];
-    } catch {
-      return [this._benefits];
-    }
-  }
-
-  set benefits(value: string[] | string) {
-    if (Array.isArray(value)) {
-      this._benefits = JSON.stringify(value);
-    } else {
-      this._benefits = JSON.stringify([value]);
-    }
-  }
-
-  @Column({ nullable: true })
-  description: string;
-
-  @Column({ nullable: true })
-  description_ar: string;
 
   @Column('int')
   created_by: number;

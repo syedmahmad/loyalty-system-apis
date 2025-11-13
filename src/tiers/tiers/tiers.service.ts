@@ -160,7 +160,6 @@ export class TiersService {
       return {
         tiers: tiers.map((tier) => ({
           ...tier,
-          benefits: tier.benefits,
         })),
       };
     }
@@ -205,7 +204,6 @@ export class TiersService {
     return {
       tiers: specificTiers.map((tier) => ({
         ...tier,
-        benefits: tier.benefits,
       })),
     };
   }
@@ -240,9 +238,6 @@ export class TiersService {
       where: whereClause,
       select: [
         'uuid',
-        'name',
-        'name_ar',
-        'benefits',
         'status',
         // add any other fields you actually need here
       ],
@@ -316,10 +311,8 @@ export class TiersService {
     //   rule_id: rt.rule_id,
     // }));
 
-    const benefits = tier.benefits;
     return {
       ...tier,
-      benefits,
       // rule_targets,
     };
   }
@@ -414,7 +407,7 @@ export class TiersService {
     }
   }
 
-  async getAllTierBenefits(client_id: string) {
+  async getAllTierBenefits(client_id: string, language_code = 'en') {
     const tenant = await this.tenantRepository.findOne({
       where: { uuid: client_id, status: 1 },
     });
@@ -423,15 +416,24 @@ export class TiersService {
       throw new NotFoundException('Tenant not found');
     }
 
-    const tiers = await this.tiersRepository.find({
-      where: { tenant_id: tenant.id, status: 1 },
-      order: { created_at: 'DESC' },
-    });
+    const query = this.tiersRepository
+      .createQueryBuilder('tier')
+      .leftJoinAndSelect('tier.locales', 'locale')
+      .leftJoinAndSelect('locale.language', 'language')
+      .where('tier.tenant_id = :tenant_id', { tenant_id: tenant.id })
+      .andWhere('tier.status = :status', { status: 1 })
+      .orderBy('tier.created_at', 'DESC');
+
+    if (language_code) {
+      query.andWhere('language.code = :language_code', { language_code });
+    }
+
+    const tiers = await query.getMany();
 
     return tiers.map((tier) => ({
       tier_id: tier.id,
-      tier_name: tier.name,
-      benefits: tier.benefits || [], // assuming it's stored as an array or JSON column
+      tier_name: tier?.locales?.[0]?.name,
+      benefits: tier?.locales?.[0]?.benefits || [],
     }));
   }
 
@@ -452,16 +454,22 @@ export class TiersService {
     const points = customerWallet.total_balance;
 
     // Step 2: Find the matching tier
-    const matchingTier = await this.tiersRepository.findOne({
-      where: {
-        min_points: LessThanOrEqual(points),
-        status: 1,
+    const query = this.tiersRepository
+      .createQueryBuilder('tier')
+      .leftJoinAndSelect('tier.locales', 'locale')
+      .leftJoinAndSelect('locale.language', 'language')
+      .where('tier.min_points <= :points', { points })
+      .andWhere('tier.status = :status', { status: 1 })
+      .andWhere('tier.business_unit_id = :business_unit_id', {
         business_unit_id: customerWallet.business_unit?.id,
-      },
-      order: {
-        min_points: 'DESC',
-      },
-    });
+      })
+      .orderBy('tier.min_points', 'DESC');
+
+    if (language_code) {
+      query.andWhere('language.code = :language_code', { language_code });
+    }
+
+    const matchingTier = await query.getOne();
 
     if (!matchingTier) {
       return {
@@ -476,10 +484,7 @@ export class TiersService {
       tier: {
         id: matchingTier.id,
         uuid: matchingTier.uuid,
-        name:
-          language_code === 'ar'
-            ? await this.openaiService.translateToArabic(matchingTier.name)
-            : matchingTier.name,
+        name: matchingTier?.locales?.[0]?.name,
         level: matchingTier.level,
         min_points: matchingTier.min_points,
       },
@@ -528,18 +533,24 @@ export class TiersService {
       );
       if (!wallet) throw new NotFoundException("customer's Wallet not found");
 
-      const customerTierInfo = await this.getCurrentCustomerTier(customer.id);
+      const customerTierInfo = await this.getCurrentCustomerTier(
+        customer.id,
+        language_code,
+      );
 
-      const allTiers = await this.tiersRepository.find({
-        where: {
-          tenant_id: tenantId,
-          business_unit_id: parseInt(BUId),
-          status: 1,
-        },
-        order: {
-          min_points: 'ASC',
-        },
-      });
+      const query = this.tiersRepository
+        .createQueryBuilder('tier')
+        .leftJoinAndSelect('tier.locales', 'locale')
+        .leftJoinAndSelect('locale.language', 'language')
+        .where('tier.tenant_id = :tenantId', { tenantId })
+        .andWhere('tier.business_unit_id = :BUId', { BUId: parseInt(BUId) })
+        .andWhere('tier.status = :status', { status: 1 })
+        .orderBy('tier.min_points', 'ASC');
+
+      if (language_code) {
+        query.andWhere('language.code = :language_code', { language_code });
+      }
+      const allTiers = await query.getMany();
 
       let nextTier = null;
       const benefits = [];
@@ -551,10 +562,7 @@ export class TiersService {
           nextTier = next
             ? {
                 uuid: next.uuid,
-                name:
-                  language_code === 'ar'
-                    ? await this.openaiService.translateToArabic(next.name)
-                    : next.name,
+                name: next?.locales?.[0]?.name,
                 level: next.level,
                 min_points: next.min_points,
               }
@@ -563,21 +571,17 @@ export class TiersService {
 
         tiersArr.push({
           uuid: eachTier.uuid,
-          name:
-            language_code === 'ar'
-              ? await this.openaiService.translateToArabic(eachTier.name)
-              : eachTier.name,
+          name: eachTier?.locales?.[0]?.name,
           level: eachTier.level,
           min_points: eachTier.min_points,
         });
 
-        if (eachTier.name !== 'Bronze') {
-          for (
-            let bindex = 0;
-            bindex <= eachTier.benefits.length - 1;
-            bindex++
-          ) {
-            const eachBenefit = eachTier.benefits[bindex];
+        const benefitsArr = eachTier?.locales?.[0]?.benefits;
+        if (!benefitsArr || !Array.isArray(benefitsArr)) continue;
+
+        if (eachTier?.locales?.[0]?.name !== 'Bronze') {
+          for (let bindex = 0; bindex <= benefitsArr.length - 1; bindex++) {
+            const eachBenefit = eachTier?.locales?.[0]?.benefits[bindex];
             if (!eachBenefit) {
               continue;
             }
@@ -592,16 +596,6 @@ export class TiersService {
                   icon: string;
                 }),
               });
-            } else {
-              benefits.push({
-                tierId: eachTier.uuid,
-                name:
-                  language_code === 'ar'
-                    ? await this.openaiService.translateToArabic(eachBenefit)
-                    : String(eachBenefit),
-                isUsed: false,
-                icon: '',
-              });
             }
           }
         }
@@ -612,10 +606,7 @@ export class TiersService {
         const firstTier = allTiers[0];
         nextTier = {
           uuid: firstTier.uuid,
-          name:
-            language_code === 'ar'
-              ? await this.openaiService.translateToArabic(firstTier.name)
-              : firstTier.name,
+          name: firstTier?.locales?.[0]?.name,
           level: firstTier.level,
           min_points: firstTier?.min_points,
         };
@@ -640,7 +631,7 @@ export class TiersService {
       }
 
       const { id, ...currentTier } = customerTierInfo?.tier;
-      const { name_ar, ...restTier } = currentTier;
+      const { ...restTier } = currentTier;
 
       const walletSettings = await this.walletSettings.findOne({
         where: {
@@ -671,10 +662,7 @@ export class TiersService {
               : 0.01) * customerTierInfo.points,
           currentTier: {
             ...restTier,
-            name:
-              language_code === 'ar'
-                ? await this.openaiService.translateToArabic(restTier.name)
-                : restTier.name,
+            name: restTier.name,
           },
           nextTier,
           pointsToNextTier: nextTier
