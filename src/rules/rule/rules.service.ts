@@ -119,6 +119,8 @@ export class RulesService extends BaseService {
     customer_id: string,
     language_code: string = 'en',
   ) {
+    if (!customer_id) throw new NotFoundException('Customer not found');
+
     const customer = await this.customerRepo.findOne({
       where: {
         uuid: customer_id,

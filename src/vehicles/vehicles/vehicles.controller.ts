@@ -52,6 +52,7 @@ export class VehiclesController {
     @Headers() headers: Record<string, string>,
     @Param('platNo') platNo: string,
     @Param('customerId') customerId: string,
+    @Body() body: { reason_for_deletion: string },
   ) {
     const tenantId = headers['x-tenant-id'];
     const businessUnitId = headers['x-business-unit-id'];
@@ -61,6 +62,7 @@ export class VehiclesController {
       businessUnitId,
       platNo,
       customerId,
+      body?.reason_for_deletion,
     );
   }
 

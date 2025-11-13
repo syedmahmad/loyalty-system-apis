@@ -3055,86 +3055,72 @@ export class CustomerService {
     const take = pageSize;
     const skip = (page - 1) * take;
 
-    try {
-      const customer = await this.customerRepo.findOne({
-        where: { uuid: customer_id, status: 1 },
-        relations: ['tenant', 'business_unit'],
-      });
-
-      if (!customer) {
-        throw new NotFoundException(`Customer not found`);
-      }
-
-      if (customer.status == 0) {
-        throw new BadRequestException(`Customer is inactive`);
-      }
-
-      if (customer.status === 3) {
-        throw new NotFoundException('Customer is deleted');
-      }
-
-      const wallet = await this.walletService.getSingleCustomerWalletInfo(
-        customer.id,
-        customer.business_unit.id,
-      );
-
-      if (!wallet) {
-        throw new NotFoundException(`Customer wallet not configured`);
-      }
-
-      const [earnedData, total] = await this.txRepo.findAndCount({
-        select: [
-          'id',
-          'amount',
-          'point_balance',
-          'description',
-          'invoice_no',
-          'created_at',
-        ],
-        where: {
-          type: WalletTransactionType.EARN,
-          status: WalletTransactionStatus.ACTIVE,
-          wallet: { id: wallet.id },
-          business_unit: { id: wallet.business_unit.id },
-        },
-        take,
-        skip,
-        order: { created_at: 'DESC' },
-      });
-
-      // remove id before returning
-      const earnhistory = await Promise.all(
-        earnedData.map(async ({ id, ...rest }) => {
-          return {
-            ...rest,
-            description:
-              language_code === 'ar'
-                ? await this.openaiService.translateToArabic(rest.description)
-                : rest.description,
-          };
-        }),
-      );
-
-      return {
-        success: true,
-        message: `Successfully fetched the data!`,
-        result: {
-          earnhistory,
-          total,
-          page: Number(page),
-          pageSize: Number(pageSize),
-          totalPages: Math.ceil(total / pageSize),
-        },
-        errors: [],
-      };
-    } catch (error) {
-      throw new BadRequestException({
-        success: false,
-        message: 'Failed to get earn history',
-        result: null,
-        errors: error.message,
-      });
+    if (!customer_id) {
+      throw new NotFoundException(`Customer not found`);
     }
+    const customer = await this.customerRepo.findOne({
+      where: { uuid: customer_id, status: 1 },
+      relations: ['tenant', 'business_unit'],
+    });
+
+    if (!customer) {
+      throw new NotFoundException(`Customer not found`);
+    }
+
+    const wallet = await this.walletService.getSingleCustomerWalletInfo(
+      customer.id,
+      customer.business_unit.id,
+    );
+
+    if (!wallet) {
+      throw new NotFoundException(`Customer wallet not configured`);
+    }
+
+    const [earnedData, total] = await this.txRepo.findAndCount({
+      select: [
+        'id',
+        'amount',
+        'point_balance',
+        'description',
+        'invoice_no',
+        'created_at',
+      ],
+      where: {
+        type: WalletTransactionType.EARN,
+        status: WalletTransactionStatus.ACTIVE,
+        wallet: { id: wallet.id },
+        business_unit: { id: wallet.business_unit.id },
+      },
+      take,
+      skip,
+      order: { created_at: 'DESC' },
+    });
+
+    // remove id before returning
+    const earnhistory = await Promise.all(
+      earnedData.map(async ({ id, ...rest }) => {
+        return {
+          ...rest,
+          description:
+            language_code === 'ar'
+              ? await this.openaiService.translateToArabic(rest.description)
+              : rest.description,
+        };
+      }),
+    );
+
+    return {
+      success: true,
+      message: `Successfully fetched the data!`,
+      result: {
+        earnhistory,
+        total,
+        page: Number(page),
+        pageSize: Number(pageSize),
+        totalPages: Math.ceil(total / pageSize),
+      },
+      errors: [],
+    };
   }
 
   async burnHistory(body, pageNumber, pgsize, language_code: string = 'en') {
@@ -3144,99 +3130,88 @@ export class CustomerService {
     const pageSize = Number(pgsize) || 10;
     const take = pageSize;
     const skip = (page - 1) * take;
+    const customer = await this.customerRepo.findOne({
+      where: { uuid: customer_id, status: 1 },
+      relations: ['tenant', 'business_unit'],
+    });
 
-    try {
-      const customer = await this.customerRepo.findOne({
-        where: { uuid: customer_id, status: 1 },
-        relations: ['tenant', 'business_unit'],
-      });
-
-      if (!customer) {
-        throw new NotFoundException(`Customer not found`);
-      }
-
-      if (customer.status == 0) {
-        throw new BadRequestException(`Customer is inactive`);
-      }
-
-      if (customer.status === 3) {
-        throw new NotFoundException('Customer is deleted');
-      }
-
-      const wallet = await this.walletService.getSingleCustomerWalletInfo(
-        customer.id,
-        customer.business_unit.id,
-      );
-
-      if (!wallet) {
-        throw new NotFoundException(`Customer wallet not configured`);
-      }
-
-      const [burnData, total] = await this.txRepo.findAndCount({
-        select: [
-          'id',
-          'amount',
-          'point_balance',
-          'description',
-          'invoice_no',
-          'created_at',
-        ],
-        where: {
-          type: WalletTransactionType.BURN,
-          status: WalletTransactionStatus.ACTIVE,
-          wallet: { id: wallet.id },
-          business_unit: { id: wallet.business_unit.id },
-        },
-        take,
-        skip,
-        order: { created_at: 'DESC' },
-      });
-
-      // remove id before returning
-      const burnhistory = await Promise.all(
-        burnData.map(async ({ id, ...rest }) => {
-          return {
-            ...rest,
-            description:
-              language_code === 'ar'
-                ? await this.openaiService.translateToArabic(rest.description)
-                : rest.description,
-          };
-        }),
-      );
-
-      return {
-        success: true,
-        message: `Successfully fetched the data!`,
-        result: {
-          burnhistory,
-          total,
-          page: Number(page),
-          pageSize: Number(pageSize),
-          totalPages: Math.ceil(total / pageSize),
-        },
-        errors: [],
-      };
-    } catch (error) {
-      throw new BadRequestException({
-        success: false,
-        message: 'Failed to get burn history',
-        result: null,
-        errors: error.message,
-      });
+    if (!customer) {
+      throw new NotFoundException(`Customer not found`);
     }
+
+    if (customer.status == 0) {
+      throw new BadRequestException(`Customer is inactive`);
+    }
+
+    if (customer.status === 3) {
+      throw new NotFoundException('Customer is deleted');
+    }
+
+    const wallet = await this.walletService.getSingleCustomerWalletInfo(
+      customer.id,
+      customer.business_unit.id,
+    );
+
+    if (!wallet) {
+      throw new NotFoundException(`Customer wallet not configured`);
+    }
+
+    const [burnData, total] = await this.txRepo.findAndCount({
+      select: [
+        'id',
+        'amount',
+        'point_balance',
+        'description',
+        'invoice_no',
+        'created_at',
+      ],
+      where: {
+        type: WalletTransactionType.BURN,
+        status: WalletTransactionStatus.ACTIVE,
+        wallet: { id: wallet.id },
+        business_unit: { id: wallet.business_unit.id },
+      },
+      take,
+      skip,
+      order: { created_at: 'DESC' },
+    });
+
+    // remove id before returning
+    const burnhistory = await Promise.all(
+      burnData.map(async ({ id, ...rest }) => {
+        return {
+          ...rest,
+          description:
+            language_code === 'ar'
+              ? await this.openaiService.translateToArabic(rest.description)
+              : rest.description,
+        };
+      }),
+    );
+
+    return {
+      success: true,
+      message: `Successfully fetched the data!`,
+      result: {
+        burnhistory,
+        total,
+        page: Number(page),
+        pageSize: Number(pageSize),
+        totalPages: Math.ceil(total / pageSize),
+      },
+      errors: [],
+    };
   }
 
   // Combine earn burn transaction
   async transactionHistory(
     body,
     pageNumber,
-    pgsize,
+    pageSize,
     language_code: string = 'en',
   ) {
     const { customer_id } = body;
     const page = Number(pageNumber) || 1;
-    const pageSize = Number(pgsize) || 10;
     const take = pageSize;
     const skip = (page - 1) * take;
 
@@ -3313,12 +3288,7 @@ export class CustomerService {
         errors: [],
       };
     } catch (error) {
-      throw new BadRequestException({
-        success: false,
-        message: 'Failed to get transaction history',
-        result: null,
-        errors: error.message,
-      });
+      throw error;
     }
   }
 
