@@ -125,6 +125,10 @@ export class CreateOfferDto {
 
   @IsInt()
   all_users: number;
+
+  @IsNumber()
+  @IsOptional()
+  show_in_app?: number;
 }
 
 export class UpdateOfferDto extends PartialType(CreateOfferDto) {
