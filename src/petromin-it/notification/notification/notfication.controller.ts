@@ -43,4 +43,25 @@ export class NotificationController {
       body.notification_id,
     );
   }
+
+  /**
+   * ✅ Get device tokens for multiple mobile numbers
+   */
+  @Post('device-tokens')
+  async getDeviceTokens(@Body() body: { mobileNumbers: string[] }) {
+    const { mobileNumbers } = body;
+    console.log('mobileNumbers', mobileNumbers);
+
+    if (!mobileNumbers || !mobileNumbers.length) {
+      return { success: false, message: 'mobileNumbers array is required' };
+    }
+
+    const tokens =
+      await this.notificationService.getAllDeviceTokens(mobileNumbers);
+
+    return {
+      success: true,
+      data: tokens,
+    };
+  }
 }
