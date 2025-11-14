@@ -146,30 +146,6 @@ export class CreateCouponDto {
   @IsInt({ each: true })
   customer_segment_ids?: number[];
 
-  @IsString()
-  @IsOptional()
-  benefits?: string[];
-
-  @IsString()
-  @IsOptional()
-  coupon_title_ar?: string;
-
-  @IsString()
-  @IsOptional()
-  description_en?: string;
-
-  @IsString()
-  @IsOptional()
-  description_ar?: string;
-
-  @IsString()
-  @IsOptional()
-  terms_and_conditions_en?: string;
-
-  @IsString()
-  @IsOptional()
-  terms_and_conditions_ar?: string;
-
   created_by?: number;
 
   @IsInt()
@@ -182,9 +158,6 @@ export class CreateCouponDto {
 
   @IsOptional()
   complex_coupon?: any;
-
-  @IsOptional()
-  images: ImagesDto;
 
   @IsOptional()
   @IsArray()

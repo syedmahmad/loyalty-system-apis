@@ -1144,6 +1144,7 @@ export class CustomerService {
           amount,
           order,
           metadata,
+          langCode,
         });
       }
       default:
@@ -1371,24 +1372,29 @@ export class CustomerService {
       bodyPayload;
     try {
       const today = new Date();
-      const campaign = await this.campaignRepository.findOne({
-        where: {
-          uuid: campaign_id,
-          status: 1,
-          start_date: LessThanOrEqual(today),
-          end_date: MoreThanOrEqual(today),
-        },
-        relations: [
-          'rules',
-          'rules.rule',
-          'tiers',
-          'tiers.tier',
-          'business_unit',
-          'coupons',
-          'customerSegments',
-          'customerSegments.segment',
-        ],
-      });
+      const query = this.campaignRepository
+        .createQueryBuilder('campaign')
+        .leftJoinAndSelect('campaign.rules', 'campaignRules')
+        .leftJoinAndSelect('campaignRules.rule', 'rule')
+        .leftJoinAndSelect('campaign.tiers', 'campaignTiers')
+        .leftJoinAndSelect('campaignTiers.tier', 'tier')
+        .leftJoinAndSelect('tier.locales', 'locale')
+        .leftJoinAndSelect('locale.language', 'language')
+        .leftJoinAndSelect('campaign.business_unit', 'business_unit')
+        .leftJoinAndSelect('campaign.coupons', 'coupons')
+        .leftJoinAndSelect('campaign.customerSegments', 'customerSegments')
+        .leftJoinAndSelect('customerSegments.segment', 'segment')
+        .where('campaign.uuid = :campaign_id', { campaign_id })
+        .andWhere('campaign.status = :status', { status: 1 })
+        .andWhere('campaign.start_date <= :today', { today })
+        .andWhere('campaign.end_date >= :today', { today })
+        .orderBy('campaign.created_at', 'DESC');
+
+      if (langCode) {
+        query.andWhere('language.code = :langCode', { langCode });
+      }
+
+      const campaign = await query.getOne();
 
       if (campaign) {
         const campaignId = campaign.id;
@@ -1440,12 +1446,15 @@ export class CustomerService {
         const campaignTiers = campaign.tiers || [];
         if (campaignTiers.length > 0) {
           const currentCustomerTier =
-            await this.tiersService.getCurrentCustomerTier(customerId);
+            await this.tiersService.getCurrentCustomerTier(
+              customerId,
+              langCode,
+            );
           const matchedTier = campaignTiers.find((ct) => {
             return (
               ct.tier &&
               currentCustomerTier?.tier &&
-              ct.tier.name === currentCustomerTier.tier.name &&
+              ct.tier?.locales?.[0]?.name === currentCustomerTier.tier.name &&
               ct.tier.level === currentCustomerTier.tier.level
             );
           });
@@ -1540,26 +1549,32 @@ export class CustomerService {
   }
 
   async handleCampaignCoupons(bodyPayload) {
-    const { campaign_id, wallet, amount, order, metadata } = bodyPayload;
+    const { campaign_id, wallet, amount, order, metadata, langCode } =
+      bodyPayload;
     const today = new Date();
-    const campaign = await this.campaignRepository.findOne({
-      where: {
-        uuid: campaign_id,
-        status: 1,
-        start_date: LessThanOrEqual(today),
-        end_date: MoreThanOrEqual(today),
-      },
-      relations: [
-        'rules',
-        'rules.rule',
-        'tiers',
-        'tiers.tier',
-        'business_unit',
-        'coupons',
-        'customerSegments',
-        'customerSegments.segment',
-      ],
-    });
+
+    const query = this.campaignRepository
+      .createQueryBuilder('campaign')
+      .leftJoinAndSelect('campaign.rules', 'campaignRules')
+      .leftJoinAndSelect('campaignRules.rule', 'rule')
+      .leftJoinAndSelect('campaign.tiers', 'campaignTiers')
+      .leftJoinAndSelect('campaignTiers.tier', 'tier')
+      .leftJoinAndSelect('tier.locales', 'locale')
+      .leftJoinAndSelect('locale.language', 'language')
+      .leftJoinAndSelect('campaign.business_unit', 'business_unit')
+      .leftJoinAndSelect('campaign.coupons', 'coupons')
+      .leftJoinAndSelect('campaign.customerSegments', 'customerSegments')
+      .leftJoinAndSelect('customerSegments.segment', 'segment')
+      .where('campaign.uuid = :campaign_id', { campaign_id })
+      .andWhere('campaign.status = :status', { status: 1 })
+      .andWhere('campaign.start_date <= :today', { today })
+      .andWhere('campaign.end_date >= :today', { today });
+
+    if (langCode) {
+      query.andWhere('language.code = :langCode', { langCode });
+    }
+
+    const campaign = await query.getOne();
 
     if (campaign) {
       const campaignId = campaign.id;
@@ -1597,12 +1612,12 @@ export class CustomerService {
       const campaignTiers = campaign.tiers || [];
       if (campaignTiers.length > 0) {
         const currentCustomerTier =
-          await this.tiersService.getCurrentCustomerTier(customerId);
+          await this.tiersService.getCurrentCustomerTier(customerId, langCode);
         const matchedTier = campaignTiers.find((ct) => {
           return (
             ct.tier &&
             currentCustomerTier?.tier &&
-            ct.tier.name === currentCustomerTier.tier.name &&
+            ct.tier?.locales?.[0]?.name === currentCustomerTier.tier.name &&
             ct.tier.level === currentCustomerTier.tier.level
           );
         });

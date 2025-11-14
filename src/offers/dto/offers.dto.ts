@@ -98,22 +98,6 @@ export class CreateOfferDto {
   business_unit_id: number;
 
   @IsString()
-  @IsNotEmpty()
-  offer_title: string;
-
-  @IsString()
-  @IsOptional()
-  offer_title_ar?: string;
-
-  @IsString()
-  @IsNotEmpty()
-  offer_subtitle: string;
-
-  @IsString()
-  @IsOptional()
-  offer_subtitle_ar?: string;
-
-  @IsString()
   @IsOptional()
   station_type?: string;
 
@@ -125,31 +109,9 @@ export class CreateOfferDto {
   @IsOptional()
   date_to?: Date;
 
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => BenefitDto)
-  @IsOptional()
-  benefits?: BenefitDto[];
-
   @IsNumber()
   @IsOptional()
   status?: number;
-
-  @IsString()
-  @IsOptional()
-  description_en?: string;
-
-  @IsString()
-  @IsOptional()
-  description_ar?: string;
-
-  @IsString()
-  @IsOptional()
-  terms_and_conditions_en?: string;
-
-  @IsString()
-  @IsOptional()
-  terms_and_conditions_ar?: string;
 
   @IsInt()
   @IsOptional()
