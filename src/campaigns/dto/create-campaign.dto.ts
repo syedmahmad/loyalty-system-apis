@@ -1,3 +1,4 @@
+import { Type } from 'class-transformer';
 import {
   IsArray,
   IsDateString,
@@ -6,8 +7,27 @@ import {
   IsString,
   IsNumber,
   IsInt,
+  ValidateNested,
 } from 'class-validator';
 
+export class CreateCampaignLocalizationDto {
+  @IsOptional()
+  @IsInt()
+  @IsNotEmpty()
+  id?: number;
+
+  @IsNotEmpty()
+  @IsString()
+  languageId: string;
+
+  @IsNotEmpty()
+  @IsString()
+  name: string;
+
+  @IsOptional()
+  @IsString()
+  description?: string;
+}
 export class CreateCampaignDto {
   @IsString()
   @IsNotEmpty()
@@ -56,4 +76,10 @@ export class CreateCampaignDto {
   @IsOptional()
   @IsString()
   campaign_type?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CreateCampaignLocalizationDto)
+  locales?: CreateCampaignLocalizationDto[];
 }

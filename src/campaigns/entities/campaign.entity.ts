@@ -16,6 +16,7 @@ import { CampaignTier } from './campaign-tier.entity';
 import { Tenant } from 'src/tenants/entities/tenant.entity';
 import { CampaignCoupons } from './campaign-coupon.entity';
 import { CampaignCustomerSegment } from './campaign-customer-segments.entity';
+import { CampaignLocalEntity } from './campaign-locale.entity';
 
 @Entity('campaigns')
 export class Campaign {
@@ -90,4 +91,10 @@ export class Campaign {
 
   @UpdateDateColumn()
   updated_at: Date;
+
+  @OneToMany(() => CampaignLocalEntity, (locale) => locale.campaign, {
+    cascade: true,
+    eager: true,
+  })
+  locales: CampaignLocalEntity[];
 }

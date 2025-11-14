@@ -1,28 +1,33 @@
+import { Type } from 'class-transformer';
 import {
   IsArray,
+  IsInt,
   IsNotEmpty,
   IsNumber,
   IsOptional,
   IsString,
+  ValidateNested,
 } from 'class-validator';
 
-export class CreateCustomerSegmentDto {
+export class CreateCustomerSegmentLocalizationDto {
+  @IsOptional()
+  @IsInt()
+  @IsNotEmpty()
+  id?: number;
+
+  @IsNotEmpty()
+  @IsString()
+  languageId: string;
+
   @IsNotEmpty()
   @IsString()
   name: string;
 
-  @IsNotEmpty()
+  @IsOptional()
   @IsString()
-  description: string;
-
-  @IsNotEmpty()
-  @IsString()
-  name_ar: string;
-
-  @IsNotEmpty()
-  @IsString()
-  description_ar: string;
-
+  description?: string;
+}
+export class CreateCustomerSegmentDto {
   @IsNotEmpty()
   file: any; // you can later use `@IsObject()` or a custom validation pipe if needed
 
@@ -33,6 +38,12 @@ export class CreateCustomerSegmentDto {
   @IsNumber()
   @IsOptional()
   business_unit_id: number;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CreateCustomerSegmentLocalizationDto)
+  locales?: CreateCustomerSegmentLocalizationDto[];
 }
 
 export class AddCustomerToSegmentDto {
