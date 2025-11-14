@@ -489,6 +489,7 @@ export class OffersService {
     const baseConditions = {
       status: Not(2),
       tenant_id: tenant_id,
+      show_in_app: 1,
     };
     let whereClause = {};
 
@@ -573,6 +574,7 @@ export class OffersService {
         all_users: 1,
         status: ActiveStatus.ACTIVE,
         tenant_id,
+        show_in_app: 1,
       },
       order: { created_at: 'DESC' },
     });
