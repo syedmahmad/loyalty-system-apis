@@ -5,7 +5,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource, In, ILike } from 'typeorm';
+import { Repository, DataSource, In } from 'typeorm';
 import { Campaign } from '../entities/campaign.entity';
 import { CampaignRule } from '../entities/campaign-rule.entity';
 import { CampaignTier } from '../entities/campaign-tier.entity';
@@ -107,6 +107,7 @@ export class CampaignsService {
         client_id,
         customer_segment_ids = [],
         campaign_type,
+        locales,
       } = dto;
 
       const manager = queryRunner.manager;
@@ -163,6 +164,11 @@ export class CampaignsService {
         active: true,
         status: 1,
         campaign_type,
+        locales: locales?.map((locale) => ({
+          language: { id: locale.languageId },
+          name: locale.name,
+          description: locale.description,
+        })) as any,
       });
       const savedCampaign = await manager.save(campaign);
 
@@ -214,23 +220,27 @@ export class CampaignsService {
     userId: number,
     page: number = 1,
     pageSize: number = 10,
+    langCode: string = 'en',
   ) {
     const take = pageSize;
     const skip = (page - 1) * take;
 
-    let optionalWhereClause = {};
+    // Fetch user
     const user = await this.userRepository.findOne({ where: { id: userId } });
     if (!user)
       throw new BadRequestException('User not found against user-token');
 
     const privileges: any[] = user.user_privileges || [];
+
+    // Fetch tenant
     const tenant = await this.tenantRepository.findOne({
       where: { id: client_id },
     });
     if (!tenant) throw new BadRequestException('Tenant not found');
+
     const tenantName = tenant.name;
 
-    const isSuperAdmin = privileges.some((p: any) => p.name === 'all_tenants');
+    const isSuperAdmin = privileges.some((p) => p.name === 'all_tenants');
 
     const hasGlobalAccess = privileges.some(
       (p) =>
@@ -238,68 +248,68 @@ export class CampaignsService {
         p.name === `${tenantName}_All Business Unit`,
     );
 
+    // ---------- BASE QUERY ----------
+    const qb = this.campaignRepository
+      .createQueryBuilder('campaign')
+      .leftJoinAndSelect('campaign.locales', 'locale')
+      .leftJoinAndSelect('locale.language', 'language')
+      .leftJoinAndSelect('campaign.rules', 'rules')
+      .leftJoinAndSelect('campaign.tiers', 'tiers')
+      .leftJoinAndSelect('tiers.tier', 'tier')
+      .leftJoinAndSelect('campaign.coupons', 'coupons')
+      .leftJoinAndSelect('campaign.business_unit', 'business_unit')
+      .leftJoinAndSelect('campaign.customerSegments', 'customerSegments')
+      .leftJoinAndSelect('customerSegments.segment', 'segment')
+      .where('campaign.tenant_id = :tenantId', { tenantId: client_id })
+      .andWhere('campaign.status = :status', { status: 1 })
+      .andWhere('language.code = :langCode', { langCode });
+
+    // ---------- NAME FILTER (LOCALES TABLE) ----------
     if (name?.trim()) {
-      optionalWhereClause = { name: ILike(`%${name}%`) };
+      qb.andWhere(
+        '(locale.name LIKE :search OR locale.description LIKE :search)',
+        { search: `%${name}%` },
+      );
     }
 
-    if (hasGlobalAccess || isSuperAdmin) {
-      const [data, total] = await this.campaignRepository.findAndCount({
+    // ---------- ROLE / BUSINESS UNIT FILTER ----------
+    if (!isSuperAdmin && !hasGlobalAccess) {
+      const accessibleBU = privileges
+        .filter(
+          (p) =>
+            p.module === 'businessUnits' &&
+            p.name.startsWith(`${tenantName}_`) &&
+            p.name !== `${tenantName}_All Business Unit`,
+        )
+        .map((p) => p.name.replace(`${tenantName}_`, ''));
+
+      if (!accessibleBU.length) {
+        return {
+          data: [],
+          total: 0,
+          page,
+          pageSize,
+          totalPages: 0,
+        };
+      }
+
+      const businessUnits = await this.businessUnitRepository.find({
         where: {
-          tenant_id: Number(client_id),
           status: 1,
-          ...optionalWhereClause,
+          tenant_id: client_id,
+          name: In(accessibleBU),
         },
-        relations: ['rules', 'tiers', 'business_unit', 'coupons'],
-        take,
-        skip,
-        order: { created_at: 'DESC' },
       });
 
-      return {
-        data,
-        total,
-        page,
-        pageSize,
-        totalPages: Math.ceil(total / pageSize),
-      };
+      const buIds = businessUnits.map((b) => b.id);
+
+      qb.andWhere('campaign.business_unit_id IN (:...buIds)', { buIds });
     }
 
-    const accessibleBU = privileges
-      .filter(
-        (p) =>
-          p.module === 'businessUnits' &&
-          p.name.startsWith(`${tenantName}_`) &&
-          p.name !== `${tenantName}_All Business Unit`,
-      )
-      .map((p) => p.name.replace(`${tenantName}_`, ''));
+    // ---------- PAGINATION ----------
+    qb.orderBy('campaign.created_at', 'DESC').take(take).skip(skip);
 
-    if (!accessibleBU.length) return [];
-
-    const businessUnits = await this.businessUnitRepository.find({
-      where: { status: 1, tenant_id: client_id, name: In(accessibleBU) },
-    });
-
-    const businessUnitIds = businessUnits.map((bu) => bu.id);
-
-    const [data, total] = await this.campaignRepository.findAndCount({
-      where: {
-        tenant_id: Number(client_id),
-        status: 1,
-        business_unit_id: In(businessUnitIds),
-        ...optionalWhereClause,
-      },
-      relations: [
-        'rules',
-        'tiers',
-        'business_unit',
-        'coupons',
-        'customerSegments',
-        'customerSegments.segment',
-      ],
-      take,
-      skip,
-      order: { created_at: 'DESC' },
-    });
+    const [data, total] = await qb.getManyAndCount();
 
     return {
       data,
@@ -519,6 +529,7 @@ export class CampaignsService {
         description: dto.description,
         business_unit_id: dto.business_unit_id,
         campaign_type: dto.campaign_type,
+        locales: dto?.locales,
       });
 
       const updatedCampaign = await manager.save(campaign);

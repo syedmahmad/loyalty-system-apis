@@ -47,14 +47,19 @@ export class ScheduleService {
     today.setHours(0, 0, 0, 0);
     console.log('Running campaign expiry check...');
 
-    const expiredCampaigns = await this.campaignRepository.find({
-      where: { end_date: today, active: true },
-    });
+    const qb = this.campaignRepository
+      .createQueryBuilder('campaign')
+      .leftJoinAndSelect('campaign.locales', 'locale')
+      .where('campaign.end_date = :today', { today })
+      .andWhere('campaign.active = :active', { active: true })
+      .andWhere('locale.language_code = :langCode', { langCode: 'en' });
+
+    const expiredCampaigns: any = await qb.getMany();
 
     for (const campaign of expiredCampaigns) {
       campaign.active = false;
       await this.campaignRepository.save(campaign);
-      console.log(`Deactivated campaign: ${campaign.name}`);
+      console.log(`Deactivated campaign: ${campaign?.locales?.[0]?.name}`);
     }
   }
 

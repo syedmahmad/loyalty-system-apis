@@ -33,6 +33,7 @@ import { NotificationModule } from 'src/petromin-it/notification/notification.mo
 import { OpenaiModule } from 'src/openai/openai.module';
 import { CustomerPreference } from 'src/petromin-it/preferences/entities/customer-preference.entity';
 import { DeviceToken } from 'src/petromin-it/notification/entities/device-token.entity';
+import { CustomerSegmentLocalEntity } from './entities/customer-segment-locale.entity';
 
 @Module({
   imports: [
@@ -60,6 +61,7 @@ import { DeviceToken } from 'src/petromin-it/notification/entities/device-token.
       Tenant,
       CouponType,
       CustomerPreference,
+      CustomerSegmentLocalEntity,
     ]),
     NotificationModule,
     OpenaiModule,
