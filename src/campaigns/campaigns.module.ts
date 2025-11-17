@@ -25,6 +25,7 @@ import { UserCoupon } from 'src/wallet/entities/user-coupon.entity';
 import { WalletOrder } from 'src/wallet/entities/wallet-order.entity';
 import { OciService } from 'src/oci/oci.service';
 import { OpenaiModule } from 'src/openai/openai.module';
+import { CampaignLocalEntity } from './entities/campaign-locale.entity';
 
 @Module({
   imports: [
@@ -48,6 +49,7 @@ import { OpenaiModule } from 'src/openai/openai.module';
       WalletSettings,
       UserCoupon,
       WalletOrder,
+      CampaignLocalEntity,
     ]),
     OpenaiModule,
   ],

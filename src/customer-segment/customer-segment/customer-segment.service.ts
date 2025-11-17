@@ -1,14 +1,10 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import * as fs from 'fs';
 import * as fastcsv from 'fast-csv';
 import { v4 as uuidv4 } from 'uuid';
 import { nanoid } from 'nanoid';
 import { InjectRepository, InjectDataSource } from '@nestjs/typeorm';
-import { Repository, DataSource, ILike, FindOptionsWhere } from 'typeorm';
+import { Repository, DataSource } from 'typeorm';
 import { CustomerSegment } from '../entities/customer-segment.entity';
 import { CreateCustomerSegmentDto } from '../dto/create.dto';
 import { UpdateCustomerSegmentDto } from '../dto/update-customer-segment.dto';
@@ -49,19 +45,24 @@ export class CustomerSegmentsService {
     await queryRunner.startTransaction();
 
     try {
-      const checkSegmentExist = await this.segmentRepository.findOne({
-        where: { name: dto.name, status: 1 },
-      });
+      // const checkSegmentExist = await this.segmentRepository.findOne({
+      //   where: { name: dto.name, status: 1 },
+      // });
 
-      if (checkSegmentExist) {
-        throw new BadRequestException('Segment already exist with same name.');
-      }
+      // if (checkSegmentExist) {
+      //   throw new BadRequestException('Segment already exist with same name.');
+      // }
 
       queryRunner.data = { user };
       const repo = queryRunner.manager.getRepository(CustomerSegment);
       const segment = repo.create({
         ...dto,
         status: 1,
+        locales: dto?.locales?.map((locale) => ({
+          language: { id: locale.languageId },
+          name: locale.name,
+          description: locale.description,
+        })) as any,
       });
 
       const saved = await repo.save(segment);
@@ -89,32 +90,31 @@ export class CustomerSegmentsService {
     page: number = 1,
     pageSize: number = 7,
     name: string,
+    langCode: string = 'en',
   ) {
     const take = pageSize;
     const skip = (page - 1) * take;
 
-    const baseConditions = {
-      tenant_id: client_id,
-      status: 1,
-    };
+    const qb = this.segmentRepository
+      .createQueryBuilder('segment')
+      .leftJoinAndSelect('segment.locales', 'locale')
+      .leftJoinAndSelect('locale.language', 'language')
+      .leftJoinAndSelect('segment.members', 'members')
+      .leftJoinAndSelect('members.customer', 'customer')
+      .where('segment.tenant_id = :tenantId', { tenantId: client_id })
+      .andWhere('segment.status = :status', { status: 1 })
+      .andWhere('language.code = :langCode', { langCode });
 
-    let where: any;
-
+    // 🔍 Name-based filter on locale table
     if (name) {
-      where = [
-        { ...baseConditions, name: ILike(`%${name}%`) },
-        { ...baseConditions, description: ILike(`%${name}%`) },
-      ];
-    } else {
-      where = baseConditions;
+      qb.andWhere(`(locale.name LIKE :name OR locale.description LIKE :name)`, {
+        name: `%${name}%`,
+      });
     }
 
-    const [data, total] = await this.segmentRepository.findAndCount({
-      where,
-      relations: ['members', 'members.customer'],
-      take,
-      skip,
-    });
+    qb.orderBy('segment.created_at', 'DESC').take(take).skip(skip);
+
+    const [data, total] = await qb.getManyAndCount();
 
     return {
       data,
@@ -267,13 +267,6 @@ export class CustomerSegmentsService {
     await queryRunner.startTransaction();
 
     try {
-      // ✅ Check segment existence
-      const existing = await this.segmentRepository.findOne({
-        where: { name: body.name, status: 1 },
-      });
-      if (existing)
-        throw new BadRequestException('Segment already exists with same name.');
-
       queryRunner.data = { user };
       const repo = queryRunner.manager.getRepository(CustomerSegment);
 
