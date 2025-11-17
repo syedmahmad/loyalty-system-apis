@@ -1,9 +1,15 @@
+import * as v8 from 'v8';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import * as bodyParser from 'body-parser';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  console.log(
+    '💾 Node heap limit (MB):',
+    v8.getHeapStatistics().heap_size_limit / 1024 / 1024,
+  );
 
   // // TODO: Increase HTTP server timeout
   // const server = app.getHttpServer();
