@@ -23,8 +23,8 @@ dotenv -e .env -- pm2 start npm \
   -- run start:dev \
   --node-args="--max-old-space-size=${NODE_HEAP_MB}"
 
-# Optionally save PM2 process list so it autostarts on reboot
-pm2 save
+# # Optionally save PM2 process list so it autostarts on reboot
+# pm2 save
 
-echo "✅ Deployment complete. Running PM2 list:"
-pm2 list
+# echo "✅ Deployment complete. Running PM2 list:"
+# pm2 list
