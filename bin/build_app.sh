@@ -20,7 +20,7 @@ pm2 delete "$APP_NAME" || true
 # Start with larger Node heap and name the app
 dotenv -e .env -- pm2 start npm \
   --name "$APP_NAME" \
-  -- run start:dev \
+  -- run start:prod \
   --node-args="--max-old-space-size=${NODE_HEAP_MB}"
 
 # # Optionally save PM2 process list so it autostarts on reboot
