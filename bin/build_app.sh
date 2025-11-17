@@ -18,10 +18,16 @@ echo "🚀 Restarting PM2 process with increased heap..."
 pm2 delete "$APP_NAME" || true
 
 # Start with larger Node heap and name the app
+# dotenv -e .env -- pm2 start npm \
+#   --name "$APP_NAME" \
+#   -- run start:prod \
+#   --node-args="--max-old-space-size=${NODE_HEAP_MB}"
+
+NODE_OPTIONS="--max-old-space-size=${NODE_HEAP_MB}" \
 dotenv -e .env -- pm2 start npm \
   --name "$APP_NAME" \
-  -- run start:prod \
-  --node-args="--max-old-space-size=${NODE_HEAP_MB}"
+  -- run start:prod
+
 
 # # Optionally save PM2 process list so it autostarts on reboot
 # pm2 save
