@@ -2483,7 +2483,7 @@ export class CouponsService {
     );
   }
 
-  async validateCoupon(body) {
+  async getCouponCriterias(body) {
     const { tenantId, bUId, coupon_code } = body;
 
     const coupon = await this.couponRepo.findOne({
@@ -2665,5 +2665,236 @@ export class CouponsService {
     }
 
     return result;
+  }
+
+  async validateCoupon(bodyPayload, language_code: string = 'en') {
+    const today = new Date();
+    const { customer_id, campaign_id, metadata } = bodyPayload;
+
+    // Step 1: Get Customer & Wallet Info
+    const customer = await this.customerRepo.findOne({
+      where: { uuid: customer_id, status: 1 },
+    });
+    if (!customer) throw new NotFoundException('Customer not found');
+
+    if (customer && customer.status === 0) {
+      throw new NotFoundException('Customer is inactive');
+    }
+
+    const wallet = await this.walletService.getSingleCustomerWalletInfoById(
+      customer.id,
+    );
+    if (!wallet) throw new NotFoundException('Wallet not found');
+    const customerId = wallet.customer.id;
+
+    let coupon;
+    let campaign;
+    let hasSegments = [];
+
+    // Step 2:
+    // If campaign_id present it means coupon will be redeemed through campaign
+    //other wise, it means user want to redeem coupon direclty
+    if (campaign_id) {
+      campaign = await this.campaignRepository.findOne({
+        where: {
+          uuid: campaign_id,
+          status: 1,
+          start_date: LessThanOrEqual(today),
+          end_date: MoreThanOrEqual(today),
+        },
+        relations: [
+          'rules',
+          'rules.rule',
+          'tiers',
+          'tiers.tier',
+          'business_unit',
+          'coupons',
+          'customerSegments',
+          'customerSegments.segment',
+        ],
+      });
+
+      if (campaign) {
+        const campaignId = campaign.id;
+
+        // Segment validation
+        hasSegments = await this.campaignCustomerSegmentRepo.find({
+          where: { campaign: { id: campaign.id } },
+          relations: ['segment'],
+        });
+
+        if (hasSegments.length > 0) {
+          // Extract segment IDs
+          const segmentIds = hasSegments.map((cs) => cs.segment.id);
+
+          if (segmentIds.length === 0) {
+            return false;
+          }
+
+          const match = await this.customerSegmentMemberRepository.findOne({
+            where: {
+              segment: { id: In(segmentIds) },
+              customer: { id: customerId },
+            },
+          });
+
+          if (!match) {
+            throw new ForbiddenException(
+              'Customer is not eligible for this campaign',
+            );
+          }
+        }
+
+        // customer eligible tier checking
+        const campaignTiers = campaign.tiers || [];
+        if (campaignTiers.length > 0) {
+          const currentCustomerTier =
+            await this.tiersService.getCurrentCustomerTier(customerId);
+          const matchedTier = campaignTiers.find((ct) => {
+            return (
+              ct.tier &&
+              currentCustomerTier?.tier &&
+              ct.tier.name === currentCustomerTier.tier.name &&
+              ct.tier.level === currentCustomerTier.tier.level
+            );
+          });
+
+          if (!matchedTier) {
+            throw new ForbiddenException(
+              'Customer tier is not eligible for this campaign',
+            );
+          }
+        }
+
+        const campaignCoupon = await this.campaignCouponRepo.findOne({
+          where: {
+            campaign: { id: campaignId },
+            coupon: {
+              code: metadata.coupon_code,
+            },
+          },
+          relations: ['coupon'],
+        });
+
+        // Coupon Not Found
+        if (!campaignCoupon) {
+          throw new BadRequestException('Coupon not found');
+        }
+        coupon = campaignCoupon.coupon;
+      } else {
+        throw new NotFoundException(
+          'Campaign not found or it may not started yet',
+        );
+      }
+    } else {
+      coupon = await this.couponsRepository.findOne({
+        where: { code: metadata.coupon_code },
+      });
+
+      if (!coupon) throw new NotFoundException('Coupon not found');
+
+      // Segment validation
+      hasSegments = await this.couponSegmentRepository.find({
+        where: { coupon: { id: coupon.id } },
+        relations: ['segment'],
+      });
+
+      if (hasSegments.length > 0) {
+        // Extract segment IDs
+        const segmentIds = hasSegments.map((cs) => cs.segment.id);
+
+        if (segmentIds.length === 0) {
+          return false;
+        }
+
+        const match = await this.customerSegmentMemberRepository.findOne({
+          where: {
+            segment: { id: In(segmentIds) },
+            customer: { id: customerId },
+          },
+        });
+
+        if (!match) {
+          throw new ForbiddenException(
+            'Customer is not eligible for this coupon 11',
+          );
+        }
+      }
+    }
+
+    // Checking customer is assigned to this coupon or not
+    if (hasSegments.length === 0) {
+      const isUserAssignedTothisCoupon = await this.userCouponRepo.findOne({
+        where: [
+          { customer: { id: customer.id }, coupon_id: coupon.id },
+          { customer: { id: customer.id }, issued_from_id: coupon.id },
+        ],
+      });
+
+      if (!isUserAssignedTothisCoupon && coupon.all_users == 0) {
+        throw new NotFoundException('Customer is not eligible for this coupon');
+      }
+    }
+
+    // Step 3:
+    // checking coupon validation like (usage limit, expiry, max usage per user .....)
+    await this.couponValidations(coupon, today, customerId);
+
+    // Step 4:
+    // checking conditions of Complex Coupon & Normal Coupon
+    if (coupon?.coupon_type_id === null) {
+      const conditions = coupon?.complex_coupon;
+      const result = await this.checkComplexCouponConditions(
+        metadata,
+        conditions,
+        wallet,
+      );
+      if (!result) {
+        const criteria = await this.makeCriteriaFromCouponPayload(conditions);
+        throw new BadRequestException({
+          success: false,
+          message: 'Coupon is not applicable',
+          requiredCriteria: criteria,
+        });
+      }
+    } else {
+      const couponType = await this.couponTypeService.findOne(
+        coupon?.coupon_type_id,
+      );
+
+      const result = await this.checkSimpleCouponConditions(
+        metadata,
+        coupon.conditions,
+        couponType,
+        wallet,
+      );
+
+      if (!result) {
+        // throw new BadRequestException('Coupon is not applicable');
+        const criteria =
+          await this.makeCriteriaFromCouponPayloadForSimpleCoupon(
+            coupon?.coupon_type_id,
+            coupon.conditions,
+          );
+        throw new BadRequestException({
+          success: false,
+          message: 'Coupon is not applicable',
+          requiredCriteria: criteria,
+        });
+      }
+    }
+
+    // Step 5:
+    // Checking if coupon already rewarded or not
+    await this.checkAlreadyRewaredCoupons(
+      wallet.customer.uuid,
+      coupon.uuid,
+      coupon,
+    );
+
+    return {
+      success: true,
+      message: 'Customer is eligible for this coupon',
+    };
   }
 }
