@@ -1197,14 +1197,14 @@ export class CouponsService {
 
             let variantMatch = false;
             // Variant check (if provided, match against array of allowed variants)
-            if (cond.variant.length == 1 && cond.variant[0] === 'all') {
+            if (cond?.variant?.length == 1 && cond?.variant[0] === 'all') {
               variantMatch = true;
             } else {
               variantMatch =
-                cond.variant_names && cond.variant_names.length > 0
-                  ? cond.variant_names.some(
+                cond?.variant_names && cond?.variant_names?.length > 0
+                  ? cond?.variant_names.some(
                       (v: string) =>
-                        v.toLowerCase() === veh.variant?.toLowerCase(),
+                        v.toLowerCase() === veh?.variant?.toLowerCase(),
                     )
                   : false;
             }
@@ -1213,7 +1213,8 @@ export class CouponsService {
               (vehicleExtraFeatures && makeMatch) ||
               yearMatch ||
               modelMatch ||
-              variantMatch
+              variantMatch ||
+              vehicleExtraFeatures
             );
           }),
         );
