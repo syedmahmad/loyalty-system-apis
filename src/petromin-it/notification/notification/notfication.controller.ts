@@ -1,4 +1,13 @@
-import { Controller, Post, Body, Get, Query, Patch } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  Get,
+  Query,
+  Patch,
+  Req,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { RegisterToken } from 'src/petromin-it/notification/dto/notifications.dto';
 import { NotificationService } from 'src/petromin-it/notification/notification/notifications.service';
 
@@ -47,10 +56,23 @@ export class NotificationController {
   /**
    * ✅ Get device tokens for multiple mobile numbers
    */
-  @Post('device-tokens')
-  async getDeviceTokens(@Body() body: { mobileNumbers: string[] }) {
+  @Post('get-device-tokens')
+  async getDeviceTokens(
+    @Req() req: Request,
+    @Body() body: { mobileNumbers: string[] },
+  ) {
+    const authHeader = req.headers['authorization'];
+
+    if (!authHeader) {
+      throw new UnauthorizedException('Missing Authorization header');
+    }
+
+    const token = authHeader.split(' ')[1];
+    if (token !== process.env.NCMC_COMMUNICATION_TOKEN) {
+      throw new UnauthorizedException('Invalid auth token');
+    }
+
     const { mobileNumbers } = body;
-    console.log('mobileNumbers', mobileNumbers);
 
     if (!mobileNumbers || !mobileNumbers.length) {
       return { success: false, message: 'mobileNumbers array is required' };
