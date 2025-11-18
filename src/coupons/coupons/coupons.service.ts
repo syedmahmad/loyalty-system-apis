@@ -2544,7 +2544,10 @@ export class CouponsService {
 
       switch (selectedCouponType) {
         case CouponType.SERVICE_BASED:
-          result['services'] = dynamicRows.map((row) => ({ name: row.type }));
+          result['services'] = dynamicRows.map((row) => ({
+            name: row.type,
+            value: row.value,
+          }));
           break;
 
         case CouponType.PRODUCT_SPECIFIC:
@@ -2628,7 +2631,7 @@ export class CouponsService {
           break;
 
         case CouponTypeName.SERVICE_BASED:
-          add('serivices', { name: coupon.type });
+          add('serivices', { name: coupon.type, value: coupon.value });
           break;
 
         case CouponTypeName.DISCOUNT:
