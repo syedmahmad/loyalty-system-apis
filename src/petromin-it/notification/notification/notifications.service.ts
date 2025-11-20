@@ -1,12 +1,13 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 import { DeviceToken } from 'src/petromin-it/notification/entities/device-token.entity';
 import { RegisterToken } from 'src/petromin-it/notification/dto/notifications.dto';
 import { Customer } from 'src/customers/entities/customer.entity';
 import { Notification } from 'src/petromin-it/notification/entities/notification.entity';
 import axios from 'axios';
+import { decrypt, encrypt } from 'src/helpers/encryption';
 
 interface CreateNotificationDto {
   customer_id?: number | null;
@@ -284,5 +285,52 @@ export class NotificationService {
       console.error('❌ Failed to create notification:', error);
       throw new Error('Failed to create notification');
     }
+  }
+
+  async getAllDeviceTokens(
+    mobileNumbers: string[],
+  ): Promise<Record<string, string[]>> {
+    if (!mobileNumbers?.length) {
+      return {};
+    }
+
+    // 1️⃣ Fetch customers whose hashed_number matches the given mobile numbers
+    const customers = await this.customerRepo.find({
+      where: mobileNumbers.map((num) => ({ hashed_number: encrypt(num) })),
+      select: ['id', 'hashed_number'],
+    });
+
+    if (!customers.length) {
+      return {};
+    }
+
+    // Map hashed_number -> customerId
+    const customerIdMap: Record<string, number> = {};
+    customers.forEach((c) => {
+      customerIdMap[c.hashed_number] = c.id;
+    });
+
+    const customerIds = customers.map((c) => c.id);
+
+    // 2️⃣ Fetch device tokens for these customers
+    const deviceTokens = await this.tokenRepo.find({
+      where: { customer: { id: In(customerIds) } },
+      relations: ['customer'],
+      select: ['token', 'customer'],
+    });
+
+    // 3️⃣ Map mobile numbers to device tokens
+    const result: Record<string, string[]> = {};
+
+    deviceTokens.forEach((dt) => {
+      const mobile = decrypt(dt.customer.hashed_number);
+      if (!result[mobile]) {
+        result[mobile] = [];
+      }
+      result[mobile].push(dt.token);
+    });
+
+    // 4️⃣ Return key-value object
+    return result;
   }
 }
