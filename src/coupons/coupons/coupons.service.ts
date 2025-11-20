@@ -1175,12 +1175,15 @@ export class CouponsService {
             const fieldName = cond.type;
             const vehValue = veh[fieldName];
 
-            if (vehValue === undefined) return false;
-            const vehicleExtraFeatures = this.applyOperator(
-              String(vehValue.trim()).toLowerCase(),
-              cond.operator,
-              String(cond.value.trim()).toLowerCase(),
-            );
+            let vehicleExtraFeatures = false;
+            if (fieldName) {
+              if (vehValue === undefined) return false;
+              vehicleExtraFeatures = this.applyOperator(
+                String(vehValue.trim()).toLowerCase(),
+                cond.operator,
+                String(cond.value.trim()).toLowerCase(),
+              );
+            }
 
             // Make check (if provided in condition)
             const makeMatch = cond.make_name
@@ -1209,12 +1212,22 @@ export class CouponsService {
                   : false;
             }
 
+            let makeAndExtraFeaturesCombination = false;
+            // Case A: both model_name and type exist → AND condition
+            if (cond?.make_name && cond?.type) {
+              makeAndExtraFeaturesCombination =
+                makeMatch && vehicleExtraFeatures;
+            } else {
+              // Case B: only one present → OR condition
+              makeAndExtraFeaturesCombination =
+                makeMatch || vehicleExtraFeatures;
+            }
+
             return (
-              (vehicleExtraFeatures && makeMatch) ||
+              makeAndExtraFeaturesCombination ||
               yearMatch ||
               modelMatch ||
-              variantMatch ||
-              vehicleExtraFeatures
+              variantMatch
             );
           }),
         );
@@ -1371,29 +1384,32 @@ export class CouponsService {
               const fieldName = cond.type.toLowerCase();
               const vehValue = veh[fieldName];
 
-              if (vehValue === undefined) return false;
+              let vehicleExtraFeatures = false;
+              if (fieldName) {
+                if (vehValue === undefined) return false;
 
-              // Normalize actual & expected values based on type
-              let actualValue = vehValue;
-              let expectedValue = cond.value;
+                // Normalize actual & expected values based on type
+                let actualValue = vehValue;
+                let expectedValue = cond.value;
 
-              if (typeof actualValue === 'string') {
-                actualValue = actualValue.trim().toLowerCase();
-              } else if (typeof actualValue === 'number') {
-                actualValue = Number(actualValue);
+                if (typeof actualValue === 'string') {
+                  actualValue = actualValue.trim().toLowerCase();
+                } else if (typeof actualValue === 'number') {
+                  actualValue = Number(actualValue);
+                }
+
+                if (typeof expectedValue === 'string') {
+                  expectedValue = expectedValue.trim().toLowerCase();
+                } else if (typeof expectedValue === 'number') {
+                  expectedValue = Number(expectedValue);
+                }
+
+                vehicleExtraFeatures = this.applyOperator(
+                  actualValue,
+                  cond.operator,
+                  expectedValue,
+                );
               }
-
-              if (typeof expectedValue === 'string') {
-                expectedValue = expectedValue.trim().toLowerCase();
-              } else if (typeof expectedValue === 'number') {
-                expectedValue = Number(expectedValue);
-              }
-
-              const vehicleExtraFeatures = this.applyOperator(
-                actualValue,
-                cond.operator,
-                expectedValue,
-              );
 
               // Make check (if provided in condition)
               const makeMatch = cond.make_name
@@ -1425,16 +1441,25 @@ export class CouponsService {
                     : false;
               }
 
+              let makeAndExtraFeaturesCombination = false;
+              // Case A: both model_name and type exist → AND condition
+              if (cond?.make_name && cond?.type) {
+                makeAndExtraFeaturesCombination =
+                  makeMatch && vehicleExtraFeatures;
+              } else {
+                // Case B: only one present → OR condition
+                makeAndExtraFeaturesCombination =
+                  makeMatch || vehicleExtraFeatures;
+              }
+
               return (
-                vehicleExtraFeatures ||
-                makeMatch ||
+                makeAndExtraFeaturesCombination ||
                 yearMatch ||
                 modelMatch ||
                 variantMatch
               );
             }),
           );
-
           results.push(isVehicleSatisfied);
           break;
         }
@@ -2589,15 +2614,30 @@ export class CouponsService {
           }));
           break;
 
-        case CouponType.VEHICLE_SPECIFIC:
-          result['vehicle'] = dynamicRows.map((row) => ({
-            make: row.make_name || null,
-            model: row.model_name || null,
-            variants: row.variant_names || null,
-            year: row.year || null,
-            [row.type]: row.value || null,
-          }));
+        case CouponType.VEHICLE_SPECIFIC: {
+          result['vehicle'] = dynamicRows.map((row) => {
+            const vehicleObj: any = {
+              make: row.make_name,
+              model: row.model_name,
+              variants: row.variant_names,
+              year: row.year,
+              [row.type]: row.value,
+            };
+
+            // Remove null, undefined, empty string, empty array
+            Object.keys(vehicleObj).forEach((key) => {
+              const value = vehicleObj[key];
+              const isEmptyArray = Array.isArray(value) && value.length === 0;
+              const isEmptyValue =
+                value === null || value === undefined || value === '';
+              if (isEmptyArray || isEmptyValue) {
+                delete vehicleObj[key];
+              }
+            });
+            return vehicleObj;
+          });
           break;
+        }
 
         default:
           break;
@@ -2649,13 +2689,24 @@ export class CouponsService {
           break;
 
         case CouponTypeName.VEHICLE_SPECIFIC:
-          add('vehicle', {
+          const vehicleObj = {
             make: coupon.make_name || null,
             model: coupon.model_name || null,
             variant_names: coupon.variant_names || null,
             year: coupon.year || null,
             [coupon.type]: coupon.value || null,
+          };
+          // Remove null, undefined, empty string, empty array
+          Object.keys(vehicleObj).forEach((key) => {
+            const value = vehicleObj[key];
+            const isEmptyArray = Array.isArray(value) && value.length === 0;
+            const isEmptyValue =
+              value === null || value === undefined || value === '';
+            if (isEmptyArray || isEmptyValue) {
+              delete vehicleObj[key];
+            }
           });
+          add('vehicle', vehicleObj);
           break;
 
         case CouponTypeName.REFERRAL:
