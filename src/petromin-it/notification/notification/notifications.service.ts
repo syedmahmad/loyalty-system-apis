@@ -191,8 +191,6 @@ export class NotificationService {
     offset = 10,
     language_code?: string,
   ) {
-    console.log('language_code', language_code);
-
     if (!customer_id) {
       throw new NotFoundException(`Customer not found`);
     }
