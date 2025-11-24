@@ -1172,63 +1172,74 @@ export class CouponsService {
         if (!metadata.vehicle || metadata.vehicle.length === 0) return false;
         return metadata.vehicle.some((veh: any) =>
           conditions.some((cond: any) => {
-            const fieldName = cond.type;
-            const vehValue = veh[fieldName];
+            const matches: boolean[] = [];
 
-            let vehicleExtraFeatures = false;
-            if (fieldName) {
-              if (vehValue === undefined) return false;
-              vehicleExtraFeatures = this.applyOperator(
-                String(vehValue.trim()).toLowerCase(),
-                cond.operator,
-                String(cond.value.trim()).toLowerCase(),
-              );
+            if (cond?.type) {
+              const fieldName = cond.type;
+              const vehValue = veh[fieldName];
+              let vehicleExtraFeatures = false;
+              if (fieldName) {
+                if (vehValue === undefined) return false;
+                vehicleExtraFeatures = this.applyOperator(
+                  String(vehValue.trim()).toLowerCase(),
+                  cond.operator,
+                  String(cond.value.trim()).toLowerCase(),
+                );
+                matches.push(vehicleExtraFeatures);
+              }
             }
 
             // Make check (if provided in condition)
-            const makeMatch = cond.make_name
-              ? veh.make?.toLowerCase() === cond.make_name.toLowerCase()
-              : false;
+            if (cond?.make_name) {
+              const makeMatch = cond.make_name
+                ? veh.make?.toLowerCase() === cond.make_name.toLowerCase()
+                : false;
+              matches.push(makeMatch);
+            }
 
             //  Year check (if provided)
-            const yearMatch = cond.year ? veh.year === cond.year : false;
+            if (cond?.year) {
+              const yearMatch = cond.year ? veh.year === cond.year : false;
+              matches.push(yearMatch);
+            }
 
             // Model check
-            const modelMatch = cond.model_name
-              ? veh.model?.toLowerCase() === cond.model_name.toLowerCase()
-              : false;
-
-            let variantMatch = false;
-            // Variant check (if provided, match against array of allowed variants)
-            if (cond?.variant?.length == 1 && cond?.variant[0] === 'all') {
-              variantMatch = true;
-            } else {
-              variantMatch =
-                cond?.variant_names && cond?.variant_names?.length > 0
-                  ? cond?.variant_names.some(
-                      (v: string) =>
-                        v.toLowerCase() === veh?.variant?.toLowerCase(),
-                    )
-                  : false;
+            if (cond?.model_name) {
+              const modelMatch = cond.model_name
+                ? veh.model?.toLowerCase() === cond.model_name.toLowerCase()
+                : false;
+              matches.push(modelMatch);
             }
 
-            let makeAndExtraFeaturesCombination = false;
-            // Case A: both model_name and type exist → AND condition
-            if (cond?.make_name && cond?.type) {
-              makeAndExtraFeaturesCombination =
-                makeMatch && vehicleExtraFeatures;
-            } else {
-              // Case B: only one present → OR condition
-              makeAndExtraFeaturesCombination =
-                makeMatch || vehicleExtraFeatures;
+            if (cond?.variant_names?.length > 0) {
+              let variantMatch = false;
+              // Variant check (if provided, match against array of allowed variants)
+              if (
+                cond?.variant_names?.length == 1 &&
+                cond?.variant_names[0] === 'all'
+              ) {
+                variantMatch = true;
+              } else {
+                variantMatch =
+                  cond.variant_names && cond.variant_names.length > 0
+                    ? cond.variant_names.every((v: string) =>
+                        veh?.variants?.includes(v),
+                      )
+                    : false;
+              }
+              matches.push(variantMatch);
             }
 
-            return (
-              makeAndExtraFeaturesCombination ||
-              yearMatch ||
-              modelMatch ||
-              variantMatch
-            );
+            // If no condition fields provided → false
+            if (matches.length === 0) return false;
+
+            // If only 1 field → return it
+            if (matches.length === 1) {
+              return matches[0];
+            }
+
+            // If 2 or more fields → AND condition
+            return matches.every(Boolean);
           }),
         );
       }
@@ -1381,83 +1392,91 @@ export class CouponsService {
 
           const isVehicleSatisfied = metadata.vehicle.some((veh: any) =>
             conditions.some((cond: any) => {
-              const fieldName = cond.type.toLowerCase();
-              const vehValue = veh[fieldName];
+              const matches: boolean[] = [];
 
-              let vehicleExtraFeatures = false;
-              if (fieldName) {
-                if (vehValue === undefined) return false;
+              if (cond?.type) {
+                const fieldName = cond.type.toLowerCase();
+                const vehValue = veh[fieldName];
+                let vehicleExtraFeatures = false;
+                if (fieldName) {
+                  if (vehValue === undefined) return false;
 
-                // Normalize actual & expected values based on type
-                let actualValue = vehValue;
-                let expectedValue = cond.value;
+                  // Normalize actual & expected values based on type
+                  let actualValue = vehValue;
+                  let expectedValue = cond.value;
 
-                if (typeof actualValue === 'string') {
-                  actualValue = actualValue.trim().toLowerCase();
-                } else if (typeof actualValue === 'number') {
-                  actualValue = Number(actualValue);
+                  if (typeof actualValue === 'string') {
+                    actualValue = actualValue.trim().toLowerCase();
+                  } else if (typeof actualValue === 'number') {
+                    actualValue = Number(actualValue);
+                  }
+
+                  if (typeof expectedValue === 'string') {
+                    expectedValue = expectedValue.trim().toLowerCase();
+                  } else if (typeof expectedValue === 'number') {
+                    expectedValue = Number(expectedValue);
+                  }
+
+                  vehicleExtraFeatures = this.applyOperator(
+                    actualValue,
+                    cond.operator,
+                    expectedValue,
+                  );
+                  matches.push(vehicleExtraFeatures);
                 }
-
-                if (typeof expectedValue === 'string') {
-                  expectedValue = expectedValue.trim().toLowerCase();
-                } else if (typeof expectedValue === 'number') {
-                  expectedValue = Number(expectedValue);
-                }
-
-                vehicleExtraFeatures = this.applyOperator(
-                  actualValue,
-                  cond.operator,
-                  expectedValue,
-                );
               }
 
               // Make check (if provided in condition)
-              const makeMatch = cond.make_name
-                ? veh.make?.toLowerCase() === cond.make_name.toLowerCase()
-                : false;
+              if (cond?.make_name) {
+                const makeMatch = cond.make_name
+                  ? veh.make?.toLowerCase() === cond.make_name.toLowerCase()
+                  : false;
+                matches.push(makeMatch);
+              }
 
               //  Year check (if provided)
-              const yearMatch = cond.year ? veh.year === cond.year : false;
+              if (cond?.year) {
+                const yearMatch = cond.year ? veh.year === cond.year : false;
+                matches.push(yearMatch);
+              }
 
               // Model check
-              const modelMatch = cond.model_name
-                ? veh.model?.toLowerCase() === cond.model_name.toLowerCase()
-                : false;
-
-              let variantMatch = false;
-              // Variant check (if provided, match against array of allowed variants)
-              if (
-                cond.variant_names.length == 1 &&
-                cond.variant_names[0] === 'all'
-              ) {
-                variantMatch = true;
-              } else {
-                variantMatch =
-                  cond.variant_names && cond.variant_names.length > 0
-                    ? cond.variant_names.some(
-                        (v: string) =>
-                          v.toLowerCase() === veh.variant?.toLowerCase(),
-                      )
-                    : false;
+              if (cond?.model_name) {
+                const modelMatch = cond.model_name
+                  ? veh.model?.toLowerCase() === cond.model_name.toLowerCase()
+                  : false;
+                matches.push(modelMatch);
               }
 
-              let makeAndExtraFeaturesCombination = false;
-              // Case A: both model_name and type exist → AND condition
-              if (cond?.make_name && cond?.type) {
-                makeAndExtraFeaturesCombination =
-                  makeMatch && vehicleExtraFeatures;
-              } else {
-                // Case B: only one present → OR condition
-                makeAndExtraFeaturesCombination =
-                  makeMatch || vehicleExtraFeatures;
+              if (cond?.variant_names?.length > 0) {
+                let variantMatch = false;
+                // Variant check (if provided, match against array of allowed variants)
+                if (
+                  cond.variant_names.length == 1 &&
+                  cond.variant_names[0] === 'all'
+                ) {
+                  variantMatch = true;
+                } else {
+                  variantMatch =
+                    cond.variant_names && cond.variant_names.length > 0
+                      ? cond.variant_names.every((v: string) =>
+                          veh?.variants?.includes(v),
+                        )
+                      : false;
+                }
+                matches.push(variantMatch);
               }
 
-              return (
-                makeAndExtraFeaturesCombination ||
-                yearMatch ||
-                modelMatch ||
-                variantMatch
-              );
+              // If no condition fields provided → false
+              if (matches.length === 0) return false;
+
+              // If only 1 field → return it
+              if (matches.length === 1) {
+                return matches[0];
+              }
+
+              // If 2 or more fields → AND condition
+              return matches.every(Boolean);
             }),
           );
           results.push(isVehicleSatisfied);
@@ -2692,7 +2711,7 @@ export class CouponsService {
           const vehicleObj = {
             make: coupon.make_name || null,
             model: coupon.model_name || null,
-            variant_names: coupon.variant_names || null,
+            variants: coupon.variant_names || null,
             year: coupon.year || null,
             [coupon.type]: coupon.value || null,
           };

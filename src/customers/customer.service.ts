@@ -299,7 +299,7 @@ export class CustomerService {
 
   async updateStatus(id: number, status: 0 | 1) {
     const customer = await this.customerRepo.findOne({
-      where: { id, status: 1 },
+      where: { id },
     });
 
     if (!customer) {
@@ -433,9 +433,17 @@ export class CustomerService {
       where: { id: customerId, status: 1 },
     });
 
+    if (!customer) {
+      throw new NotFoundException(`Customer with id ${customerId} not found`);
+    }
+
     const walletinfo = await this.walletService.getSingleCustomerWalletInfoById(
-      customer.id,
+      customer?.id,
     );
+
+    if (!walletinfo) {
+      throw new NotFoundException(`Customer Wallet is not configured.`);
+    }
 
     const transactionInfo = await this.walletService.getWalletTransactions(
       walletinfo?.id,
@@ -456,10 +464,6 @@ export class CustomerService {
 
     const tiersInfo =
       await this.tiersService.getCurrentCustomerTier(customerId);
-
-    if (!customer) {
-      throw new NotFoundException(`Customer with ID ${customerId} not found`);
-    }
 
     return {
       ...customer,
