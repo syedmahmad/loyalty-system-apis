@@ -65,6 +65,7 @@ import { OpenAIService } from 'src/openai/openai/openai.service';
 import { BUSINESS_UNITS_WITH_UUID } from './type/type';
 import axios from 'axios';
 import { DeviceToken } from 'src/petromin-it/notification/entities/device-token.entity';
+import { decrypt } from 'src/helpers/encryption';
 
 @Injectable()
 export class CustomerService {
@@ -817,6 +818,7 @@ export class CustomerService {
           business_name: 'PETROMINit',
           to: deviceTokens.map((token) => ({
             user_device_token: token.token,
+            customer_mobile: decrypt(customer.hashed_number),
             dynamic_fields: {
               rewardPoints: rewardPoints.toString(),
               event: event,
