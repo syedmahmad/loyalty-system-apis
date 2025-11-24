@@ -463,6 +463,7 @@ export class BurningService {
             business_name: 'PETROMINit',
             to: deviceTokens.map((token) => ({
               user_device_token: token.token,
+              customer_mobile: decrypt(customer.hashed_number),
               dynamic_fields: {
                 appliedBurnPoints: appliedBurnPoints.toString(),
                 discountAmount: discountAmount.toString(),
