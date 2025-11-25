@@ -1194,49 +1194,74 @@ export class CouponsService {
         if (!metadata.vehicle || metadata.vehicle.length === 0) return false;
         return metadata.vehicle.some((veh: any) =>
           conditions.some((cond: any) => {
-            const fieldName = cond.type;
-            const vehValue = veh[fieldName];
+            const matches: boolean[] = [];
 
-            if (vehValue === undefined) return false;
-            const vehicleExtraFeatures = this.applyOperator(
-              String(vehValue.trim()).toLowerCase(),
-              cond.operator,
-              String(cond.value.trim()).toLowerCase(),
-            );
-
-            // Make check (if provided in condition)
-            const makeMatch = cond.make_name
-              ? veh.make?.toLowerCase() === cond.make_name.toLowerCase()
-              : false;
-
-            //  Year check (if provided)
-            const yearMatch = cond.year ? veh.year === cond.year : false;
-
-            // Model check
-            const modelMatch = cond.model_name
-              ? veh.model?.toLowerCase() === cond.model_name.toLowerCase()
-              : false;
-
-            let variantMatch = false;
-            // Variant check (if provided, match against array of allowed variants)
-            if (cond.variant.length == 1 && cond.variant[0] === 'all') {
-              variantMatch = true;
-            } else {
-              variantMatch =
-                cond.variant_names && cond.variant_names.length > 0
-                  ? cond.variant_names.some(
-                      (v: string) =>
-                        v.toLowerCase() === veh.variant?.toLowerCase(),
-                    )
-                  : false;
+            if (cond?.type) {
+              const fieldName = cond.type;
+              const vehValue = veh[fieldName];
+              let vehicleExtraFeatures = false;
+              if (fieldName) {
+                if (vehValue === undefined) return false;
+                vehicleExtraFeatures = this.applyOperator(
+                  String(vehValue.trim()).toLowerCase(),
+                  cond.operator,
+                  String(cond.value.trim()).toLowerCase(),
+                );
+                matches.push(vehicleExtraFeatures);
+              }
             }
 
-            return (
-              (vehicleExtraFeatures && makeMatch) ||
-              yearMatch ||
-              modelMatch ||
-              variantMatch
-            );
+            // Make check (if provided in condition)
+            if (cond?.make_name) {
+              const makeMatch = cond.make_name
+                ? veh.make?.toLowerCase() === cond.make_name.toLowerCase()
+                : false;
+              matches.push(makeMatch);
+            }
+
+            //  Year check (if provided)
+            if (cond?.year) {
+              const yearMatch = cond.year ? veh.year === cond.year : false;
+              matches.push(yearMatch);
+            }
+
+            // Model check
+            if (cond?.model_name) {
+              const modelMatch = cond.model_name
+                ? veh.model?.toLowerCase() === cond.model_name.toLowerCase()
+                : false;
+              matches.push(modelMatch);
+            }
+
+            if (cond?.variant_names?.length > 0) {
+              let variantMatch = false;
+              // Variant check (if provided, match against array of allowed variants)
+              if (
+                cond?.variant_names?.length == 1 &&
+                cond?.variant_names[0] === 'all'
+              ) {
+                variantMatch = true;
+              } else {
+                variantMatch =
+                  cond.variant_names && cond.variant_names.length > 0
+                    ? cond.variant_names.every((v: string) =>
+                        veh?.variants?.includes(v),
+                      )
+                    : false;
+              }
+              matches.push(variantMatch);
+            }
+
+            // If no condition fields provided → false
+            if (matches.length === 0) return false;
+
+            // If only 1 field → return it
+            if (matches.length === 1) {
+              return matches[0];
+            }
+
+            // If 2 or more fields → AND condition
+            return matches.every(Boolean);
           }),
         );
       }
@@ -1389,73 +1414,93 @@ export class CouponsService {
 
           const isVehicleSatisfied = metadata.vehicle.some((veh: any) =>
             conditions.some((cond: any) => {
-              const fieldName = cond.type.toLowerCase();
-              const vehValue = veh[fieldName];
+              const matches: boolean[] = [];
 
-              if (vehValue === undefined) return false;
+              if (cond?.type) {
+                const fieldName = cond.type.toLowerCase();
+                const vehValue = veh[fieldName];
+                let vehicleExtraFeatures = false;
+                if (fieldName) {
+                  if (vehValue === undefined) return false;
 
-              // Normalize actual & expected values based on type
-              let actualValue = vehValue;
-              let expectedValue = cond.value;
+                  // Normalize actual & expected values based on type
+                  let actualValue = vehValue;
+                  let expectedValue = cond.value;
 
-              if (typeof actualValue === 'string') {
-                actualValue = actualValue.trim().toLowerCase();
-              } else if (typeof actualValue === 'number') {
-                actualValue = Number(actualValue);
+                  if (typeof actualValue === 'string') {
+                    actualValue = actualValue.trim().toLowerCase();
+                  } else if (typeof actualValue === 'number') {
+                    actualValue = Number(actualValue);
+                  }
+
+                  if (typeof expectedValue === 'string') {
+                    expectedValue = expectedValue.trim().toLowerCase();
+                  } else if (typeof expectedValue === 'number') {
+                    expectedValue = Number(expectedValue);
+                  }
+
+                  vehicleExtraFeatures = this.applyOperator(
+                    actualValue,
+                    cond.operator,
+                    expectedValue,
+                  );
+                  matches.push(vehicleExtraFeatures);
+                }
               }
-
-              if (typeof expectedValue === 'string') {
-                expectedValue = expectedValue.trim().toLowerCase();
-              } else if (typeof expectedValue === 'number') {
-                expectedValue = Number(expectedValue);
-              }
-
-              const vehicleExtraFeatures = this.applyOperator(
-                actualValue,
-                cond.operator,
-                expectedValue,
-              );
 
               // Make check (if provided in condition)
-              const makeMatch = cond.make_name
-                ? veh.make?.toLowerCase() === cond.make_name.toLowerCase()
-                : false;
-
-              //  Year check (if provided)
-              const yearMatch = cond.year ? veh.year === cond.year : false;
-
-              // Model check
-              const modelMatch = cond.model_name
-                ? veh.model?.toLowerCase() === cond.model_name.toLowerCase()
-                : false;
-
-              let variantMatch = false;
-              // Variant check (if provided, match against array of allowed variants)
-              if (
-                cond.variant_names.length == 1 &&
-                cond.variant_names[0] === 'all'
-              ) {
-                variantMatch = true;
-              } else {
-                variantMatch =
-                  cond.variant_names && cond.variant_names.length > 0
-                    ? cond.variant_names.some(
-                        (v: string) =>
-                          v.toLowerCase() === veh.variant?.toLowerCase(),
-                      )
-                    : false;
+              if (cond?.make_name) {
+                const makeMatch = cond.make_name
+                  ? veh.make?.toLowerCase() === cond.make_name.toLowerCase()
+                  : false;
+                matches.push(makeMatch);
               }
 
-              return (
-                vehicleExtraFeatures ||
-                makeMatch ||
-                yearMatch ||
-                modelMatch ||
-                variantMatch
-              );
+              //  Year check (if provided)
+              if (cond?.year) {
+                const yearMatch = cond.year ? veh.year === cond.year : false;
+                matches.push(yearMatch);
+              }
+
+              // Model check
+              if (cond?.model_name) {
+                const modelMatch = cond.model_name
+                  ? veh.model?.toLowerCase() === cond.model_name.toLowerCase()
+                  : false;
+                matches.push(modelMatch);
+              }
+
+              if (cond?.variant_names?.length > 0) {
+                let variantMatch = false;
+                // Variant check (if provided, match against array of allowed variants)
+                if (
+                  cond.variant_names.length == 1 &&
+                  cond.variant_names[0] === 'all'
+                ) {
+                  variantMatch = true;
+                } else {
+                  variantMatch =
+                    cond.variant_names && cond.variant_names.length > 0
+                      ? cond.variant_names.every((v: string) =>
+                          veh?.variants?.includes(v),
+                        )
+                      : false;
+                }
+                matches.push(variantMatch);
+              }
+
+              // If no condition fields provided → false
+              if (matches.length === 0) return false;
+
+              // If only 1 field → return it
+              if (matches.length === 1) {
+                return matches[0];
+              }
+
+              // If 2 or more fields → AND condition
+              return matches.every(Boolean);
             }),
           );
-
           results.push(isVehicleSatisfied);
           break;
         }
@@ -2505,7 +2550,7 @@ export class CouponsService {
     );
   }
 
-  async validateCoupon(body) {
+  async getCouponCriterias(body) {
     const { tenantId, bUId, coupon_code } = body;
 
     const coupon = await this.couponRepo.findOne({
@@ -2610,15 +2655,30 @@ export class CouponsService {
           }));
           break;
 
-        case CouponType.VEHICLE_SPECIFIC:
-          result['vehicle'] = dynamicRows.map((row) => ({
-            make: row.make_name || null,
-            model: row.model_name || null,
-            variants: row.variant_names || null,
-            year: row.year || null,
-            [row.type]: row.value || null,
-          }));
+        case CouponType.VEHICLE_SPECIFIC: {
+          result['vehicle'] = dynamicRows.map((row) => {
+            const vehicleObj: any = {
+              make: row.make_name,
+              model: row.model_name,
+              variants: row.variant_names,
+              year: row.year,
+              [row.type]: row.value,
+            };
+
+            // Remove null, undefined, empty string, empty array
+            Object.keys(vehicleObj).forEach((key) => {
+              const value = vehicleObj[key];
+              const isEmptyArray = Array.isArray(value) && value.length === 0;
+              const isEmptyValue =
+                value === null || value === undefined || value === '';
+              if (isEmptyArray || isEmptyValue) {
+                delete vehicleObj[key];
+              }
+            });
+            return vehicleObj;
+          });
           break;
+        }
 
         default:
           break;
@@ -2670,13 +2730,24 @@ export class CouponsService {
           break;
 
         case CouponTypeName.VEHICLE_SPECIFIC:
-          add('vehicle', {
+          const vehicleObj = {
             make: coupon.make_name || null,
             model: coupon.model_name || null,
-            variant_names: coupon.variant_names || null,
+            variants: coupon.variant_names || null,
             year: coupon.year || null,
             [coupon.type]: coupon.value || null,
+          };
+          // Remove null, undefined, empty string, empty array
+          Object.keys(vehicleObj).forEach((key) => {
+            const value = vehicleObj[key];
+            const isEmptyArray = Array.isArray(value) && value.length === 0;
+            const isEmptyValue =
+              value === null || value === undefined || value === '';
+            if (isEmptyArray || isEmptyValue) {
+              delete vehicleObj[key];
+            }
           });
+          add('vehicle', vehicleObj);
           break;
 
         case CouponTypeName.REFERRAL:
@@ -2690,5 +2761,236 @@ export class CouponsService {
     }
 
     return result;
+  }
+
+  async validateCoupon(bodyPayload, language_code: string = 'en') {
+    const today = new Date();
+    const { customer_id, campaign_id, metadata } = bodyPayload;
+
+    // Step 1: Get Customer & Wallet Info
+    const customer = await this.customerRepo.findOne({
+      where: { uuid: customer_id, status: 1 },
+    });
+    if (!customer) throw new NotFoundException('Customer not found');
+
+    if (customer && customer.status === 0) {
+      throw new NotFoundException('Customer is inactive');
+    }
+
+    const wallet = await this.walletService.getSingleCustomerWalletInfoById(
+      customer.id,
+    );
+    if (!wallet) throw new NotFoundException('Wallet not found');
+    const customerId = wallet.customer.id;
+
+    let coupon;
+    let campaign;
+    let hasSegments = [];
+
+    // Step 2:
+    // If campaign_id present it means coupon will be redeemed through campaign
+    //other wise, it means user want to redeem coupon direclty
+    if (campaign_id) {
+      campaign = await this.campaignRepository.findOne({
+        where: {
+          uuid: campaign_id,
+          status: 1,
+          start_date: LessThanOrEqual(today),
+          end_date: MoreThanOrEqual(today),
+        },
+        relations: [
+          'rules',
+          'rules.rule',
+          'tiers',
+          'tiers.tier',
+          'business_unit',
+          'coupons',
+          'customerSegments',
+          'customerSegments.segment',
+        ],
+      });
+
+      if (campaign) {
+        const campaignId = campaign.id;
+
+        // Segment validation
+        hasSegments = await this.campaignCustomerSegmentRepo.find({
+          where: { campaign: { id: campaign.id } },
+          relations: ['segment'],
+        });
+
+        if (hasSegments.length > 0) {
+          // Extract segment IDs
+          const segmentIds = hasSegments.map((cs) => cs.segment.id);
+
+          if (segmentIds.length === 0) {
+            return false;
+          }
+
+          const match = await this.customerSegmentMemberRepository.findOne({
+            where: {
+              segment: { id: In(segmentIds) },
+              customer: { id: customerId },
+            },
+          });
+
+          if (!match) {
+            throw new ForbiddenException(
+              'Customer is not eligible for this campaign',
+            );
+          }
+        }
+
+        // customer eligible tier checking
+        const campaignTiers = campaign.tiers || [];
+        if (campaignTiers.length > 0) {
+          const currentCustomerTier =
+            await this.tiersService.getCurrentCustomerTier(customerId);
+          const matchedTier = campaignTiers.find((ct) => {
+            return (
+              ct.tier &&
+              currentCustomerTier?.tier &&
+              ct.tier.name === currentCustomerTier.tier.name &&
+              ct.tier.level === currentCustomerTier.tier.level
+            );
+          });
+
+          if (!matchedTier) {
+            throw new ForbiddenException(
+              'Customer tier is not eligible for this campaign',
+            );
+          }
+        }
+
+        const campaignCoupon = await this.campaignCouponRepo.findOne({
+          where: {
+            campaign: { id: campaignId },
+            coupon: {
+              code: metadata.coupon_code,
+            },
+          },
+          relations: ['coupon'],
+        });
+
+        // Coupon Not Found
+        if (!campaignCoupon) {
+          throw new BadRequestException('Coupon not found');
+        }
+        coupon = campaignCoupon.coupon;
+      } else {
+        throw new NotFoundException(
+          'Campaign not found or it may not started yet',
+        );
+      }
+    } else {
+      coupon = await this.couponsRepository.findOne({
+        where: { code: metadata.coupon_code },
+      });
+
+      if (!coupon) throw new NotFoundException('Coupon not found');
+
+      // Segment validation
+      hasSegments = await this.couponSegmentRepository.find({
+        where: { coupon: { id: coupon.id } },
+        relations: ['segment'],
+      });
+
+      if (hasSegments.length > 0) {
+        // Extract segment IDs
+        const segmentIds = hasSegments.map((cs) => cs.segment.id);
+
+        if (segmentIds.length === 0) {
+          return false;
+        }
+
+        const match = await this.customerSegmentMemberRepository.findOne({
+          where: {
+            segment: { id: In(segmentIds) },
+            customer: { id: customerId },
+          },
+        });
+
+        if (!match) {
+          throw new ForbiddenException(
+            'Customer is not eligible for this coupon 11',
+          );
+        }
+      }
+    }
+
+    // Checking customer is assigned to this coupon or not
+    if (hasSegments.length === 0) {
+      const isUserAssignedTothisCoupon = await this.userCouponRepo.findOne({
+        where: [
+          { customer: { id: customer.id }, coupon_id: coupon.id },
+          { customer: { id: customer.id }, issued_from_id: coupon.id },
+        ],
+      });
+
+      if (!isUserAssignedTothisCoupon && coupon.all_users == 0) {
+        throw new NotFoundException('Customer is not eligible for this coupon');
+      }
+    }
+
+    // Step 3:
+    // checking coupon validation like (usage limit, expiry, max usage per user .....)
+    await this.couponValidations(coupon, today, customerId);
+
+    // Step 4:
+    // checking conditions of Complex Coupon & Normal Coupon
+    if (coupon?.coupon_type_id === null) {
+      const conditions = coupon?.complex_coupon;
+      const result = await this.checkComplexCouponConditions(
+        metadata,
+        conditions,
+        wallet,
+      );
+      if (!result) {
+        const criteria = await this.makeCriteriaFromCouponPayload(conditions);
+        throw new BadRequestException({
+          success: false,
+          message: 'Coupon is not applicable',
+          requiredCriteria: criteria,
+        });
+      }
+    } else {
+      const couponType = await this.couponTypeService.findOne(
+        coupon?.coupon_type_id,
+      );
+
+      const result = await this.checkSimpleCouponConditions(
+        metadata,
+        coupon.conditions,
+        couponType,
+        wallet,
+      );
+
+      if (!result) {
+        // throw new BadRequestException('Coupon is not applicable');
+        const criteria =
+          await this.makeCriteriaFromCouponPayloadForSimpleCoupon(
+            coupon?.coupon_type_id,
+            coupon.conditions,
+          );
+        throw new BadRequestException({
+          success: false,
+          message: 'Coupon is not applicable',
+          requiredCriteria: criteria,
+        });
+      }
+    }
+
+    // Step 5:
+    // Checking if coupon already rewarded or not
+    await this.checkAlreadyRewaredCoupons(
+      wallet.customer.uuid,
+      coupon.uuid,
+      coupon,
+    );
+
+    return {
+      success: true,
+      message: 'Customer is eligible for this coupon',
+    };
   }
 }

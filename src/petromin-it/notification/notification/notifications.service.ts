@@ -1,12 +1,17 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 import { DeviceToken } from 'src/petromin-it/notification/entities/device-token.entity';
 import { RegisterToken } from 'src/petromin-it/notification/dto/notifications.dto';
 import { Customer } from 'src/customers/entities/customer.entity';
 import { Notification } from 'src/petromin-it/notification/entities/notification.entity';
 import axios from 'axios';
+import { decrypt, encrypt } from 'src/helpers/encryption';
 
 interface CreateNotificationDto {
   customer_id?: number | null;
@@ -158,6 +163,9 @@ export class NotificationService {
     //   };
     // }
 
+    console.log('/???????????????????????????');
+    console.log('/???????????????????????????');
+    console.log('/???????????????????????????', payload);
     try {
       // Send notification request
       await axios.post(
@@ -186,12 +194,11 @@ export class NotificationService {
     offset = 10,
     language_code?: string,
   ) {
-    console.log('language_code', language_code);
-
     if (!customer_id) {
       throw new NotFoundException(`Customer not found`);
     }
 
+    // Find customer
     const customer = await this.customerRepo.findOne({
       where: { uuid: customer_id, status: 1 },
     });
@@ -200,41 +207,35 @@ export class NotificationService {
       throw new NotFoundException(`Customer not found`);
     }
 
-    // Fetch paginated notifications
-    const [notifications, total] = await this.notificationRepo.findAndCount({
-      where: { customer_id: customer.id },
-      order: { created_at: 'DESC' },
-      skip: (page - 1) * offset,
-      take: offset,
-      select: [
-        'notification_type',
-        'is_read',
-        'notification_details',
-        'created_at',
-        'updated_at',
-        'uuid',
-      ],
-    });
+    if (!customer.phone) {
+      throw new BadRequestException(`Customer phone_number is missing`);
+    }
 
-    // Count unread notifications
-    const unread_count = await this.notificationRepo.count({
-      where: { customer_id: customer.id, is_read: false },
-    });
+    // Build URL for the other app's notifications API
+    const baseUrl = process.env.COMMUNICATION_NOTIFICATION_BASE_ENDPOINT; // replace with actual host if different
+    const params: any = { page, offset };
+    if (language_code) params.language_code = language_code;
 
-    return {
-      success: true,
-      message: 'Fetched notifications successfully',
-      data: {
-        total,
-        page,
-        offset,
-        unread_count,
-        notifications: notifications,
-      },
-    };
+    const url = `${baseUrl}/customer/${decrypt(customer.hashed_number)}`;
+
+    try {
+      const response = await axios.get(url, { params });
+      // You can further process the response if needed
+      return {
+        success: true,
+        message: 'Fetched notifications successfully',
+        data: response.data.data,
+      };
+    } catch (error: any) {
+      console.error('Error fetching notifications:', error.message);
+      throw new BadRequestException(
+        'Failed to fetch notifications from the external service',
+      );
+    }
   }
 
   async markAsRead(customer_id: string, notification_id: string) {
+    // 1️⃣ Find customer
     const customer = await this.customerRepo.findOne({
       where: { uuid: customer_id, status: 1 },
     });
@@ -243,23 +244,23 @@ export class NotificationService {
       throw new NotFoundException(`Customer not found`);
     }
 
-    const notification = await this.notificationRepo.findOne({
-      where: { uuid: notification_id, customer_id: customer.id },
-    });
-
-    if (!notification) {
-      throw new NotFoundException(
-        `Notification not found for given customer and notification_id`,
-      );
+    if (!customer.phone) {
+      throw new BadRequestException(`Customer phone_number is missing`);
     }
 
-    notification.is_read = true;
-    await this.notificationRepo.save(notification);
+    // 2️⃣ Call the notification-history API to mark as read
+    const baseUrl = process.env.COMMUNICATION_NOTIFICATION_BASE_ENDPOINT;
+    try {
+      const response = await axios.patch(`${baseUrl}/customer/mark-read`, {
+        customer_mobile: decrypt(customer.hashed_number),
+        notification_id,
+      });
 
-    return {
-      success: true,
-      message: 'Notification marked as read successfully',
-    };
+      return response.data;
+    } catch (error) {
+      // You can handle error more gracefully if needed
+      throw new BadRequestException(error.response?.data || error.message);
+    }
   }
 
   /**
@@ -284,5 +285,52 @@ export class NotificationService {
       console.error('❌ Failed to create notification:', error);
       throw new Error('Failed to create notification');
     }
+  }
+
+  async getAllDeviceTokens(
+    mobileNumbers: string[],
+  ): Promise<Record<string, string[]>> {
+    if (!mobileNumbers?.length) {
+      return {};
+    }
+
+    // 1️⃣ Fetch customers whose hashed_number matches the given mobile numbers
+    const customers = await this.customerRepo.find({
+      where: mobileNumbers.map((num) => ({ hashed_number: encrypt(num) })),
+      select: ['id', 'hashed_number'],
+    });
+
+    if (!customers.length) {
+      return {};
+    }
+
+    // Map hashed_number -> customerId
+    const customerIdMap: Record<string, number> = {};
+    customers.forEach((c) => {
+      customerIdMap[c.hashed_number] = c.id;
+    });
+
+    const customerIds = customers.map((c) => c.id);
+
+    // 2️⃣ Fetch device tokens for these customers
+    const deviceTokens = await this.tokenRepo.find({
+      where: { customer: { id: In(customerIds) } },
+      relations: ['customer'],
+      select: ['token', 'customer'],
+    });
+
+    // 3️⃣ Map mobile numbers to device tokens
+    const result: Record<string, string[]> = {};
+
+    deviceTokens.forEach((dt) => {
+      const mobile = decrypt(dt.customer.hashed_number);
+      if (!result[mobile]) {
+        result[mobile] = [];
+      }
+      result[mobile].push(dt.token);
+    });
+
+    // 4️⃣ Return key-value object
+    return result;
   }
 }

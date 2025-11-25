@@ -151,14 +151,6 @@ export class CustomerProfileService {
 
     if (!customer) throw new NotFoundException('Customer not found');
 
-    if (customer.status === 0) {
-      throw new NotFoundException('Customer is Inactive');
-    }
-
-    if (customer.status === 3) {
-      throw new NotFoundException('Customer is deleted');
-    }
-
     let encryptedPhone: string | undefined;
     let encryptedEmail: string | undefined;
 
