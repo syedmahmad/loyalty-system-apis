@@ -851,45 +851,62 @@ export class CustomerService {
 
       const templateId = process.env.EARNED_POINTS_TEMPLATE_ID;
 
-      try {
-        // Prepare data payload
-        const payload = {
-          template_id: templateId,
-          language_code: 'en', // or 'ar'
-          business_name: 'PETROMINit',
-          to: deviceTokens.map((token) => ({
-            user_device_token: token.token,
-            customer_mobile: decrypt(customer.hashed_number),
-            dynamic_fields: {
-              rewardPoints: rewardPoints.toString(),
-              event: event,
-            },
-          })),
-        };
+      const tokensString = deviceTokens.map((t) => t.token).join(',');
 
-        console.log('////////////////////////////?????????');
-        console.log('////////////////////////////?????????');
-        console.log('////////////////////////////?????????', payload);
+      if (tokensString) {
+        try {
+          // Prepare data payload
+          const payload = {
+            template_id: templateId,
+            language_code: 'en', // or 'ar'
+            business_name: 'PETROMINit',
+            to: [
+              {
+                user_device_token: tokensString,
+                customer_mobile: decrypt(customer.hashed_number),
+                dynamic_fields: {
+                  rewardPoints: rewardPoints.toString(),
+                  event: event,
+                },
+              },
+            ],
+          };
 
-        const saveNotificationPayload = {
-          title: 'Points Earned',
-          body: `Earned ${rewardPoints} points against this event: ${event}`,
-          customer_id: customer.id,
-        };
+          console.log('////////////////////////////?????????');
+          console.log('////////////////////////////?????????');
+          console.log('////////////////////////////?????????', payload);
 
-        // Send notification request
-        await this.notificationService.sendToUser(
-          payload,
-          saveNotificationPayload,
-        );
+          const saveNotificationPayload = {
+            title: 'Points Earned',
+            body: `Earned ${rewardPoints} points against this event: ${event}`,
+            customer_id: customer.id,
+          };
 
-        console.log('Notification sent successfully');
-      } catch (err) {
-        console.error(
-          'Error while sending notification:',
-          err.response?.data || err.message,
-        );
+          // Send notification request
+          await this.notificationService.sendToUser(
+            payload,
+            saveNotificationPayload,
+          );
+
+          console.log('Notification sent successfully');
+        } catch (err) {
+          console.error(
+            'Error while sending notification:',
+            err.response?.data || err.message,
+          );
+        }
       }
+    } else {
+      return {
+        message:
+          'Points earned successfully, but notificaiton did not send as no device token found',
+        points: rewardPoints,
+        status: walletTransaction.status,
+        transaction_id: savedTx.id,
+        available_balance: wallet.available_balance,
+        locked_balance: wallet.locked_balance,
+        total_balance: wallet.total_balance,
+      };
     }
 
     return {

@@ -12,6 +12,7 @@ import { WalletModule } from 'src/wallet/wallet.module';
 import { Referral } from 'src/wallet/entities/referrals.entity';
 import { VehicleModule } from 'src/vehicles/vehicles.module';
 import { RestyCustomerProfileSelection } from 'src/customers/entities/resty_customer_profile_selection.entity';
+import { CustomerPreference } from '../preferences/entities/customer-preference.entity';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { RestyCustomerProfileSelection } from 'src/customers/entities/resty_cust
       Log,
       Referral,
       RestyCustomerProfileSelection,
+      CustomerPreference,
     ]),
     CustomerModule,
     WalletModule,
