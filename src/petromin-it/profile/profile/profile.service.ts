@@ -21,6 +21,8 @@ import { TiersService } from 'src/tiers/tiers/tiers.service';
 import { RestyCustomerProfileSelection } from 'src/customers/entities/resty_customer_profile_selection.entity';
 import { OpenAIService } from 'src/openai/openai/openai.service';
 import { Vehicle } from 'src/vehicles/entities/vehicle.entity';
+import axios from 'axios';
+import { decrypt } from 'src/helpers/encryption';
 
 @Injectable()
 export class CustomerProfileService {
@@ -352,6 +354,33 @@ export class CustomerProfileService {
     await this.restyCustomerProfileSelectionRepo.delete({
       phone_number: customerInfo.hashed_number,
     });
+
+    /**
+     * -----------------------------------------------------------------
+     * 🔥 CALL DELETE NOTIFICATIONS API (integrated curl)
+     * -----------------------------------------------------------------
+     *
+     * curl -X DELETE "http://localhost:3000/customer/delete-notifications" \
+     *   -H "Content-Type: application/json" \
+     *   -d '{"customer_mobile": "03001234567"}'
+     */
+
+    try {
+      await axios.delete(
+        `${process.env.COMMUNICATION_NOTIFICATION_BASE_ENDPOINT}/customer/delete-notifications`,
+        {
+          data: {
+            customer_mobile: decrypt(customerInfo.hashed_number),
+          },
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        },
+      );
+    } catch (error) {
+      console.error('Failed to delete notifications:', error?.message);
+      // You may choose NOT to throw here to avoid blocking deletion workflow
+    }
 
     return {
       success: true,

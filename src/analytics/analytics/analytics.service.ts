@@ -186,7 +186,9 @@ export class LoyaltyAnalyticsService {
     const chartMap = new Map<string, { earn: number; burn: number }>();
 
     for (const tx of transactions) {
-      const dateKey = tx.created_at.toISOString().split('T')[0]; // yyyy-mm-dd
+      const dateKey = tx.created_at
+        ? tx.created_at.toISOString().split('T')[0]
+        : null; // yyyy-mm-dd
       const current = chartMap.get(dateKey) || { earn: 0, burn: 0 };
 
       if (tx.type === 'earn' || tx.type === 'adjustment') {

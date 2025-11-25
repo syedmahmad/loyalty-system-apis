@@ -22,6 +22,7 @@ import {
   ProfileSelectionStatus,
   RestyCustomerProfileSelection,
 } from 'src/customers/entities/resty_customer_profile_selection.entity';
+import { CustomerPreference } from 'src/petromin-it/preferences/entities/customer-preference.entity';
 // import { Referral } from 'src/wallet/entities/referrals.entity';
 @Injectable()
 export class AuthService {
@@ -30,6 +31,8 @@ export class AuthService {
     private readonly customerRepo: Repository<Customer>,
     @InjectRepository(RestyCustomerProfileSelection)
     private readonly restyCustomerProfileSelectionRepo: Repository<RestyCustomerProfileSelection>,
+    @InjectRepository(CustomerPreference)
+    private readonly customerPreferencesRepo: Repository<CustomerPreference>,
     private readonly ociService: OciService,
     private readonly customerService: CustomerService,
     @InjectRepository(QrCode)
@@ -126,6 +129,20 @@ export class AuthService {
           business_unit_id: Number(businessUnitId),
           tenant_id: Number(tenantId),
         });
+      }
+
+      const preference = await this.customerPreferencesRepo.findOne({
+        where: { customer: { id: customer.id } },
+      });
+
+      if (!preference) {
+        const newPreference = this.customerPreferencesRepo.create({
+          customer: { id: customer.id },
+          language_code: body.language_code || 'en',
+          created_at: new Date(),
+          updated_at: new Date(),
+        } as any);
+        await this.customerPreferencesRepo.save(newPreference);
       }
 
       // trigger sms
