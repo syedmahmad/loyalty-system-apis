@@ -16,7 +16,7 @@ export class RuleLocaleEntity extends BaseEntityBeta {
   @JoinColumn({ name: 'language_id' })
   language: LanguageEntity;
 
-  @Column({ name: 'name' })
+  @Column({ name: 'name', nullable: true })
   name: string;
 
   @Column({ type: 'text', name: 'description', nullable: true })
