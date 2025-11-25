@@ -365,13 +365,11 @@ export class CustomerProfileService {
      *   -d '{"customer_mobile": "03001234567"}'
      */
 
+    const decryptedNumber = decrypt(customerInfo.hashed_number);
     try {
       await axios.delete(
-        `${process.env.COMMUNICATION_NOTIFICATION_BASE_ENDPOINT}/customer/delete-notifications`,
+        `${process.env.COMMUNICATION_NOTIFICATION_BASE_ENDPOINT}/customer/delete-notifications?customer_mobile=${encodeURIComponent(decryptedNumber)}`,
         {
-          data: {
-            customer_mobile: decrypt(customerInfo.hashed_number),
-          },
           headers: {
             'Content-Type': 'application/json',
           },
