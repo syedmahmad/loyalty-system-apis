@@ -295,9 +295,10 @@ export class CouponsService {
     }
 
     if (name && name.trim() !== '') {
-      query.andWhere('locale_coupon.title LIKE :search', {
-        search: `%${name}%`,
-      });
+      query.andWhere(
+        `(coupon.code LIKE :search OR locale_coupon.title LIKE :search)`,
+        { search: `%${name}%` },
+      );
     }
 
     if (!hasGlobalAccess && !isSuperAdmin) {

@@ -30,17 +30,11 @@ export class Campaign {
   @Column()
   tenant_id: number;
 
-  @Column()
-  name: string;
-
   @Column({ type: 'timestamp' })
   start_date: Date;
 
   @Column({ type: 'timestamp' })
   end_date: Date;
-
-  @Column({ nullable: true })
-  description?: string;
 
   @ManyToOne(() => BusinessUnit, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'business_unit_id' })
