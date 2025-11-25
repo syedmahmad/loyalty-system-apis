@@ -65,6 +65,7 @@ import { OpenAIService } from 'src/openai/openai/openai.service';
 import { BUSINESS_UNITS_WITH_UUID } from './type/type';
 import axios from 'axios';
 import { DeviceToken } from 'src/petromin-it/notification/entities/device-token.entity';
+import { decrypt } from 'src/helpers/encryption';
 
 @Injectable()
 export class CustomerService {
@@ -299,7 +300,7 @@ export class CustomerService {
 
   async updateStatus(id: number, status: 0 | 1) {
     const customer = await this.customerRepo.findOne({
-      where: { id, status: 1 },
+      where: { id },
     });
 
     if (!customer) {
@@ -433,9 +434,17 @@ export class CustomerService {
       where: { id: customerId, status: 1 },
     });
 
+    if (!customer) {
+      throw new NotFoundException(`Customer with id ${customerId} not found`);
+    }
+
     const walletinfo = await this.walletService.getSingleCustomerWalletInfoById(
-      customer.id,
+      customer?.id,
     );
+
+    if (!walletinfo) {
+      throw new NotFoundException(`Customer Wallet is not configured.`);
+    }
 
     const transactionInfo = await this.walletService.getWalletTransactions(
       walletinfo?.id,
@@ -456,10 +465,6 @@ export class CustomerService {
 
     const tiersInfo =
       await this.tiersService.getCurrentCustomerTier(customerId);
-
-    if (!customer) {
-      throw new NotFoundException(`Customer with ID ${customerId} not found`);
-    }
 
     return {
       ...customer,
@@ -607,6 +612,10 @@ export class CustomerService {
         }
       }
     }
+    console.log(';;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;');
+    console.log(';;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;');
+    console.log(';;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;');
+    console.log(';;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;');
     // 3. Get customer wallet info
     const wallet = await this.walletService.getSingleCustomerWalletInfoById(
       customer.id,
@@ -629,6 +638,10 @@ export class CustomerService {
       order: { created_at: 'DESC' },
     });
 
+    console.log(';;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;1');
+    console.log(';;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;1');
+    console.log(';;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;1');
+    console.log(';;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;1');
     // Frequency logic
     if (rule.frequency === 'once' && previousTx) {
       throw new BadRequestException(
@@ -656,7 +669,10 @@ export class CustomerService {
       }
     }
     // 'anytime' means no restriction
-
+    console.log(';;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;2');
+    console.log(';;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;2');
+    console.log(';;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;2');
+    console.log(';;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;2');
     // 5. Calculate reward points
     let rewardPoints = rule.reward_points;
     // TODO: BIG NOTE:
@@ -694,7 +710,6 @@ export class CustomerService {
     }
 
     if (!rewardPoints || rewardPoints <= 0) {
-      console.log('BCBCBBCBCBCBCBCBCBCBCBCBCBCBCBCBCB');
       throw new BadRequestException('No reward points to grant');
     }
 
@@ -727,6 +742,10 @@ export class CustomerService {
       // Cron job will unlock after pending_days
     }
 
+    console.log(';;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;3');
+    console.log(';;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;3');
+    console.log(';;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;3');
+    console.log(';;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;3');
     // 8. Now, we need to generate wallet_order if any
     // const walletOrderId: number | null = null;
     // Try to map metadata to wallet_order if possible (optional, depends on event)
@@ -758,6 +777,10 @@ export class CustomerService {
       }
     }
 
+    console.log(';;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;4');
+    console.log(';;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;4');
+    console.log(';;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;4');
+    console.log(';;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;4');
     // 9. Create wallet_transaction
     const walletTransaction: Partial<WalletTransaction> = {
       wallet: wallet, // pass the full Wallet entity instance
@@ -810,7 +833,16 @@ export class CustomerService {
       },
     });
 
+    console.log(';;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;5');
+    console.log(';;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;5');
+    console.log(';;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;5');
+    console.log(';;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;5');
+
     if (customerPreferences.push_notification) {
+      console.log(';;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;6');
+      console.log(';;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;6');
+      console.log(';;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;6');
+      console.log(';;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;6');
       // There could be duplicate entries or multiple, so fetch the last one (most recently created)
       const deviceTokens = await this.deviceTokenRepo.find({
         where: { customer: { id: customer.id } },
@@ -827,12 +859,17 @@ export class CustomerService {
           business_name: 'PETROMINit',
           to: deviceTokens.map((token) => ({
             user_device_token: token.token,
+            customer_mobile: decrypt(customer.hashed_number),
             dynamic_fields: {
               rewardPoints: rewardPoints.toString(),
               event: event,
             },
           })),
         };
+
+        console.log('////////////////////////////?????????');
+        console.log('////////////////////////////?????????');
+        console.log('////////////////////////////?????????', payload);
 
         const saveNotificationPayload = {
           title: 'Points Earned',

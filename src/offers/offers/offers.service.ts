@@ -599,7 +599,28 @@ export class OffersService {
       'deletedAt',
     ];
 
-    const allOffers = offers;
+    // language-based extra fields
+    if (langCode === 'en') {
+      removeExtraFields.push(
+        'offer_title_ar',
+        'offer_subtitle_ar',
+        'description_ar',
+        'terms_and_conditions_ar',
+        'name_ar',
+        'ar',
+      );
+    } else {
+      removeExtraFields.push(
+        'offer_title',
+        'offer_subtitle',
+        'description_en',
+        'terms_and_conditions_en',
+        'name_en',
+        'en',
+      );
+    }
+    const allOffers = this.omitExtraFields(offers, removeExtraFields);
+
     const today = new Date();
     const available = [];
     const expired = [];
