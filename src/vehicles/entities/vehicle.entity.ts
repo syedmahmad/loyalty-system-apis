@@ -151,4 +151,7 @@ export class Vehicle {
 
   @Column({ type: 'json', nullable: true })
   images: { type: string; url: string }[];
+
+  @Column({ type: 'json', nullable: true })
+  car_value: any;
 }

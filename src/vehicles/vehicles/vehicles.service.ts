@@ -15,6 +15,10 @@ import { Log } from 'src/logs/entities/log.entity';
 import { decrypt } from 'src/helpers/encryption';
 import { VariantEntity } from 'src/variant/entities/variant.entity';
 import { AuthService } from 'src/petromin-it/auth/auth/auth.service';
+
+import { GGMCommonAuth, GGMCommonAuthHeaders } from '@gogomotor/common-auth';
+import { v4 as uuidv4 } from 'uuid';
+
 @Injectable()
 export class VehiclesService {
   constructor(
@@ -58,6 +62,7 @@ export class VehiclesService {
         vin,
         ...restBody
       } = body;
+
       const parsedBusinessUnitId = parseInt(businessUnitId);
       const parsedTenantId = parseInt(tenantId);
 
@@ -145,6 +150,34 @@ export class VehiclesService {
       }
 
       vehicle = await this.vehiclesRepository.save(vehicle);
+      // get car valuation.
+      // 🔹 Step X: Fetch car valuation from Gogomotor API
+      try {
+        // if (variantInfo?.variantId && year && restBody?.last_mileage) {
+        if (!vehicle.car_value && variantInfo?.variantId && year) {
+          const valuation = await this.getCarValuation({
+            km: restBody?.last_mileage || 0,
+            trimId: variantInfo?.variantId || variant_id, // cannot pass modelId as bluebook does not work with it.
+            year,
+          });
+          // {
+          //   fair: { min: 61138.22472, max: 74724.49687999999 },
+          //   good: { min: 65514.6, max: 80073.4 },
+          //   vGood: { min: 68429.9997, max: 83636.6663 },
+          //   excellent: { min: 70991.62056, max: 86767.53624 }
+          // }
+          if (valuation?.data) {
+            const { good } = valuation.data;
+            vehicle.car_value = valuation.data; // store only "data" object
+            vehicle.carCondition = 'good';
+            vehicle.minPrice = good.min;
+            vehicle.maxPrice = good.max;
+            vehicle = await this.vehiclesRepository.save(vehicle);
+          }
+        }
+      } catch (err) {
+        console.error('Car valuation integration failed:', err?.message || err);
+      }
 
       // Step 3: Sync with Resty
       let loginInfo: any;
@@ -1154,6 +1187,50 @@ export class VehiclesService {
       return response.data;
     } catch (error: any) {
       throw error?.response?.data || error;
+    }
+  }
+
+  private async getCarValuation({
+    km,
+    trimId,
+    year,
+  }: {
+    km: number;
+    trimId: number;
+    year: number;
+  }) {
+    try {
+      // 1. Create auth client
+      const authClient = new GGMCommonAuth({
+        clientId: process.env.GGM_CLIENT_ID,
+        clientSecret: process.env.GGM_CLIENT_SECRET,
+        encryptionKey: process.env.GGM_ENC_KEY,
+        encryptionIV: process.env.GGM_ENC_IV,
+      });
+
+      // 2. Get auth headers
+      const res = authClient.getAccessToken();
+
+      const headers = {
+        [GGMCommonAuthHeaders.ClientId]: res.clientId,
+        [GGMCommonAuthHeaders.AccessToken]: res.accessToken,
+        [GGMCommonAuthHeaders.RequestId]: res.requestId || uuidv4(),
+        [GGMCommonAuthHeaders.RequestTimestamp]: res.timestamp,
+      };
+
+      console.log('///////////headers', headers);
+      // 3. Hit Gogomotor API
+      const url = `${process.env.GGM_BASE_URL}?km=${km}&trimId=${trimId}&year=${year}`;
+      const { data } = await axios.get(url, { headers });
+
+      // 4. Return valuation data
+      return data;
+    } catch (error: any) {
+      console.error(
+        'Error fetching car valuation:',
+        error?.response?.data || error.message,
+      );
+      return null;
     }
   }
 }
