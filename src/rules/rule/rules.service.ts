@@ -224,40 +224,37 @@ export class RulesService extends BaseService {
   async findAll(client_id: number, name: string, bu: number, langCode = 'en') {
     const queryBuilder = this.ruleRepository
       .createQueryBuilder('rules')
-      .leftJoinAndSelect('rules.locales', 'locale')
-      .leftJoinAndSelect('locale.language', 'language')
       .where('rules.status = :status', { status: 1 })
       .orderBy('rules.created_at', 'DESC');
 
-    // Tenant Filter
     if (client_id) {
       queryBuilder.andWhere('rules.tenant_id = :tenant_id', {
         tenant_id: client_id,
       });
     }
 
-    // Business Unit filter
     if (bu) {
       queryBuilder.andWhere('rules.business_unit_id = :business_unit_id', {
         business_unit_id: bu,
       });
     }
 
-    // Language filter
-    if (langCode) {
-      queryBuilder.andWhere('language.code = :langCode', {
-        langCode: langCode,
+    if (name) {
+      queryBuilder.andWhere(`locale.name LIKE :name`, {
+        name: `%${name.trim()}%`,
       });
     }
 
-    // Name search
-    if (name) {
-      queryBuilder.andWhere(
-        `(locale.name ILIKE :name OR rules.rule_type ILIKE :name)`,
-        { name: `%${name.trim()}%` },
-      );
+    if (langCode) {
+      queryBuilder
+        .leftJoinAndSelect('rules.locales', 'locale')
+        .leftJoin('locale.language', 'language')
+        .andWhere('language.code = :langCode', { langCode: langCode });
+    } else {
+      queryBuilder
+        .leftJoinAndSelect('rules.locales', 'locale')
+        .leftJoinAndSelect('locale.language', 'language');
     }
-
     const rules = await queryBuilder.getMany();
 
     return {
@@ -265,48 +262,6 @@ export class RulesService extends BaseService {
       rules,
     };
   }
-
-  // async findAll(client_id: number, name: string, bu: number, langCode = 'en') {
-  //   const queryBuilder = this.ruleRepository
-  //     .createQueryBuilder('rules')
-  //     .where('rules.status = :status', { status: 1 })
-  //     .orderBy('rules.created_at', 'DESC');
-
-  //   if (client_id) {
-  //     queryBuilder.andWhere('rules.tenant_id = :tenant_id', {
-  //       tenant_id: client_id,
-  //     });
-  //   }
-
-  //   if (bu) {
-  //     queryBuilder.andWhere('rules.business_unit_id = :business_unit_id', {
-  //       business_unit_id: bu,
-  //     });
-  //   }
-
-  //   if (name) {
-  //     queryBuilder.andWhere(`locale.name LIKE :name`, {
-  //       name: `%${name.trim()}%`,
-  //     });
-  //   }
-
-  //   if (langCode) {
-  //     queryBuilder
-  //       .leftJoinAndSelect('rules.locales', 'locale')
-  //       .leftJoin('locale.language', 'language')
-  //       .andWhere('language.code = :langCode', { langCode: langCode });
-  //   } else {
-  //     queryBuilder
-  //       .leftJoinAndSelect('rules.locales', 'locale')
-  //       .leftJoinAndSelect('locale.language', 'language');
-  //   }
-  //   const rules = await queryBuilder.getMany();
-
-  //   return {
-  //     message: 'Rule retrieved successfully',
-  //     rules,
-  //   };
-  // }
 
   async findAllForThirdParty(tenant_id: string, name: string) {
     let optionalWhereClause = {};
