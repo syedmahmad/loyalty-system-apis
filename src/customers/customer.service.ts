@@ -612,10 +612,6 @@ export class CustomerService {
         }
       }
     }
-    console.log(';;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;');
-    console.log(';;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;');
-    console.log(';;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;');
-    console.log(';;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;');
     // 3. Get customer wallet info
     const wallet = await this.walletService.getSingleCustomerWalletInfoById(
       customer.id,
@@ -638,10 +634,6 @@ export class CustomerService {
       order: { created_at: 'DESC' },
     });
 
-    console.log(';;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;1');
-    console.log(';;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;1');
-    console.log(';;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;1');
-    console.log(';;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;1');
     // Frequency logic
     if (rule.frequency === 'once' && previousTx) {
       throw new BadRequestException(
@@ -669,10 +661,6 @@ export class CustomerService {
       }
     }
     // 'anytime' means no restriction
-    console.log(';;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;2');
-    console.log(';;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;2');
-    console.log(';;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;2');
-    console.log(';;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;2');
     // 5. Calculate reward points
     let rewardPoints = rule.reward_points;
     // TODO: BIG NOTE:
@@ -742,10 +730,6 @@ export class CustomerService {
       // Cron job will unlock after pending_days
     }
 
-    console.log(';;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;3');
-    console.log(';;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;3');
-    console.log(';;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;3');
-    console.log(';;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;3');
     // 8. Now, we need to generate wallet_order if any
     // const walletOrderId: number | null = null;
     // Try to map metadata to wallet_order if possible (optional, depends on event)
@@ -777,10 +761,6 @@ export class CustomerService {
       }
     }
 
-    console.log(';;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;4');
-    console.log(';;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;4');
-    console.log(';;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;4');
-    console.log(';;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;4');
     // 9. Create wallet_transaction
     const walletTransaction: Partial<WalletTransaction> = {
       wallet: wallet, // pass the full Wallet entity instance
@@ -833,16 +813,7 @@ export class CustomerService {
       },
     });
 
-    console.log(';;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;5');
-    console.log(';;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;5');
-    console.log(';;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;5');
-    console.log(';;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;5');
-
     if (customerPreferences.push_notification) {
-      console.log(';;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;6');
-      console.log(';;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;6');
-      console.log(';;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;6');
-      console.log(';;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;6');
       // There could be duplicate entries or multiple, so fetch the last one (most recently created)
       const deviceTokens = await this.deviceTokenRepo.find({
         where: { customer: { id: customer.id } },
@@ -853,60 +824,43 @@ export class CustomerService {
 
       const tokensString = deviceTokens.map((t) => t.token).join(',');
 
-      if (tokensString) {
-        try {
-          // Prepare data payload
-          const payload = {
-            template_id: templateId,
-            language_code: 'en', // or 'ar'
-            business_name: 'PETROMINit',
-            to: [
-              {
-                user_device_token: tokensString,
-                customer_mobile: decrypt(customer.hashed_number),
-                dynamic_fields: {
-                  rewardPoints: rewardPoints.toString(),
-                  event: event,
-                },
+      try {
+        // Prepare data payload
+        const payload = {
+          template_id: templateId,
+          language_code: 'en', // or 'ar'
+          business_name: 'PETROMINit',
+          to: [
+            {
+              user_device_token: tokensString,
+              customer_mobile: decrypt(customer.hashed_number),
+              dynamic_fields: {
+                rewardPoints: rewardPoints.toString(),
+                event: event,
               },
-            ],
-          };
+            },
+          ],
+        };
 
-          console.log('////////////////////////////?????????');
-          console.log('////////////////////////////?????????');
-          console.log('////////////////////////////?????????', payload);
+        const saveNotificationPayload = {
+          title: 'Points Earned',
+          body: `Earned ${rewardPoints} points against this event: ${event}`,
+          customer_id: customer.id,
+        };
 
-          const saveNotificationPayload = {
-            title: 'Points Earned',
-            body: `Earned ${rewardPoints} points against this event: ${event}`,
-            customer_id: customer.id,
-          };
+        // Send notification request
+        await this.notificationService.sendToUser(
+          payload,
+          saveNotificationPayload,
+        );
 
-          // Send notification request
-          await this.notificationService.sendToUser(
-            payload,
-            saveNotificationPayload,
-          );
-
-          console.log('Notification sent successfully');
-        } catch (err) {
-          console.error(
-            'Error while sending notification:',
-            err.response?.data || err.message,
-          );
-        }
+        console.log('Notification sent successfully');
+      } catch (err) {
+        console.error(
+          'Error while sending notification:',
+          err.response?.data || err.message,
+        );
       }
-    } else {
-      return {
-        message:
-          'Points earned successfully, but notificaiton did not send as no device token found',
-        points: rewardPoints,
-        status: walletTransaction.status,
-        transaction_id: savedTx.id,
-        available_balance: wallet.available_balance,
-        locked_balance: wallet.locked_balance,
-        total_balance: wallet.total_balance,
-      };
     }
 
     return {
