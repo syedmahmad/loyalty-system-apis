@@ -26,10 +26,10 @@ export class CouponSyncLog {
   created_at: Date;
 
   // store list of coupon that succeeded
-  @Column({ type: 'simple-json', nullable: true })
+  @Column({ type: 'json', nullable: true })
   success_coupons: string[];
 
   // store list of coupon that failed
-  @Column({ type: 'simple-json', nullable: true })
+  @Column({ type: 'json', nullable: true })
   failed_coupons: string[];
 }
