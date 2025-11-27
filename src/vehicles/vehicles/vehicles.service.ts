@@ -150,11 +150,13 @@ export class VehiclesService {
       }
 
       vehicle = await this.vehiclesRepository.save(vehicle);
+      console.log('/////////////////vehicle', vehicle);
       // get car valuation.
       // 🔹 Step X: Fetch car valuation from Gogomotor API
       try {
         // if (variantInfo?.variantId && year && restBody?.last_mileage) {
         if (!vehicle.car_value && variantInfo?.variantId && year) {
+          console.log('/////////////////initiating car valuation');
           const valuation = await this.getCarValuation({
             km: restBody?.last_mileage || 0,
             trimId: variantInfo?.variantId || variant_id, // cannot pass modelId as bluebook does not work with it.
@@ -166,6 +168,7 @@ export class VehiclesService {
           //   vGood: { min: 68429.9997, max: 83636.6663 },
           //   excellent: { min: 70991.62056, max: 86767.53624 }
           // }
+          console.log('/////////////////data', valuation?.data);
           if (valuation?.data) {
             const { good } = valuation.data;
             vehicle.car_value = valuation.data; // store only "data" object
@@ -1218,7 +1221,6 @@ export class VehiclesService {
         [GGMCommonAuthHeaders.RequestTimestamp]: res.timestamp,
       };
 
-      console.log('///////////headers', headers);
       // 3. Hit Gogomotor API
       const url = `${process.env.GGM_BASE_URL}?km=${km}&trimId=${trimId}&year=${year}`;
       const { data } = await axios.get(url, { headers });
