@@ -149,6 +149,9 @@ export class Vehicle {
   @Column({ type: 'decimal', precision: 15, scale: 2, nullable: true })
   maxPrice: number;
 
+  @Column({ type: 'datetime', nullable: true })
+  last_valuation_date: Date;
+
   @Column({ type: 'json', nullable: true })
   images: { type: string; url: string }[];
 
