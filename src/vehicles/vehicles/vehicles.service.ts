@@ -170,6 +170,7 @@ export class VehiclesService {
           // }
           console.log('/////////////////data', valuation?.data);
           if (valuation?.data) {
+            vehicle.last_valuation_date = new Date();
             const { good } = valuation.data;
             vehicle.car_value = valuation.data; // store only "data" object
             vehicle.carCondition = 'good';
@@ -177,6 +178,14 @@ export class VehiclesService {
             vehicle.maxPrice = good.max;
             vehicle = await this.vehiclesRepository.save(vehicle);
           }
+        }
+
+        // UPDATE last_valuation_date ONLY if user sent it
+        if (restBody?.last_valuation_date) {
+          vehicle.last_valuation_date = this.parseDate(
+            restBody?.last_valuation_date,
+          );
+          vehicle = await this.vehiclesRepository.save(vehicle);
         }
       } catch (err) {
         console.error('Car valuation integration failed:', err?.message || err);
@@ -1234,5 +1243,22 @@ export class VehiclesService {
       );
       return null;
     }
+  }
+
+  private parseDate(value: any): Date | null {
+    if (!value) return null;
+
+    // If it's already a Date
+    if (value instanceof Date) return value;
+
+    // If timestamp (number/string)
+    if (!isNaN(Number(value))) {
+      const date = new Date(Number(value));
+      return isNaN(date.getTime()) ? null : date;
+    }
+
+    // Try parse ISO / string formats
+    const parsed = new Date(value);
+    return isNaN(parsed.getTime()) ? null : parsed;
   }
 }
