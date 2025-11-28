@@ -301,6 +301,7 @@ export class CouponsController {
 
   @Post('migrate-coupon')
   async migrateCoupon(@Body() body: migrateCouponDto) {
+    console.log('//////////migrate-coupon');
     return await this.service.migrateCoupon(body);
   }
 }
