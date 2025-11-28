@@ -610,6 +610,8 @@ export class VehiclesService {
         };
       }
 
+      console.log('////////////////lastService', lastService);
+
       // This code checks whether the vehicle associated with the last recorded service is still an active vehicle for the customer.
       // It first fetches the list of active vehicles for the customer from the local database (status: 1).
       // Then it creates a set of the plate numbers for these active vehicles.
@@ -717,6 +719,8 @@ export class VehiclesService {
               String(item),
         );
       }
+
+      console.log('//////////////lastservice', lastService);
 
       // Step 7: Prepare response
       const result = {
