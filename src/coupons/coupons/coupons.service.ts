@@ -3036,6 +3036,8 @@ export class CouponsService {
         .on('error', (err) => reject(err));
     });
 
+    let migratedCount = 0;
+    let skipCount = 0;
     for (const row of coupons) {
       try {
         const existing = await this.couponRepo.findOne({
@@ -3043,6 +3045,7 @@ export class CouponsService {
         });
 
         if (!existing) {
+          skipCount++;
           continue;
         }
 
@@ -3067,42 +3070,44 @@ export class CouponsService {
             await this.openAIService.translateToArabic(termAndConditionEn);
         }
 
-        if (existing) {
-          for (let index = 0; index <= tenant?.languages.length - 1; index++) {
-            const singleLanguage = tenant?.languages[index];
+        for (let index = 0; index <= tenant?.languages.length - 1; index++) {
+          const singleLanguage = tenant?.languages[index];
 
-            if (singleLanguage.language.code === 'en') {
-              const localeCouponEn = this.couponLocaleRepo.create({
-                coupon: { id: existing?.id },
-                language: { id: singleLanguage?.language?.id },
-                title: titleEn,
-                description: descriptionEn,
-                term_and_condition: termAndConditionEn,
-              });
-              await this.couponLocaleRepo.save(localeCouponEn);
-            }
-
-            if (singleLanguage.language.code === 'ar') {
-              const localeCouponEn = this.couponLocaleRepo.create({
-                coupon: { id: existing?.id },
-                language: { id: singleLanguage?.language?.id },
-                title: titleAr,
-                description: descriptionAr,
-                term_and_condition: termAndConditionAr,
-              });
-              await this.couponLocaleRepo.save(localeCouponEn);
-            }
+          if (singleLanguage.language.code === 'en') {
+            const localeCouponEn = this.couponLocaleRepo.create({
+              coupon: { id: existing?.id },
+              language: { id: singleLanguage?.language?.id },
+              title: titleEn,
+              description: descriptionEn,
+              term_and_condition: termAndConditionEn,
+            });
+            await this.couponLocaleRepo.save(localeCouponEn);
           }
-          return {
-            success: true,
-            message: 'success',
-          };
+
+          if (singleLanguage.language.code === 'ar') {
+            const localeCouponEn = this.couponLocaleRepo.create({
+              coupon: { id: existing?.id },
+              language: { id: singleLanguage?.language?.id },
+              title: titleAr,
+              description: descriptionAr,
+              term_and_condition: termAndConditionAr,
+            });
+            await this.couponLocaleRepo.save(localeCouponEn);
+          }
         }
+
+        migratedCount++;
       } catch (err) {
         console.error(`❌ Failed to insert ${row.coupon_code}`, err.message);
         throw new BadRequestException('Failed to migrate coupon', err.message);
       }
     }
+    return {
+      success: true,
+      message: `Coupons migrated successfully`,
+      migratedCount,
+      skipCount,
+    };
   }
 
   private async getRemoteFileStream(url: string): Promise<Readable> {
