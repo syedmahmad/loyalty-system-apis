@@ -14,6 +14,9 @@ export class CouponUsage {
   @PrimaryGeneratedColumn()
   id: number;
 
+  @Column({ type: 'int', nullable: true })
+  external_system_id: number;
+
   @Column({ type: 'varchar', length: 100 })
   invoice_no: string;
 
