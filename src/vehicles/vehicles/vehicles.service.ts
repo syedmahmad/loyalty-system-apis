@@ -610,6 +610,8 @@ export class VehiclesService {
         };
       }
 
+      console.log('////////////////lastService', lastService);
+
       // This code checks whether the vehicle associated with the last recorded service is still an active vehicle for the customer.
       // It first fetches the list of active vehicles for the customer from the local database (status: 1).
       // Then it creates a set of the plate numbers for these active vehicles.
@@ -632,6 +634,10 @@ export class VehiclesService {
       // Step 5: Fetch feedback for the last service
       let feedback = null;
       try {
+        console.log(
+          '/////////////////initiating feedbacks',
+          `${process.env.DRAGON_WORKSHOPS_URL}/feedback?customer_id=${customerId}`,
+        );
         const feedbackRes = await axios.get(
           `${process.env.DRAGON_WORKSHOPS_URL}/feedback?customer_id=${customerId}`,
           {
@@ -641,7 +647,12 @@ export class VehiclesService {
           },
         );
 
+        console.log(
+          '/////////////////feedbackRes.data?.feedback?.workshop',
+          feedbackRes.data?.feedback?.workshop,
+        );
         const feedbacks = feedbackRes.data?.feedback?.workshop || [];
+        console.log('/////////////////feedbacks', feedbacks);
         feedback = feedbacks.find(
           (fb) =>
             fb.workstation_code === lastService.BranchCode &&
@@ -654,6 +665,8 @@ export class VehiclesService {
           err?.response?.data || err.message || err,
         );
       }
+
+      console.log('feedback/////////////feedback', feedback);
 
       // Step 6: Extract service items from the last service
       let serviceItems: string[] = [];
@@ -717,6 +730,8 @@ export class VehiclesService {
               String(item),
         );
       }
+
+      console.log('//////////////lastservice', lastService);
 
       // Step 7: Prepare response
       const result = {
