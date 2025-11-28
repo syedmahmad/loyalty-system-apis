@@ -3036,7 +3036,7 @@ export class CouponsService {
     for (const row of coupons) {
       try {
         const existing = await this.couponRepo.findOne({
-          where: { code: row.coupon_code },
+          where: { external_system_id: row.id },
         });
 
         if (!existing) {
@@ -3045,21 +3045,21 @@ export class CouponsService {
 
         const titleEn = row?.title;
         const descriptionEn = row?.description;
-        const termAndConditionEn = row?.term_and_condition;
+        const termAndConditionEn = row?.terms_condition;
 
         let titleAr = row?.title_ar;
-        if (!titleAr) {
+        if (!titleAr && titleEn) {
           titleAr = await this.openAIService.translateToArabic(titleEn);
         }
 
         let descriptionAr = row?.description_ar;
-        if (!descriptionAr) {
+        if (!descriptionAr && descriptionEn) {
           descriptionAr =
             await this.openAIService.translateToArabic(descriptionEn);
         }
 
-        let termAndConditionAr = row?.term_and_condition_ar;
-        if (!termAndConditionAr) {
+        let termAndConditionAr = row?.terms_conditions_ar;
+        if (!termAndConditionAr && termAndConditionEn) {
           termAndConditionAr =
             await this.openAIService.translateToArabic(termAndConditionEn);
         }
