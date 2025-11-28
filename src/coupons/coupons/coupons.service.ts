@@ -10,6 +10,8 @@ import * as dayjs from 'dayjs';
 import { v4 as uuidv4 } from 'uuid';
 import * as fs from 'fs';
 import * as fastcsv from 'fast-csv';
+import * as csv from 'csv-parser';
+import * as path from 'path';
 // import { v4 as uuidv4 } from 'uuid';
 import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
 import { CouponTypeService } from 'src/coupon_type/coupon_type/coupon_type.service';
@@ -55,6 +57,9 @@ import { CouponUsage } from '../entities/coupon-usages.entity';
 import { CouponType, CouponTypeName } from '../type/types';
 import { Tier } from 'src/tiers/entities/tier.entity';
 import { LanguageEntity } from 'src/master/language/entities/language.entity';
+import { CouponLocaleEntity } from '../entities/coupon-locale.entity';
+import { OpenAIService } from 'src/openai/openai/openai.service';
+import { Readable } from 'stream';
 
 @Injectable()
 export class CouponsService {
@@ -130,6 +135,11 @@ export class CouponsService {
 
     @InjectRepository(LanguageEntity)
     private languageRepo: Repository<LanguageEntity>,
+
+    @InjectRepository(CouponLocaleEntity)
+    private readonly couponLocaleRepo: Repository<CouponLocaleEntity>,
+
+    private readonly openAIService: OpenAIService,
   ) {}
 
   async create(dto: CreateCouponDto, user: string) {
@@ -2993,5 +3003,123 @@ export class CouponsService {
       success: true,
       message: 'Customer is eligible for this coupon',
     };
+  }
+
+  async migrateCoupon(bodyPayload) {
+    const { tenantId } = bodyPayload;
+    const tenant = await this.tenantRepository.findOne({
+      where: { uuid: tenantId },
+      relations: ['languages', 'languages.language'],
+    });
+    if (!tenant) {
+      throw new BadRequestException('Tenant not found');
+    }
+
+    const results = [];
+    // const filePath = path.resolve(process.cwd(), 'uploads/loyalty_coupons.csv'); // File in local system
+    const filePath = process.env.COUPON_CSV_PATH; // File in remote server
+    if (!filePath) {
+      throw new BadRequestException('COUPON_CSV_PATH is not defined in env');
+    }
+
+    const stream = filePath.startsWith('http')
+      ? await this.getRemoteFileStream(filePath)
+      : fs.createReadStream(filePath);
+    const coupons: any = await new Promise((resolve, reject) => {
+      stream
+        .pipe(csv())
+        .on('data', (data) => results.push(data))
+        .on('end', () => resolve(results))
+        .on('error', (err) => reject(err));
+    });
+
+    for (const row of coupons) {
+      try {
+        const existing = await this.couponRepo.findOne({
+          where: { external_system_id: row.id },
+        });
+
+        if (!existing) {
+          continue;
+        }
+
+        const titleEn = row?.title;
+        const descriptionEn = row?.description;
+        const termAndConditionEn = row?.terms_condition;
+
+        let titleAr = row?.title_ar;
+        if (!titleAr && titleEn) {
+          titleAr = await this.openAIService.translateToArabic(titleEn);
+        }
+
+        let descriptionAr = row?.description_ar;
+        if (!descriptionAr && descriptionEn) {
+          descriptionAr =
+            await this.openAIService.translateToArabic(descriptionEn);
+        }
+
+        let termAndConditionAr = row?.terms_conditions_ar;
+        if (!termAndConditionAr && termAndConditionEn) {
+          termAndConditionAr =
+            await this.openAIService.translateToArabic(termAndConditionEn);
+        }
+
+        if (existing) {
+          for (let index = 0; index <= tenant?.languages.length - 1; index++) {
+            const singleLanguage = tenant?.languages[index];
+
+            if (singleLanguage.language.code === 'en') {
+              const localeCouponEn = this.couponLocaleRepo.create({
+                coupon: { id: existing?.id },
+                language: { id: singleLanguage?.language?.id },
+                title: titleEn,
+                description: descriptionEn,
+                term_and_condition: termAndConditionEn,
+              });
+              await this.couponLocaleRepo.save(localeCouponEn);
+            }
+
+            if (singleLanguage.language.code === 'ar') {
+              const localeCouponEn = this.couponLocaleRepo.create({
+                coupon: { id: existing?.id },
+                language: { id: singleLanguage?.language?.id },
+                title: titleAr,
+                description: descriptionAr,
+                term_and_condition: termAndConditionAr,
+              });
+              await this.couponLocaleRepo.save(localeCouponEn);
+            }
+          }
+          return {
+            success: true,
+            message: 'success',
+          };
+        }
+      } catch (err) {
+        console.error(`❌ Failed to insert ${row.coupon_code}`, err.message);
+        throw new BadRequestException('Failed to migrate coupon', err.message);
+      }
+    }
+  }
+
+  private async getRemoteFileStream(url: string): Promise<Readable> {
+    const response = await axios.get(url, {
+      responseType: 'stream',
+      decompress: false, // ✅ CRITICAL LINE
+      headers: {
+        'Accept-Encoding': 'identity',
+        'Content-Type': 'text/csv',
+      },
+    });
+
+    console.log('Remote CSV Content-Type:', response.headers['content-type']);
+
+    if (
+      !response.headers['content-type']?.includes('csv') &&
+      !response.headers['content-type']?.includes('octet-stream')
+    ) {
+      throw new Error('URL is NOT returning a CSV file');
+    }
+    return response.data;
   }
 }
