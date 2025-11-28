@@ -11,3 +11,9 @@ export class getCouponCriteriasDto {
   @IsNumber()
   bUId: number;
 }
+
+export class migrateCouponDto {
+  @IsString()
+  @IsOptional()
+  tenantId?: string;
+}

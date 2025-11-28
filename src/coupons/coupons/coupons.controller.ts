@@ -27,7 +27,7 @@ import { CustomerCouponsDto } from '../dto/customer-coupon.dto';
 import { UpdateCouponDto } from '../dto/update-coupon.dto';
 import { CouponsService } from './coupons.service';
 import { ValidateCouponDto } from '../dto/validate-coupon.dto';
-import { getCouponCriteriasDto } from '../dto/coupon.dto';
+import { getCouponCriteriasDto, migrateCouponDto } from '../dto/coupon.dto';
 
 @Controller('coupons')
 export class CouponsController {
@@ -297,5 +297,10 @@ export class CouponsController {
   @Post('validate-coupon')
   async validateCoupon(@Body() body: ValidateCouponDto) {
     return await this.service.validateCoupon(body);
+  }
+
+  @Post('migrate-coupon')
+  async migrateCoupon(@Body() body: migrateCouponDto) {
+    return await this.service.migrateCoupon(body);
   }
 }
