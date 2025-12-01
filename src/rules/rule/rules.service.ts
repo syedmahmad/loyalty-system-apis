@@ -1,11 +1,14 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { DataSource, ILike, Repository } from 'typeorm';
 import { Rule } from '../entities/rules.entity';
 import { CreateRuleDto } from '../dto/create-rule.dto';
 import { UpdateRuleDto } from '../dto/update-rule.dto';
 import { Tenant } from 'src/tenants/entities/tenant.entity';
-import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
 import { RuleTier } from '../entities/rules-tier';
 import { OpenAIService } from 'src/openai/openai/openai.service';
 import {
@@ -13,6 +16,7 @@ import {
   WalletTransactionType,
 } from 'src/wallet/entities/wallet-transaction.entity';
 import { Customer } from 'src/customers/entities/customer.entity';
+import { User } from 'src/users/entities/user.entity';
 
 @Injectable()
 export class RulesService {
@@ -23,11 +27,8 @@ export class RulesService {
     @InjectRepository(Tenant)
     private readonly tenantRepository: Repository<Tenant>,
 
-    @InjectRepository(BusinessUnit)
-    private readonly businessUnitRepository: Repository<BusinessUnit>,
-
-    @InjectRepository(RuleTier)
-    private readonly ruleTierRepository: Repository<RuleTier>,
+    @InjectRepository(User)
+    private userRepository: Repository<User>,
 
     @InjectRepository(WalletTransaction)
     private readonly walletTransactionRepository: Repository<WalletTransaction>,
@@ -40,7 +41,18 @@ export class RulesService {
     private readonly openaiService: OpenAIService,
   ) {}
 
-  async create(dto: CreateRuleDto, user: string): Promise<Rule> {
+  async create(
+    dto: CreateRuleDto,
+    user: string,
+    permission: any,
+  ): Promise<Rule> {
+    const canCreateRules = permission.canCreateRules;
+
+    if (!canCreateRules) {
+      throw new BadRequestException(
+        "You don't have permissions to create rules",
+      );
+    }
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -222,7 +234,13 @@ export class RulesService {
     );
   }
 
-  findAll(client_id: number, name: string, bu: number) {
+  async findAll(client_id: number, name: string, bu: number, permission: any) {
+    const canViewRules = permission.canViewRules;
+
+    if (!canViewRules) {
+      throw new BadRequestException("You don't have permissions to view rules");
+    }
+
     let optionalWhereClause: Record<string, any> = {};
 
     if (name) {
@@ -370,7 +388,17 @@ export class RulesService {
     return rule;
   }
 
-  async update(uuid: string, dto: UpdateRuleDto, user: string): Promise<Rule> {
+  async update(
+    uuid: string,
+    dto: UpdateRuleDto,
+    user: string,
+    permission: any,
+  ): Promise<Rule> {
+    const canEditRules = permission.canEditRules;
+
+    if (!canEditRules) {
+      throw new BadRequestException("You don't have permissions to edit rules");
+    }
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -448,7 +476,16 @@ export class RulesService {
     }
   }
 
-  async remove(uuid: string, user: string): Promise<{ deleted: boolean }> {
+  async remove(
+    uuid: string,
+    user: string,
+    permission: any,
+  ): Promise<{ deleted: boolean }> {
+    const canDeleteRules = permission.canDeleteRules;
+
+    if (!canDeleteRules) {
+      throw new BadRequestException("You don't have permissions to edit rules");
+    }
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();

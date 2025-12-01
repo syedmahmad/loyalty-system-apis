@@ -54,7 +54,12 @@ export class OffersService {
     private readonly ociService: OciService,
   ) {}
 
-  async create(dto: CreateOfferDto, user: string) {
+  async create(dto: CreateOfferDto, user: string, permission: any) {
+    if (!permission.canCreateOffers) {
+      throw new BadRequestException(
+        "You don't have permission to create offers",
+      );
+    }
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -151,7 +156,13 @@ export class OffersService {
     page: number = 1,
     pageSize: number = 10,
     langCode: string = 'en',
+    permission: any,
   ) {
+    if (!permission.canViewOffers) {
+      throw new BadRequestException(
+        "You don't have permission to access offers",
+      );
+    }
     const take = pageSize;
     const skip = (page - 1) * take;
 
@@ -297,7 +308,12 @@ export class OffersService {
     return offers;
   }
 
-  async remove(uuid: string, user: string) {
+  async remove(uuid: string, user: string, permission: any) {
+    if (!permission.canDeleteOffers) {
+      throw new BadRequestException(
+        "You don't have permission to delete offers",
+      );
+    }
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -319,7 +335,15 @@ export class OffersService {
     }
   }
 
-  async update(uuid: string, dto: UpdateOfferDto, user: string) {
+  async update(
+    uuid: string,
+    dto: UpdateOfferDto,
+    user: string,
+    permission: any,
+  ) {
+    if (!permission.canEditOffers) {
+      throw new BadRequestException("You don't have permission to edit offers");
+    }
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();

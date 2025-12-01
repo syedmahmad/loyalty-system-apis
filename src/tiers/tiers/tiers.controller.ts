@@ -12,6 +12,7 @@ import {
   BadRequestException,
   UseInterceptors,
   UploadedFile,
+  Req,
 } from '@nestjs/common';
 import { TiersService } from './tiers.service';
 import { CreateTierDto } from '../dto/create-tier.dto';
@@ -23,6 +24,8 @@ import { User } from 'src/users/entities/user.entity';
 import { Repository } from 'typeorm';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { tierBenefitsDto } from '../dto/tier-benefits.dto';
+import { TierAccessGuard } from './tiers-access.guard';
+import { TIERSAccess } from './tiers-access.decorator';
 
 @Controller('tiers')
 export class TiersController {
@@ -32,9 +35,11 @@ export class TiersController {
     private readonly userRepository: Repository<User>,
   ) {}
 
-  @UseGuards(AuthTokenGuard)
+  @UseGuards(AuthTokenGuard, TierAccessGuard)
+  @TIERSAccess()
   @Post()
   async create(
+    @Req() req: any,
     @Body() dto: CreateTierDto,
     @Headers('user-secret') userSecret: string,
   ) {
@@ -53,12 +58,15 @@ export class TiersController {
     if (!user) {
       throw new BadRequestException('user not found against provided token');
     }
-    return await this.service.create(dto, user.uuid);
+    return await this.service.create(dto, user.uuid, req.permission);
   }
 
+  @UseGuards(TierAccessGuard)
+  @TIERSAccess()
   @Get(':client_id')
   async findAll(
     @Param('client_id') client_id: number,
+    @Req() req: any,
     @Headers('user-secret') userSecret: string,
     @Query('name') name?: string, // optional query param
     @Query('bu') bu?: number, // optional query param
@@ -79,7 +87,13 @@ export class TiersController {
       throw new BadRequestException('user not found against provided token');
     }
 
-    return await this.service.findAll(client_id, name, user.id, bu);
+    return await this.service.findAll(
+      client_id,
+      name,
+      user.id,
+      bu,
+      req.permission,
+    );
   }
 
   @Get('/single/:id')
@@ -87,12 +101,14 @@ export class TiersController {
     return await this.service.findOne(+id);
   }
 
-  @UseGuards(AuthTokenGuard)
+  @UseGuards(AuthTokenGuard, TierAccessGuard)
+  @TIERSAccess()
   @Put(':id')
   async update(
     @Param('id') id: string,
     @Headers('user-secret') userSecret: string,
     @Body() dto: UpdateTierDto,
+    @Req() req: any,
   ) {
     if (!userSecret) {
       throw new BadRequestException('user-secret not found in headers');
@@ -109,14 +125,16 @@ export class TiersController {
     if (!user) {
       throw new BadRequestException('user not found against provided token');
     }
-    return await this.service.update(+id, dto, user.uuid);
+    return await this.service.update(+id, dto, user.uuid, req.permission);
   }
 
-  @UseGuards(AuthTokenGuard)
+  @UseGuards(AuthTokenGuard, TierAccessGuard)
+  @TIERSAccess()
   @Delete(':id')
   async remove(
     @Param('id') id: string,
     @Headers('user-secret') userSecret: string,
+    @Req() req: any,
   ) {
     if (!userSecret) {
       throw new BadRequestException('user-secret not found in headers');
@@ -133,7 +151,7 @@ export class TiersController {
     if (!user) {
       throw new BadRequestException('user not found against provided token');
     }
-    return await this.service.remove(+id, user.uuid);
+    return await this.service.remove(+id, user.uuid, req.permission);
   }
 
   @Get(':client_id/benefits')

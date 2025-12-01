@@ -14,6 +14,7 @@ import {
   Query,
   UseInterceptors,
   UploadedFile,
+  Req,
 } from '@nestjs/common';
 import { AuthTokenGuard } from 'src/users/guards/authTokenGuard';
 import * as jwt from 'jsonwebtoken';
@@ -26,6 +27,8 @@ import { UpdateCustomerSegmentDto } from '../dto/update-customer-segment.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
+import { CustomerSegmentAccessGuard } from './customer-segment-access.guard';
+import { CUSTOMER_SEGMENTSAccess } from './customer-segment-access.decorator';
 
 @Controller('customer-segments')
 export class CustomerSegmentsController {
@@ -35,9 +38,11 @@ export class CustomerSegmentsController {
     private readonly userRepository: Repository<User>,
   ) {}
 
-  @UseGuards(AuthTokenGuard)
+  @UseGuards(AuthTokenGuard, CustomerSegmentAccessGuard)
+  @CUSTOMER_SEGMENTSAccess()
   @Post()
   async create(
+    @Req() req: any,
     @Body() dto: CreateCustomerSegmentDto,
     @Headers('user-secret') userSecret: string,
   ) {
@@ -51,17 +56,26 @@ export class CustomerSegmentsController {
     if (!user)
       throw new BadRequestException('user not found against provided token');
 
-    return await this.service.create(dto, user.uuid);
+    return await this.service.create(dto, user.uuid, req.permission);
   }
 
+  @UseGuards(CustomerSegmentAccessGuard)
+  @CUSTOMER_SEGMENTSAccess()
   @Get(':client_id')
   async findAll(
+    @Req() req: any,
     @Param('client_id') client_id: number,
     @Query('page') page?: number,
     @Query('pageSize') pageSize?: number,
     @Query('name') name?: string,
   ) {
-    return await this.service.findAll(client_id, page, pageSize, name);
+    return await this.service.findAll(
+      client_id,
+      page,
+      pageSize,
+      name,
+      req.permission,
+    );
   }
 
   @Get('view-customers/:segment_id')
@@ -69,9 +83,11 @@ export class CustomerSegmentsController {
     return await this.service.getCustomers(segmentId);
   }
 
-  @UseGuards(AuthTokenGuard)
+  @UseGuards(AuthTokenGuard, CustomerSegmentAccessGuard)
+  @CUSTOMER_SEGMENTSAccess()
   @Put('add-customer/:segment_id')
   async addCustomer(
+    @Req() req: any,
     @Param('segment_id') segmentId: number,
     @Body('customer_id') customerId: number,
     @Headers('user-secret') userSecret: string,
@@ -86,12 +102,18 @@ export class CustomerSegmentsController {
     if (!user)
       throw new BadRequestException('user not found against provided token');
 
-    return await this.service.addCustomerToSegment(segmentId, customerId);
+    return await this.service.addCustomerToSegment(
+      segmentId,
+      customerId,
+      req.permission,
+    );
   }
 
-  @UseGuards(AuthTokenGuard)
+  @UseGuards(AuthTokenGuard, CustomerSegmentAccessGuard)
+  @CUSTOMER_SEGMENTSAccess()
   @Put('remove-customer/:segment_id')
   async removeCustomer(
+    @Req() req: any,
     @Param('segment_id') segmentId: number,
     @Body('customer_id') customerId: number,
     @Headers('user-secret') userSecret: string,
@@ -106,11 +128,18 @@ export class CustomerSegmentsController {
     if (!user)
       throw new BadRequestException('user not found against provided token');
 
-    return await this.service.removeCustomerFromSegment(segmentId, customerId);
+    return await this.service.removeCustomerFromSegment(
+      segmentId,
+      customerId,
+      req.permission,
+    );
   }
 
+  @UseGuards(CustomerSegmentAccessGuard)
+  @CUSTOMER_SEGMENTSAccess()
   @Delete(':segment_id/delete')
   async deactivateSegment(
+    @Req() req: any,
     @Param('segment_id') segmentId: number,
     @Headers('user-secret') userSecret: string,
   ) {
@@ -124,14 +153,17 @@ export class CustomerSegmentsController {
     if (!user)
       throw new BadRequestException('user not found against provided token');
 
-    return this.service.remove(segmentId, user.uuid);
+    return this.service.remove(segmentId, user.uuid, req.permission);
   }
 
+  @UseGuards(CustomerSegmentAccessGuard)
+  @CUSTOMER_SEGMENTSAccess()
   @Put(':id')
   async update(
     @Param('id') id: string,
     @Headers('user-secret') userSecret: string,
     @Body() dto: UpdateCustomerSegmentDto,
+    @Req() req: any,
   ) {
     if (!userSecret) {
       throw new BadRequestException('user-secret not found in headers');
@@ -149,9 +181,11 @@ export class CustomerSegmentsController {
       throw new BadRequestException('user not found against provided token');
     }
 
-    return await this.service.update(+id, dto, user.uuid);
+    return await this.service.update(+id, dto, user.uuid, req.permission);
   }
 
+  @UseGuards(CustomerSegmentAccessGuard)
+  @CUSTOMER_SEGMENTSAccess()
   @Post('bulk-upload')
   // @UseInterceptors(FileInterceptor('file'))
   @UseInterceptors(
@@ -170,6 +204,7 @@ export class CustomerSegmentsController {
     }),
   )
   async bulkUpload(
+    @Req() req: any,
     @UploadedFile() file: Express.Multer.File,
     @Body() body: any,
     @Headers('user-secret') userSecret: string,
@@ -193,6 +228,6 @@ export class CustomerSegmentsController {
       throw new BadRequestException('File not uploaded');
     }
 
-    return this.service.bulkUpload(file.path, body, user.uuid);
+    return this.service.bulkUpload(file.path, body, user.uuid, req.permission);
   }
 }
