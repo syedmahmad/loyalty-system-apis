@@ -1,4 +1,6 @@
 import {
+  BadRequestException,
+  ForbiddenException,
   forwardRef,
   Inject,
   Injectable,
@@ -18,6 +20,10 @@ import { AuthService } from 'src/petromin-it/auth/auth/auth.service';
 
 import { GGMCommonAuth, GGMCommonAuthHeaders } from '@gogomotor/common-auth';
 import { v4 as uuidv4 } from 'uuid';
+import {
+  CreateCarListingDto,
+  MarkVehicleSoldDto,
+} from '../dto/create-car-listing.dto';
 
 @Injectable()
 export class VehiclesService {
@@ -1235,7 +1241,7 @@ export class VehiclesService {
       };
 
       // 3. Hit Gogomotor API
-      const url = `${process.env.GGM_BASE_URL}?km=${km}&trimId=${trimId}&year=${year}`;
+      const url = `${process.env.GGM_BASE_URL}/get-valuation?km=${km}&trimId=${trimId}&year=${year}`;
       const { data } = await axios.get(url, { headers });
 
       // 4. Return valuation data
@@ -1247,6 +1253,93 @@ export class VehiclesService {
       );
       return null;
     }
+  }
+
+  async selfCarListing(body: CreateCarListingDto) {
+    try {
+      // 1. Create auth client
+      const authClient = new GGMCommonAuth({
+        clientId: process.env.GGM_CLIENT_ID,
+        clientSecret: process.env.GGM_CLIENT_SECRET,
+        encryptionKey: process.env.GGM_ENC_KEY,
+        encryptionIV: process.env.GGM_ENC_IV,
+      });
+
+      // 2. Get auth headers
+      const res = authClient.getAccessToken();
+
+      const headers = {
+        [GGMCommonAuthHeaders.ClientId]: res.clientId,
+        [GGMCommonAuthHeaders.AccessToken]: res.accessToken,
+        [GGMCommonAuthHeaders.RequestId]: res.requestId || uuidv4(),
+        [GGMCommonAuthHeaders.RequestTimestamp]: res.timestamp,
+      };
+
+      // 3. Hit Gogomotor API
+      const url = `${process.env.GGM_BASE_URL}/vehicle-details`;
+      const { data } = await axios.post(url, body, { headers });
+
+      const customer_uuid = body.user.customer_id;
+
+      const customer = await this.customerRepo.findOne({
+        where: { uuid: customer_uuid },
+      });
+
+      if (!customer) {
+        throw new BadRequestException(
+          'Customer not found against provided uuid',
+        );
+      }
+
+      const vehicle = await this.vehiclesRepository.findOne({
+        where: {
+          plate_no: body.plate_no,
+          status: 1,
+          customer: { id: customer.id },
+        },
+      });
+
+      await this.vehiclesRepository.update(
+        { id: vehicle.id },
+        {
+          ggm_url: data.data.myAccountUrl,
+          asking_price: body.askingPrice,
+          listing_status: 1, // 1 = listed, 2 = sold, by default 0
+        },
+      );
+
+      // 4. Return valuation data
+      return { message: 'Vehicle Added', data: data.data, errors: [] };
+    } catch (error: any) {
+      console.error(
+        'Error fetching car listing:',
+        error?.response?.data || error.message,
+      );
+      return { message: 'Vehicle Not added', error: error, data: [] };
+    }
+  }
+
+  async markAsSold(dto: MarkVehicleSoldDto) {
+    const { vehicleId, customerId } = dto;
+
+    const vehicle = await this.vehiclesRepository.findOne({
+      where: { id: vehicleId },
+      relations: ['customer'],
+    });
+
+    if (!vehicle) {
+      throw new NotFoundException('Vehicle not found');
+    }
+
+    if (vehicle.customer?.uuid !== customerId) {
+      throw new ForbiddenException(
+        'You are not allowed to mark this vehicle as sold',
+      );
+    }
+
+    vehicle.listing_status = 2; // Sold
+
+    return await this.vehiclesRepository.save(vehicle);
   }
 
   private parseDate(value: any): Date | null {
