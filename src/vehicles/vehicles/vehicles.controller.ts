@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Headers,
   Param,
@@ -117,5 +118,15 @@ export class VehiclesController {
   @Patch('mark-sold')
   async markVehicleSold(@Body() dto: MarkVehicleSoldDto) {
     return this.service.markAsSold(dto);
+  }
+
+  @Delete('delete-self-listing')
+  async deleteVehicleFromGogo(@Body() dto: MarkVehicleSoldDto) {
+    return this.service.removeVehicleFromGogoMotor(dto);
+  }
+
+  @Patch('update-self-listing-details')
+  async updateSelfListingDetails(@Body() dto: MarkVehicleSoldDto) {
+    return this.service.updateVehicleDetailsOnGogoMotor(dto);
   }
 }

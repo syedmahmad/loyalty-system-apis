@@ -1339,7 +1339,60 @@ export class VehiclesService {
 
     vehicle.listing_status = 2; // Sold
 
-    return await this.vehiclesRepository.save(vehicle);
+    await this.vehiclesRepository.save(vehicle);
+
+    return {
+      success: true,
+      message: 'Vehicle Marked as Sold',
+    };
+  }
+
+  async removeVehicleFromGogoMotor(dto: MarkVehicleSoldDto) {
+    const { plate_no, customerId } = dto;
+
+    const vehicle = await this.vehiclesRepository.findOne({
+      where: { plate_no: plate_no },
+      relations: ['customer'],
+    });
+
+    if (!vehicle) {
+      throw new NotFoundException('Vehicle not found');
+    }
+
+    if (vehicle.customer?.uuid !== customerId) {
+      throw new ForbiddenException(
+        'You are not allowed to mark this vehicle as sold',
+      );
+    }
+
+    return {
+      success: true,
+      message: 'Vehicle deleted Successfully',
+    };
+  }
+
+  async updateVehicleDetailsOnGogoMotor(dto: MarkVehicleSoldDto) {
+    const { plate_no, customerId } = dto;
+
+    const vehicle = await this.vehiclesRepository.findOne({
+      where: { plate_no: plate_no },
+      relations: ['customer'],
+    });
+
+    if (!vehicle) {
+      throw new NotFoundException('Vehicle not found');
+    }
+
+    if (vehicle.customer?.uuid !== customerId) {
+      throw new ForbiddenException(
+        'You are not allowed to mark this vehicle as sold',
+      );
+    }
+
+    return {
+      success: true,
+      message: 'Vehicle details updated Successfully',
+    };
   }
 
   private parseDate(value: any): Date | null {
