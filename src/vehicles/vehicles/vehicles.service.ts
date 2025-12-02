@@ -1320,10 +1320,10 @@ export class VehiclesService {
   }
 
   async markAsSold(dto: MarkVehicleSoldDto) {
-    const { vehicleId, customerId } = dto;
+    const { plate_no, customerId } = dto;
 
     const vehicle = await this.vehiclesRepository.findOne({
-      where: { id: vehicleId },
+      where: { plate_no: plate_no },
       relations: ['customer'],
     });
 

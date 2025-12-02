@@ -105,8 +105,8 @@ export class CreateCarListingDto {
 }
 
 export class MarkVehicleSoldDto {
-  @IsNumber()
-  vehicleId: number;
+  @IsString()
+  plate_no: string;
 
   @IsUUID()
   customerId: string;
