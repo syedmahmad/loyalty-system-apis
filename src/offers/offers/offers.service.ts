@@ -184,8 +184,9 @@ export class OffersService {
     const isSuperAdmin = privileges.some((p: any) => p.name === 'all_tenants');
     const hasGlobalAccess = privileges.some(
       (p) =>
-        p.module === 'businessUnits' &&
-        p.name === `${tenantName}_All Business Unit`,
+        (p.module === 'businessUnits' &&
+          p.name === `${tenantName}_All Business Unit`) ||
+        (p.module === 'tenants' && p.name !== 'all_tenants'),
     );
 
     const baseConditions = {

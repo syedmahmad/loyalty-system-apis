@@ -249,8 +249,9 @@ export class CampaignsService {
 
     const hasGlobalAccess = privileges.some(
       (p) =>
-        p.module === 'businessUnits' &&
-        p.name === `${tenantName}_All Business Unit`,
+        (p.module === 'businessUnits' &&
+          p.name === `${tenantName}_All Business Unit`) ||
+        (p.module === 'tenants' && p.name !== 'all_tenants'),
     );
 
     if (name?.trim()) {
