@@ -74,8 +74,8 @@ export class CreateCarListingDto {
   @IsNumber()
   cityId: number;
 
-  @IsString()
-  askingPrice: string;
+  @IsNumber()
+  askingPrice: number;
 
   @IsString()
   plate_no: string;
