@@ -41,6 +41,8 @@ export class RuleAccessGuard implements CanActivate {
     const userSecret = request.headers['user-secret'];
     const clientId = request.headers['Client_id'];
     const client_id = parseInt(clientId);
+
+    console.log('RULES_ACCESS_KEY', request.headers);
     // const client_id =
     //   Number(request.params.client_id) || request.body.tenant_id;
 
@@ -93,10 +95,11 @@ export class RuleAccessGuard implements CanActivate {
     // STEP 2: Tenant Access
     // -----------------------
     const allowAllTenants = privileges.some((p) => p.name === 'all_tenants');
+
     const specificTenantNames = privileges
       .filter((p) => p.module === 'tenants' && p.name !== 'all_tenants')
       .map((p) => p.name);
-
+    console.log('specificTenantNames', specificTenantNames);
     let allowedTenantIds: number[] = [];
     if (allowAllTenants) {
       const allTenants = await this.tenantRepo.find();
@@ -105,7 +108,9 @@ export class RuleAccessGuard implements CanActivate {
       const matchedTenants = await this.tenantRepo.find({
         where: { name: In(specificTenantNames) },
       });
+      console.log('matchedTenants', matchedTenants);
       allowedTenantIds = matchedTenants.map((t) => t.id);
+      console.log('allowedTenantIds', allowedTenantIds);
     }
 
     if (!allowedTenantIds.includes(client_id)) {
