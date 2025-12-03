@@ -39,7 +39,7 @@ export class CustomerAccessGuard implements CanActivate {
 
     const request = context.switchToHttp().getRequest();
     const userSecret = request.headers['user-secret'];
-    const clientId = request.headers['client_id'];
+    const clientId = request.headers['client-id'];
     const client_id = parseInt(clientId);
     // const client_id =
     //   Number(request.params.client_id) || request.body.tenant_id;
