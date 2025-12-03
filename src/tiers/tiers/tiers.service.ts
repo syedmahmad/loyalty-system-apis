@@ -552,6 +552,9 @@ export class TiersService {
       }
       const allTiers = await query.getMany();
 
+      if (allTiers.length == 0)
+        throw new NotFoundException('Tier not found for this customer');
+
       let nextTier = null;
       const benefits = [];
       const tiersArr = [];
@@ -581,20 +584,21 @@ export class TiersService {
 
         if (eachTier?.locales?.[0]?.name !== 'Bronze') {
           for (let bindex = 0; bindex <= benefitsArr.length - 1; bindex++) {
-            const eachBenefit = eachTier?.locales?.[0]?.benefits[bindex];
+            const eachBenefit: any = eachTier?.locales?.[0]?.benefits[bindex];
             if (!eachBenefit) {
               continue;
             }
+
+            const filtered = {
+              [`name_${language_code}`]: eachBenefit[`name_${language_code}`],
+              icon: eachBenefit.icon,
+            };
 
             if (typeof eachBenefit === 'object' && eachBenefit !== null) {
               benefits.push({
                 tierId: eachTier.uuid,
                 isUsed: false,
-                ...(eachBenefit as {
-                  name_en: string;
-                  name_ar: string;
-                  icon: string;
-                }),
+                ...filtered,
               });
             }
           }
@@ -602,7 +606,7 @@ export class TiersService {
       }
 
       // ✅ Handle case where user doesn’t fall into any tier
-      if (!nextTier && wallet.total_balance < allTiers[0].min_points) {
+      if (!nextTier && wallet.total_balance < allTiers[0]?.min_points) {
         const firstTier = allTiers[0];
         nextTier = {
           uuid: firstTier.uuid,
