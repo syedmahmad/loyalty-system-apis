@@ -202,7 +202,7 @@ export class TransactionSyncLogsSubscriber
               vehicle_info: vehicleInfo,
               // Ensure claim-related fields remain null/empty
               is_claimed: null,
-              clamined_points: null,
+              claimed_points: null,
               claim_id: null,
               claim_date: null,
               free_items: freeItems.length ? freeItems : null,
@@ -316,7 +316,7 @@ export class TransactionSyncLogsSubscriber
 
                 // 9. Update the invoice row to assign is_claimed to 1 and claimed_points to points
                 row.is_claimed = true;
-                row.clamined_points = points;
+                row.claimed_points = points;
                 row.claim_date = new Date().toISOString();
               }
             }

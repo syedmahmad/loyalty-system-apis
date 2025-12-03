@@ -412,7 +412,7 @@ export class RestyService {
           vehicle_plate_number: singleInvoice.PlateNumber,
           vehicle_vin: singleInvoice.VIN,
           is_claimed: true,
-          clamined_points: Math.round(points),
+          claimed_points: Math.round(points),
           claim_id: uuidv4(),
           claim_date: new Date().toISOString(),
           free_items: null,
