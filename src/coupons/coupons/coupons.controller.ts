@@ -9,6 +9,7 @@ import {
   Post,
   Put,
   Query,
+  Req,
   UploadedFile,
   UseGuards,
   UseInterceptors,
@@ -28,6 +29,8 @@ import { UpdateCouponDto } from '../dto/update-coupon.dto';
 import { CouponsService } from './coupons.service';
 import { ValidateCouponDto } from '../dto/validate-coupon.dto';
 import { getCouponCriteriasDto } from '../dto/coupon.dto';
+import { CouponAccess } from './coupon-access.decorator';
+import { CouponAccessGuard } from './coupon-access.guard';
 
 @Controller('coupons')
 export class CouponsController {
@@ -37,27 +40,17 @@ export class CouponsController {
     private readonly userRepository: Repository<User>,
   ) {}
 
-  @UseGuards(AuthTokenGuard)
+  @UseGuards(AuthTokenGuard, CouponAccessGuard)
   @Post()
+  @CouponAccess()
   async create(
     @Body() dto: CreateCouponDto,
     @Headers('user-secret') userSecret: string,
+    @Req() request: any, // to access request.permission from the guard
   ) {
-    if (!userSecret) {
-      throw new BadRequestException('user-secret not found in headers');
-    }
-    const decodedUser: any = jwt.decode(userSecret);
-
-    const user = await this.userRepository.findOne({
-      where: {
-        id: decodedUser.UserId,
-      },
-    });
-
-    if (!user) {
-      throw new BadRequestException('user not found against provided token');
-    }
-    return await this.service.create(dto, user.uuid);
+    // Guard already validated userSecret and coupon permissions, so no need to repeat
+    const userUuid = request.user?.uuid; // optional, if guard attaches user info
+    return await this.service.create(dto, userUuid, request.permission);
   }
 
   @Get('/check-existing-code')
@@ -65,37 +58,36 @@ export class CouponsController {
     return await this.service.checkExistingCode(code);
   }
 
+  @UseGuards(CouponAccessGuard)
+  @CouponAccess()
   @Get('/:client_id')
   async findAll(
-    @Param('client_id') client_id: number,
+    @Req() req,
+    @Param('client_id') client_id: string,
     @Headers('user-secret') userSecret: string,
-    @Query('name') name?: string, // optional query param,
-    @Query('bu') bu?: number, // optional query param,
-    @Query('limit') limit?: number, // optional query param,
-    @Query('page') page?: number, // optional query param,
-    @Query('pageSize') pageSize?: number, // optional query param,
+    @Query('name') name?: string,
+    @Query('bu') bu?: number,
+    @Query('limit') limit?: number,
+    @Query('page') page?: number,
+    @Query('pageSize') pageSize?: number,
   ) {
     if (!userSecret) {
       throw new BadRequestException('user-secret not found in headers');
     }
 
-    const decodedUser: any = jwt.decode(userSecret);
-
-    const user = await this.userRepository.findOne({
-      where: {
-        id: decodedUser.UserId,
-      },
-    });
-
-    if (!user) {
-      throw new BadRequestException('user not found against provided token');
+    // Permissions resolved by guard
+    const permissions = req.permission;
+    if (!permissions) {
+      throw new BadRequestException(
+        'Permissions not resolved by CouponAccessGuard',
+      );
     }
 
-    return await this.service.findAll(
-      client_id,
+    return await this.service.findAllWithPermissions(
+      permissions,
+      parseInt(client_id),
       name,
       limit,
-      user.id,
       bu,
       page,
       pageSize,
@@ -116,9 +108,11 @@ export class CouponsController {
     return await this.service.findOne(+id);
   }
 
-  @UseGuards(AuthTokenGuard)
+  @UseGuards(AuthTokenGuard, CouponAccessGuard)
+  @CouponAccess()
   @Put(':id')
   async update(
+    @Req() request: any,
     @Param('id') id: string,
     @Headers('user-secret') userSecret: string,
     @Body() dto: UpdateCouponDto,
@@ -138,14 +132,16 @@ export class CouponsController {
     if (!user) {
       throw new BadRequestException('user not found against provided token');
     }
-    return await this.service.update(+id, dto, user.uuid);
+    return await this.service.update(+id, dto, user.uuid, request.permission);
   }
 
-  @UseGuards(AuthTokenGuard)
+  @UseGuards(AuthTokenGuard, CouponAccessGuard)
+  @CouponAccess()
   @Delete(':id')
   async remove(
     @Param('id') id: string,
     @Headers('user-secret') userSecret: string,
+    @Req() request: any,
   ) {
     if (!userSecret) {
       throw new BadRequestException('user-secret not found in headers');
@@ -162,7 +158,7 @@ export class CouponsController {
     if (!user) {
       throw new BadRequestException('user not found against provided token');
     }
-    return await this.service.remove(+id, user.uuid);
+    return await this.service.remove(+id, user.uuid, request.permission);
   }
 
   @Get('vehicle/makes')

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Wallet } from 'src/wallet/entities/wallet.entity';
 import { WalletTransaction } from 'src/wallet/entities/wallet-transaction.entity';
@@ -22,7 +22,16 @@ export class LoyaltyAnalyticsService {
     private readonly couponRepository: Repository<Coupon>,
   ) {}
 
-  async getLoyaltyDashboard(startDate?: string, endDate?: string) {
+  async getLoyaltyDashboard(
+    permission: any,
+    startDate?: string,
+    endDate?: string,
+  ) {
+    if (!permission.canViewAnalytics) {
+      throw new BadRequestException(
+        "You don't have permission to access analytics",
+      );
+    }
     const [pointSplits, customerByPoints, summary, itemUsage, barChart] =
       await Promise.all([
         this.getPointsSplit(startDate, endDate),
@@ -216,7 +225,16 @@ export class LoyaltyAnalyticsService {
     return result;
   }
 
-  async getCouponAnalytics(startDate?: string, endDate?: string) {
+  async getCouponAnalytics(
+    permission: any,
+    startDate?: string,
+    endDate?: string,
+  ) {
+    if (!permission.canViewAnalytics) {
+      throw new BadRequestException(
+        "You don't have permission to access analytics",
+      );
+    }
     const [stats, set, lineData, barData] = await Promise.all([
       this.getCouponCount(startDate, endDate, 'couponSummary'),
       this.getCouponCount(startDate, endDate, 'couponSetSummary'),

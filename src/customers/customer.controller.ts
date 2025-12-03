@@ -10,6 +10,7 @@ import {
   Req,
   UploadedFile,
   UploadedFiles,
+  UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -26,6 +27,8 @@ import { GvrEarnBurnWithEventsDto } from 'src/customers/dto/gvr_earn_burn_with_e
 import { CustomerDto } from './dto/customer.dto';
 import { CustomerEarnHistoryDto } from './dto/customer-earn-history.dto';
 import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
+import { CustomerAccessGuard } from './customers-access.guard';
+import { CUSTOMERSAccess } from './customers-access.decorator';
 
 @Controller('customers')
 export class CustomerController {
@@ -40,8 +43,11 @@ export class CustomerController {
     return this.customerService.createCustomer(req, dto);
   }
 
+  @UseGuards(CustomerAccessGuard)
+  @CUSTOMERSAccess()
   @Get(':client_id')
   async getAllCustomers(
+    @Req() req: any,
     @Param('client_id') client_id: number,
     @Query('page') page?: number,
     @Query('pageSize') pageSize?: number,
@@ -51,6 +57,7 @@ export class CustomerController {
       client_id,
       page,
       pageSize,
+      req.permission,
       search,
     );
   }

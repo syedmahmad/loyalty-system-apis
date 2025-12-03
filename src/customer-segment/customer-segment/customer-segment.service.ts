@@ -8,7 +8,7 @@ import * as fastcsv from 'fast-csv';
 import { v4 as uuidv4 } from 'uuid';
 import { nanoid } from 'nanoid';
 import { InjectRepository, InjectDataSource } from '@nestjs/typeorm';
-import { Repository, DataSource, ILike, FindOptionsWhere } from 'typeorm';
+import { Repository, DataSource, ILike } from 'typeorm';
 import { CustomerSegment } from '../entities/customer-segment.entity';
 import { CreateCustomerSegmentDto } from '../dto/create.dto';
 import { UpdateCustomerSegmentDto } from '../dto/update-customer-segment.dto';
@@ -43,7 +43,12 @@ export class CustomerSegmentsService {
     private readonly walletService: WalletService,
   ) {}
 
-  async create(dto: CreateCustomerSegmentDto, user: string) {
+  async create(dto: CreateCustomerSegmentDto, user: string, permission: any) {
+    if (!permission.canCreateCustomerSegments) {
+      throw new BadRequestException(
+        "You don't have access to create customer segment",
+      );
+    }
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -71,7 +76,7 @@ export class CustomerSegmentsService {
         const customerIds = dto.selected_customer_ids || [];
         for (let index = 0; index <= customerIds.length - 1; index++) {
           const eachCustomerId = customerIds[index];
-          await this.addCustomerToSegment(saved.id, eachCustomerId);
+          await this.addCustomerToSegment(saved.id, eachCustomerId, permission);
         }
       }
 
@@ -89,7 +94,13 @@ export class CustomerSegmentsService {
     page: number = 1,
     pageSize: number = 7,
     name: string,
+    permission: any,
   ) {
+    if (!permission.canViewCustomerSegments) {
+      throw new BadRequestException(
+        "You don't have access to access customer segment",
+      );
+    }
     const take = pageSize;
     const skip = (page - 1) * take;
 
@@ -146,7 +157,16 @@ export class CustomerSegmentsService {
     return segment;
   }
 
-  async addCustomerToSegment(segmentId: number, customerId: number) {
+  async addCustomerToSegment(
+    segmentId: number,
+    customerId: number,
+    permission: any,
+  ) {
+    if (!permission.canEditCustomerSegments) {
+      throw new BadRequestException(
+        "You don't have access to edit customer segment",
+      );
+    }
     const segment = await this.segmentRepository.findOne({
       where: { id: segmentId },
     });
@@ -172,7 +192,16 @@ export class CustomerSegmentsService {
     return { message: 'Customer added successfully' };
   }
 
-  async removeCustomerFromSegment(segmentId: number, customerId: number) {
+  async removeCustomerFromSegment(
+    segmentId: number,
+    customerId: number,
+    permission: any,
+  ) {
+    if (!permission.canEditCustomerSegments) {
+      throw new BadRequestException(
+        "You don't have access to edit customer segment",
+      );
+    }
     const segment = await this.segmentRepository.findOne({
       where: { id: segmentId },
     });
@@ -195,7 +224,17 @@ export class CustomerSegmentsService {
     return { message: 'Customer removed successfully' };
   }
 
-  async update(id: number, dto: UpdateCustomerSegmentDto, user: string) {
+  async update(
+    id: number,
+    dto: UpdateCustomerSegmentDto,
+    user: string,
+    permission: any,
+  ) {
+    if (!permission.canEditCustomerSegments) {
+      throw new BadRequestException(
+        "You don't have access to edit customer segment",
+      );
+    }
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -217,7 +256,11 @@ export class CustomerSegmentsService {
         const customerIds = dto.selected_customer_ids || [];
         for (let index = 0; index <= customerIds.length - 1; index++) {
           const eachCustomerId = customerIds[index];
-          await this.addCustomerToSegment(updated.id, eachCustomerId);
+          await this.addCustomerToSegment(
+            updated.id,
+            eachCustomerId,
+            permission,
+          );
         }
       }
 
@@ -230,7 +273,12 @@ export class CustomerSegmentsService {
     }
   }
 
-  async remove(id: number, user: string) {
+  async remove(id: number, user: string, permission: any) {
+    if (!permission.canDeleteCustomerSegments) {
+      throw new BadRequestException(
+        "You don't have access to delete customer segment",
+      );
+    }
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -261,7 +309,13 @@ export class CustomerSegmentsService {
     filePath: string,
     body: CreateCustomerSegmentDto,
     user: string,
+    permission: any,
   ) {
+    if (!permission.canCreateCustomerSegments) {
+      throw new BadRequestException(
+        "You don't have access to create customer segment",
+      );
+    }
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -300,7 +354,11 @@ export class CustomerSegmentsService {
         try {
           const customer = await this.findOrCreateCustomer(row, body);
           if (customer) {
-            await this.addCustomerToSegment(savedSegment.id, customer.id);
+            await this.addCustomerToSegment(
+              savedSegment.id,
+              customer.id,
+              permission,
+            );
           }
         } catch (err) {
           console.error('Row failed:', row, err.message);

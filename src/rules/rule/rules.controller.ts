@@ -10,6 +10,7 @@ import {
   Query,
   UseGuards,
   BadRequestException,
+  Req,
 } from '@nestjs/common';
 import * as jwt from 'jsonwebtoken';
 import { RulesService } from './rules.service';
@@ -19,6 +20,8 @@ import { AuthTokenGuard } from 'src/users/guards/authTokenGuard';
 import { InjectRepository } from '@nestjs/typeorm';
 import { User } from 'src/users/entities/user.entity';
 import { Repository } from 'typeorm';
+import { RuleAccessGuard } from './rules-access.guard';
+import { RULESAccess } from './rules-access.decorator';
 
 @Controller('rules')
 export class RulesController {
@@ -28,11 +31,13 @@ export class RulesController {
     private readonly userRepository: Repository<User>,
   ) {}
 
-  @UseGuards(AuthTokenGuard)
+  @UseGuards(AuthTokenGuard, RuleAccessGuard)
+  @RULESAccess()
   @Post()
   async create(
     @Body() dto: CreateRuleDto,
     @Headers('user-secret') userSecret: string,
+    @Req() req: any,
   ) {
     if (!userSecret) {
       throw new BadRequestException('user-secret not found in headers');
@@ -50,16 +55,35 @@ export class RulesController {
       throw new BadRequestException('user not found against provided token');
     }
 
-    return this.rulesService.create(dto, user.uuid);
+    return this.rulesService.create(dto, user.uuid, req.permission);
   }
 
+  @UseGuards(RuleAccessGuard)
+  @RULESAccess()
   @Get(':client_id')
   async findAll(
     @Param('client_id') client_id: number,
+    @Headers('user-secret') userSecret: string,
+    @Req() req: any,
     @Query('name') name?: string, // optional query param
     @Query('bu') bu?: number, // optional query param
   ) {
-    return await this.rulesService.findAll(client_id, name, bu);
+    if (!userSecret) {
+      throw new BadRequestException('user-secret not found in headers');
+    }
+
+    const decodedUser: any = jwt.decode(userSecret);
+
+    const user = await this.userRepository.findOne({
+      where: {
+        id: decodedUser.UserId,
+      },
+    });
+
+    if (!user) {
+      throw new BadRequestException('user not found against provided token');
+    }
+    return await this.rulesService.findAll(client_id, name, bu, req.permission);
   }
 
   @Get(':tenant_id/third-party')
@@ -90,11 +114,14 @@ export class RulesController {
     );
   }
 
+  @UseGuards(RuleAccessGuard)
+  @RULESAccess()
   @Put(':uuid')
   async update(
     @Headers('user-secret') userSecret: string,
     @Param('uuid') uuid: string,
     @Body() dto: UpdateRuleDto,
+    @Req() req: any,
   ) {
     if (!userSecret) {
       throw new BadRequestException('user-secret not found in headers');
@@ -112,13 +139,16 @@ export class RulesController {
       throw new BadRequestException('user not found against provided token');
     }
 
-    return this.rulesService.update(uuid, dto, user.uuid);
+    return this.rulesService.update(uuid, dto, user.uuid, req.permission);
   }
 
+  @UseGuards(RuleAccessGuard)
+  @RULESAccess()
   @Delete(':uuid')
   async remove(
     @Headers('user-secret') userSecret: string,
     @Param('uuid') uuid: string,
+    @Req() req: any,
   ) {
     if (!userSecret) {
       throw new BadRequestException('user-secret not found in headers');
@@ -136,6 +166,6 @@ export class RulesController {
       throw new BadRequestException('user not found against provided token');
     }
 
-    return this.rulesService.remove(uuid, user.uuid);
+    return this.rulesService.remove(uuid, user.uuid, req.permission);
   }
 }

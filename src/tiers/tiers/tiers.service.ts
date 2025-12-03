@@ -65,7 +65,17 @@ export class TiersService {
     private readonly openaiService: OpenAIService,
   ) {}
 
-  async create(dto: CreateTierDto, user: string): Promise<Tier> {
+  async create(
+    dto: CreateTierDto,
+    user: string,
+    permission: any,
+  ): Promise<Tier> {
+    if (!permission.canCreateTiers) {
+      throw new BadRequestException(
+        "You don't have permission to access tiers",
+      );
+    }
+
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -108,7 +118,18 @@ export class TiersService {
     }
   }
 
-  async findAll(client_id: number, name: string, userId: number, bu: number) {
+  async findAll(
+    client_id: number,
+    name: string,
+    userId: number,
+    bu: number,
+    permission: any,
+  ) {
+    if (!permission.canViewTiers) {
+      throw new BadRequestException(
+        "You don't have permission to access tiers",
+      );
+    }
     // const ruleTargets = await this.ruleTargetRepository.find({
     //   where: { target_type: 'tier' },
     //   relations: { rule: true },
@@ -348,7 +369,17 @@ export class TiersService {
     };
   }
 
-  async update(id: number, dto: UpdateTierDto, user: string): Promise<Tier> {
+  async update(
+    id: number,
+    dto: UpdateTierDto,
+    user: string,
+    permission: any,
+  ): Promise<Tier> {
+    if (!permission.canEditTiers) {
+      throw new BadRequestException(
+        "You don't have permission to access tiers",
+      );
+    }
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -416,7 +447,16 @@ export class TiersService {
     }
   }
 
-  async remove(id: number, user: string): Promise<{ deleted: boolean }> {
+  async remove(
+    id: number,
+    user: string,
+    permission: any,
+  ): Promise<{ deleted: boolean }> {
+    if (!permission.canDeleteTiers) {
+      throw new BadRequestException(
+        "You don't have permission to access tiers",
+      );
+    }
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();

@@ -11,6 +11,7 @@ import {
   UseGuards,
   BadRequestException,
   Delete,
+  Req,
 } from '@nestjs/common';
 import * as jwt from 'jsonwebtoken';
 import { CampaignsService } from './campaigns.service';
@@ -22,6 +23,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { User } from 'src/users/entities/user.entity';
 import { Repository } from 'typeorm';
 import { BurnPoints, BurnWithCampaignDto } from '../dto/burn.dto';
+import { CampaignAccessGuard } from './campaigns-access.guard';
+import { CAMPAIGNSAccess } from './campaigns-access.decorator';
 
 @Controller('campaigns')
 export class CampaignsController {
@@ -31,9 +34,11 @@ export class CampaignsController {
     private readonly userRepository: Repository<User>,
   ) {}
 
-  @UseGuards(AuthTokenGuard)
+  @UseGuards(AuthTokenGuard, CampaignAccessGuard)
+  @CAMPAIGNSAccess()
   @Post()
   async create(
+    @Req() req: any,
     @Body() dto: CreateCampaignDto,
     @Headers('user-secret') userSecret: string,
   ): Promise<Campaign> {
@@ -53,11 +58,14 @@ export class CampaignsController {
       throw new BadRequestException('user not found against provided token');
     }
 
-    return this.campaignService.create(dto, user.uuid);
+    return this.campaignService.create(dto, user.uuid, req.permission);
   }
 
+  @UseGuards(CampaignAccessGuard)
+  @CAMPAIGNSAccess()
   @Get(':client_id')
   async findAll(
+    @Req() req: any,
     @Param('client_id') client_id: number,
     @Headers('user-secret') userSecret: string,
     @Query('name') name?: string,
@@ -86,6 +94,7 @@ export class CampaignsController {
       user.id,
       page,
       pageSize,
+      req.permission,
     );
   }
 
@@ -120,9 +129,11 @@ export class CampaignsController {
     return campaign;
   }
 
-  @UseGuards(AuthTokenGuard)
+  @UseGuards(AuthTokenGuard, CampaignAccessGuard)
+  @CAMPAIGNSAccess()
   @Put(':id')
   async update(
+    @Req() req: any,
     @Param('id') id: number,
     @Body() dto: UpdateCampaignDto,
     @Headers('user-secret') userSecret: string,
@@ -143,16 +154,23 @@ export class CampaignsController {
       throw new BadRequestException('user not found against provided token');
     }
 
-    const updated = await this.campaignService.update(id, dto, user.uuid);
+    const updated = await this.campaignService.update(
+      id,
+      dto,
+      user.uuid,
+      req.permission,
+    );
     if (!updated) {
       throw new NotFoundException('Campaign not found');
     }
     return updated;
   }
 
-  @UseGuards(AuthTokenGuard)
+  @UseGuards(AuthTokenGuard, CampaignAccessGuard)
+  @CAMPAIGNSAccess()
   @Delete(':id')
   async remove(
+    @Req() req: any,
     @Param('id') id: string,
     @Headers('user-secret') userSecret: string,
   ) {
@@ -172,7 +190,7 @@ export class CampaignsController {
       throw new BadRequestException('user not found against provided token');
     }
 
-    return await this.campaignService.remove(+id, user.uuid);
+    return await this.campaignService.remove(+id, user.uuid, req.permission);
   }
 
   @Post('burn/points')
