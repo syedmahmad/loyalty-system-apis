@@ -39,7 +39,7 @@ export class OfferAccessGuard implements CanActivate {
 
     const request = context.switchToHttp().getRequest();
     const userSecret = request.headers['user-secret'];
-    const clientId = request.headers['Client_id'];
+    const clientId = request.headers['client_id'];
     const client_id = parseInt(clientId);
     // const client_id =
     //   Number(request.params.client_id) || request.body.tenant_id;

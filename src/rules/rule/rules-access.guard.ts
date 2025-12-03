@@ -39,10 +39,14 @@ export class RuleAccessGuard implements CanActivate {
 
     const request = context.switchToHttp().getRequest();
     const userSecret = request.headers['user-secret'];
-    const clientId = request.headers['Client_id'];
+    const clientId = request.headers['client_id'];
     const client_id = parseInt(clientId);
 
-    console.log('RULES_ACCESS_KEY', request.headers);
+    console.log(
+      'RULES_ACCESS_KEY',
+      request.headers['client_id'],
+      request.headers,
+    );
     // const client_id =
     //   Number(request.params.client_id) || request.body.tenant_id;
 
