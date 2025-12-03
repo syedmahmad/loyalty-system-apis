@@ -161,9 +161,9 @@ export class Vehicle {
   @Column({ type: 'varchar', nullable: true })
   ggm_url: string;
 
-  @Column({ type: 'varchar', nullable: true })
-  asking_price: string;
-
   @Column({ type: 'int', default: 0 })
+  asking_price: number;
+
+  @Column({ type: 'tinyint', default: 0 })
   listing_status: number; // 1 = listed, 2 = sold, by default 0
 }
