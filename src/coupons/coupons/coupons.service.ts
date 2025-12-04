@@ -1736,6 +1736,7 @@ export class CouponsService {
 
     if (metadata?.productitems.products?.length) {
       let totalAmount = 0;
+      let isCouponFound = false;
       for (
         let index = 0;
         index <= metadata?.productitems?.products.length - 1;
@@ -1763,6 +1764,7 @@ export class CouponsService {
           });
 
           if (coupons.length) {
+            isCouponFound = true;
             const matchedCoupons = coupons.filter(async (coupon) => {
               const couponType = await this.couponTypeService.findOne(
                 coupon?.coupon_type_id,
@@ -1814,6 +1816,14 @@ export class CouponsService {
           }
         }
       }
+
+      if (!isCouponFound) {
+        throw new NotFoundException(
+          'Failed to earn coupon',
+          'Your item related coupon not found',
+        );
+      }
+
       return {
         message: 'Coupon earned successfully',
         amount: totalAmount,
@@ -2031,9 +2041,10 @@ export class CouponsService {
           expired.push({
             uuid: singleCoupon.uuid,
             code: singleCoupon.code,
-            title: singleCoupon?.locales?.[0].title,
-            description: singleCoupon?.locales?.[0].description,
-            terms_and_conditions: singleCoupon?.locales?.[0].term_and_condition,
+            title: singleCoupon?.locales?.[0]?.title,
+            description: singleCoupon?.locales?.[0]?.description,
+            terms_and_conditions:
+              singleCoupon?.locales?.[0]?.term_and_condition,
             discount: `${singleCoupon.discount_price}${singleCoupon.discount_type === 'fixed' ? ' SAR' : '% Off'}`,
             expiry_date: singleCoupon.date_to,
             services,
@@ -2043,9 +2054,10 @@ export class CouponsService {
           available.push({
             uuid: singleCoupon.uuid,
             code: singleCoupon.code,
-            title: singleCoupon?.locales?.[0].title,
-            description: singleCoupon?.locales?.[0].description,
-            terms_and_conditions: singleCoupon?.locales?.[0].term_and_condition,
+            title: singleCoupon?.locales?.[0]?.title,
+            description: singleCoupon?.locales?.[0]?.description,
+            terms_and_conditions:
+              singleCoupon?.locales?.[0]?.term_and_condition,
             discount: `${singleCoupon.discount_price}${singleCoupon.discount_type === 'fixed' ? ' SAR' : '% Off'}`,
             expiry_date: singleCoupon.date_to,
             services,
