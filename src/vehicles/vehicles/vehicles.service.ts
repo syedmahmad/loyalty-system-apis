@@ -1304,7 +1304,7 @@ export class VehiclesService {
         {
           ggm_url: data.data.myAccountUrl,
           asking_price: body.askingPrice,
-          listing_status: 1, // 1 = listed, 2 = sold, by default 0
+          listing_status: data.data?.vehicleStatus || '',
         },
       );
 
@@ -1337,7 +1337,7 @@ export class VehiclesService {
       );
     }
 
-    vehicle.listing_status = 2; // Sold
+    vehicle.listing_status = ''; // Sold
 
     await this.vehiclesRepository.save(vehicle);
 

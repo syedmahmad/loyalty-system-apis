@@ -164,6 +164,6 @@ export class Vehicle {
   @Column({ type: 'int', default: 0 })
   asking_price: number;
 
-  @Column({ type: 'tinyint', default: 0 })
-  listing_status: number; // 1 = listed, 2 = sold, by default 0
+  @Column({ type: 'varchar', length: 120, default: null })
+  listing_status: string; // 1 = listed, 2 = sold, by default 0
 }
