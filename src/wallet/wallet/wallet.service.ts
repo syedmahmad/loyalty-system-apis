@@ -267,11 +267,17 @@ export class WalletService {
   }
 
   async listWallets(
+    permission: any,
     client_id: number,
     buId?: number,
     page: number = 1,
     pageSize: number = 10,
   ) {
+    if (!permission.canViewWallets) {
+      throw new BadRequestException(
+        "You don't have permission to access wallets",
+      );
+    }
     const take = pageSize;
     const skip = (page - 1) * take;
 
@@ -297,14 +303,24 @@ export class WalletService {
     };
   }
 
-  async getSettingsByBusinessUnit(buId: number) {
+  async getSettingsByBusinessUnit(buId: number, permission: any) {
+    if (!permission.canViewWalletSettings) {
+      throw new BadRequestException(
+        "You don't have permission to access wallet settings",
+      );
+    }
     return this.settingsRepo.findOne({
       where: { business_unit: { id: buId } },
       relations: ['business_unit', 'created_by'],
     });
   }
 
-  async getAllWalltetSettings(client_id: number) {
+  async getAllWalltetSettings(client_id: number, permission: any) {
+    if (!permission.canViewWalletSettings) {
+      throw new BadRequestException(
+        "You don't have permission to access wallet settings",
+      );
+    }
     return this.settingsRepo.find({
       where: {
         tenant: { id: client_id },
@@ -313,7 +329,16 @@ export class WalletService {
     });
   }
 
-  async saveOrUpdateSettings(client_id: number, dto: CreateWalletSettingsDto) {
+  async saveOrUpdateSettings(
+    client_id: number,
+    dto: CreateWalletSettingsDto,
+    permission: any,
+  ) {
+    if (!permission.canCreateWalletSettings) {
+      throw new BadRequestException(
+        "You don't have permission to create wallet settings",
+      );
+    }
     let setting = await this.settingsRepo.findOne({
       where: { business_unit: { id: dto.business_unit_id } },
     });

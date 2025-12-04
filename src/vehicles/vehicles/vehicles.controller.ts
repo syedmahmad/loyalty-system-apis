@@ -1,5 +1,18 @@
-import { Body, Controller, Get, Headers, Param, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Headers,
+  Param,
+  Patch,
+  Post,
+} from '@nestjs/common';
 import { VehiclesService } from './vehicles.service';
+import {
+  CreateCarListingDto,
+  MarkVehicleSoldDto,
+} from '../dto/create-car-listing.dto';
 
 @Controller('vehicles')
 export class VehiclesController {
@@ -95,5 +108,25 @@ export class VehiclesController {
       tenantId,
       businessUnitId,
     });
+  }
+
+  @Post('/self-listing')
+  async addSelfListingVehicle(@Body() body: CreateCarListingDto) {
+    return await this.service.selfCarListing(body);
+  }
+
+  @Patch('mark-sold')
+  async markVehicleSold(@Body() dto: MarkVehicleSoldDto) {
+    return this.service.markAsSold(dto);
+  }
+
+  @Delete('delete-self-listing')
+  async deleteVehicleFromGogo(@Body() dto: MarkVehicleSoldDto) {
+    return this.service.removeVehicleFromGogoMotor(dto);
+  }
+
+  @Patch('update-self-listing-details')
+  async updateSelfListingDetails(@Body() dto: MarkVehicleSoldDto) {
+    return this.service.updateVehicleDetailsOnGogoMotor(dto);
   }
 }

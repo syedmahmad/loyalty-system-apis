@@ -87,7 +87,16 @@ export class CampaignsService {
     private readonly dataSource: DataSource,
   ) {}
 
-  async create(dto: CreateCampaignDto, user: string): Promise<Campaign> {
+  async create(
+    dto: CreateCampaignDto,
+    user: string,
+    permission: any,
+  ): Promise<Campaign> {
+    if (!permission.canCreateCampaigns) {
+      throw new BadRequestException(
+        "You don't have permission to create offers",
+      );
+    }
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -220,8 +229,14 @@ export class CampaignsService {
     userId: number,
     page: number = 1,
     pageSize: number = 10,
+    permission: any,
     langCode: string = 'en',
   ) {
+    if (!permission.canViewCampaigns) {
+      throw new BadRequestException(
+        "You don't have permission to create offers",
+      );
+    }
     const take = pageSize;
     const skip = (page - 1) * take;
 
@@ -244,8 +259,9 @@ export class CampaignsService {
 
     const hasGlobalAccess = privileges.some(
       (p) =>
-        p.module === 'businessUnits' &&
-        p.name === `${tenantName}_All Business Unit`,
+        (p.module === 'businessUnits' &&
+          p.name === `${tenantName}_All Business Unit`) ||
+        (p.module === 'tenants' && p.name !== 'all_tenants'),
     );
 
     // ---------- BASE QUERY ----------
@@ -506,7 +522,13 @@ export class CampaignsService {
     id: number,
     dto: UpdateCampaignDto,
     user: string,
+    permission: any,
   ): Promise<Campaign> {
+    if (!permission.canEditCampaigns) {
+      throw new BadRequestException(
+        "You don't have permission to create offers",
+      );
+    }
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -724,7 +746,16 @@ export class CampaignsService {
     }
   }
 
-  async remove(id: number, user: string): Promise<{ deleted: boolean }> {
+  async remove(
+    id: number,
+    user: string,
+    permission: any,
+  ): Promise<{ deleted: boolean }> {
+    if (!permission.canDeleteCampaigns) {
+      throw new BadRequestException(
+        "You don't have permission to create offers",
+      );
+    }
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
