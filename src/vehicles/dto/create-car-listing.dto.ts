@@ -6,6 +6,7 @@ import {
   IsArray,
   IsUUID,
   IsDateString,
+  IsOptional,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -13,34 +14,43 @@ export class CarListingUserDto {
   @IsUUID()
   customer_id: string;
 
+  @IsOptional()
   @IsString()
-  phoneNumber: string;
+  phoneNumber?: string;
 
+  @IsOptional()
   @IsString()
-  firstName: string;
+  firstName?: string;
 
+  @IsOptional()
   @IsString()
-  lastName: string;
+  lastName?: string;
 
+  @IsOptional()
   @IsString()
-  emailAddress: string;
+  emailAddress?: string;
 
+  @IsOptional()
   @IsString()
-  gender: string;
+  gender?: string;
 
+  @IsOptional()
   @IsDateString()
-  dateOfBirth: string;
+  dateOfBirth?: string;
 }
 
 export class CarListingImageDto {
+  @IsOptional()
   @IsString()
-  fileName: string;
+  fileName?: string;
 
+  @IsOptional()
   @IsString()
-  imageUrl: string;
+  imageUrl?: string;
 
+  @IsOptional()
   @IsBoolean()
-  isProfileImage: boolean;
+  isProfileImage?: boolean;
 }
 
 export class CreateCarListingDto {
