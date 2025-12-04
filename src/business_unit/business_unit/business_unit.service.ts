@@ -37,7 +37,9 @@ export class BusinessUnitsService {
     // check for global business unit access for this tenant
     const hasGlobalBusinessUnitAccess = privileges.some(
       (p) =>
-        p.module === 'businessUnits' && p.name.includes('_All Business Unit'),
+        (p.module === 'businessUnits' &&
+          p.name.includes('_All Business Unit')) ||
+        (p.module === 'tenants' && p.name !== 'all_tenants'),
     );
 
     const isSuperAdmin = privileges.some((p: any) => p.name === 'all_tenants');
@@ -101,6 +103,10 @@ export class BusinessUnitsService {
 
     const isSuperAdmin = privileges.some((p: any) => p.name === 'all_tenants');
 
+    const hasBusinessUnitModule = privileges.some(
+      (p: any) => p.module === 'businessUnits',
+    );
+
     // check for global business unit access for this tenant
     const hasGlobalBusinessUnitAccess = privileges.some(
       (p) =>
@@ -114,6 +120,26 @@ export class BusinessUnitsService {
         where: {
           status: 1,
           tenant_id: client_id,
+          ...optionalWhereClause,
+        },
+      });
+    }
+
+    const tenantSpecificAccessNames = privileges
+      .filter((p) => p.module === 'tenants' && p.name !== 'all_tenants')
+      .map((p) => p.name);
+
+    const allTenants = await this.tenantRepository.find({
+      where: { status: 1, name: In(tenantSpecificAccessNames) },
+    });
+
+    if (allTenants.length > 0 && !hasBusinessUnitModule) {
+      const tenantIds = allTenants.map((t) => t.id);
+      // if user has access to multiple tenants, return business units across those tenants
+      return await this.repo.find({
+        where: {
+          status: 1,
+          tenant_id: In(tenantIds),
           ...optionalWhereClause,
         },
       });

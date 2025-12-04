@@ -7,6 +7,8 @@ import {
   Param,
   Query,
   BadRequestException,
+  UseGuards,
+  Req,
 } from '@nestjs/common';
 import { WalletService } from './wallet.service';
 import { CreateWalletDto } from '../dto/create-wallet.dto';
@@ -17,6 +19,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as jwt from 'jsonwebtoken';
 import { CreateWalletOrderDto } from '../dto/create-wallet-order.dto';
+import { WalletAccessGuard } from './wallets-access.guard';
+import { WALLETSAccess } from './wallets-access.decorator';
 
 @Controller('wallets')
 export class WalletController {
@@ -70,32 +74,55 @@ export class WalletController {
     );
   }
 
+  @UseGuards(WalletAccessGuard)
+  @WALLETSAccess()
   @Get(':client_id')
   async listWallets(
+    @Req() req: any,
     @Param('client_id') client_id: number,
     @Query('business_unit') buId?: number,
     @Query('page') page?: number,
     @Query('pageSize') pageSize?: number,
   ) {
-    return this.walletService.listWallets(client_id, buId, page, pageSize);
+    return this.walletService.listWallets(
+      req.permission,
+      client_id,
+      buId,
+      page,
+      pageSize,
+    );
   }
 
+  @UseGuards(WalletAccessGuard)
+  @WALLETSAccess()
   @Get('settings/:businessUnitId')
-  async getSettings(@Param('businessUnitId') id: number) {
-    return this.walletService.getSettingsByBusinessUnit(id);
+  async getSettings(@Req() req: any, @Param('businessUnitId') id: number) {
+    return this.walletService.getSettingsByBusinessUnit(id, req.permission);
   }
 
+  @UseGuards(WalletAccessGuard)
+  @WALLETSAccess()
   @Get('all-settings/:client_id')
-  async getAllWalltetSettings(@Param('client_id') client_id: number) {
-    return this.walletService.getAllWalltetSettings(client_id);
+  async getAllWalltetSettings(
+    @Req() req: any,
+    @Param('client_id') client_id: number,
+  ) {
+    return this.walletService.getAllWalltetSettings(client_id, req.permission);
   }
 
+  @UseGuards(WalletAccessGuard)
+  @WALLETSAccess()
   @Post('settings/:client_id')
   async saveSettings(
+    @Req() req: any,
     @Param('client_id') client_id: number,
     @Body() dto: CreateWalletSettingsDto,
   ) {
-    return this.walletService.saveOrUpdateSettings(client_id, dto);
+    return this.walletService.saveOrUpdateSettings(
+      client_id,
+      dto,
+      req.permission,
+    );
   }
 
   @Post('create-transaction')

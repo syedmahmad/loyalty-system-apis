@@ -9,14 +9,13 @@ import * as jwt from 'jsonwebtoken';
 import axios from 'axios';
 import { v4 as uuidv4 } from 'uuid';
 import { User } from '../entities/user.entity';
-import { OciService } from 'src/oci/oci.service';
+import { encrypt } from 'src/helpers/encryption';
 
 @Injectable()
 export class UsersService {
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
-    private readonly ociService: OciService,
   ) {}
 
   async validateToken({ token }: { token: string }): Promise<any> {
@@ -34,7 +33,7 @@ export class UsersService {
         .map((domain) => domain.trim().toLowerCase());
       const userEmail = decodedUser.email || decodedUser.preferred_username;
 
-      const encryptedEmail = await this.ociService.encryptData(userEmail);
+      const encryptedEmail = await encrypt(userEmail);
 
       const isValid = ALLOWED_DOMAINS.some((domain) =>
         userEmail.endsWith(domain),
@@ -51,9 +50,9 @@ export class UsersService {
       });
 
       const privileges = await this.handleverify_with_access(userEmail);
-      const encryptedPhoneNumber = await this.ociService.encryptData(
-        decodedUser?.phone_number,
-      );
+      const encryptedPhoneNumber = decodedUser?.phone_number
+        ? encrypt(decodedUser?.phone_number)
+        : decodedUser?.phone_number;
 
       if (!user) {
         user = this.userRepository.create({
