@@ -8,7 +8,7 @@ import * as fastcsv from 'fast-csv';
 import { v4 as uuidv4 } from 'uuid';
 import { nanoid } from 'nanoid';
 import { InjectRepository, InjectDataSource } from '@nestjs/typeorm';
-import { Repository, DataSource, ILike } from 'typeorm';
+import { Repository, DataSource } from 'typeorm';
 import { CustomerSegment } from '../entities/customer-segment.entity';
 import { CreateCustomerSegmentDto } from '../dto/create.dto';
 import { UpdateCustomerSegmentDto } from '../dto/update-customer-segment.dto';

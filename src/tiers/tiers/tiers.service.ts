@@ -111,6 +111,7 @@ export class TiersService {
     userId: number,
     bu: number,
     permission: any,
+    langCode = 'en',
   ) {
     if (!permission.canViewTiers) {
       throw new BadRequestException(

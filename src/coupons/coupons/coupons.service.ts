@@ -28,6 +28,7 @@ import {
 } from 'src/wallet/entities/user-coupon.entity';
 import { WalletService } from 'src/wallet/wallet/wallet.service';
 import {
+  Brackets,
   DataSource,
   ILike,
   In,
@@ -394,7 +395,8 @@ export class CouponsService {
   //   };
   // }
 
-  async findAllWithPermissions(
+  /*
+  async findAllWithPermissionsOld(
     permissions: any,
     client_id: number,
     name?: string,
@@ -486,6 +488,110 @@ export class CouponsService {
     // -----------------------------------------------------
     // 5. Return response format
     // -----------------------------------------------------
+    return {
+      data,
+      total,
+      page,
+      pageSize,
+      totalPages: Math.ceil(total / pageSize),
+    };
+  }
+*/
+
+  async findAllWithPermissions(
+    permissions: any,
+    client_id: number,
+    name?: string,
+    limit?: number,
+    bu?: number,
+    page: number = 1,
+    pageSize: number = 10,
+    langCode: string = 'en',
+  ) {
+    const take = pageSize;
+    const skip = (page - 1) * take;
+
+    const {
+      allowedTenantIds,
+      allowedBusinessUnitIds,
+      allowAllTenants,
+      allowAllBU,
+      canViewCoupons,
+    } = permissions;
+
+    if (!canViewCoupons) {
+      throw new ForbiddenException(
+        'User does not have permission to access the coupons',
+      );
+    }
+
+    if (!allowAllTenants && !allowedTenantIds.includes(client_id)) {
+      throw new ForbiddenException(
+        'User does not have permission to access this tenant',
+      );
+    }
+
+    // -------------------------------------
+    // Base QueryBuilder
+    // -------------------------------------
+    const qb = this.couponsRepository
+      .createQueryBuilder('coupon')
+      .leftJoinAndSelect('coupon.business_unit', 'business_unit')
+      .leftJoinAndSelect('coupon.locales', 'locale_coupon')
+      .leftJoinAndSelect('locale_coupon.language', 'language')
+      .leftJoinAndSelect('coupon.customerSegments', 'customerSegments')
+      .leftJoinAndSelect('customerSegments.segment', 'segment')
+      .where('coupon.tenant_id = :tenantId', { tenantId: client_id })
+      .andWhere('coupon.status != :deleted', { deleted: 2 });
+
+    // -------------------------------------
+    // Business Unit filtering
+    // -------------------------------------
+    if (bu && !isNaN(Number(bu))) {
+      // frontend is explicitly requesting BU
+      if (!allowAllBU && !allowedBusinessUnitIds.includes(Number(bu))) {
+        throw new ForbiddenException(
+          'User does not have permission for this business unit',
+        );
+      }
+
+      qb.andWhere('coupon.business_unit_id = :bu', { bu: Number(bu) });
+    } else {
+      // no frontend BU → apply permission-based BU filtering
+      if (!allowAllBU) {
+        qb.andWhere('coupon.business_unit_id IN (:...allowedBU)', {
+          allowedBU: allowedBusinessUnitIds,
+        });
+      }
+    }
+
+    if (langCode) {
+      qb.andWhere('language.code = :langCode', { langCode });
+    }
+
+    // -------------------------------------
+    // Name search
+    // -------------------------------------
+    if (name && name.trim() !== '') {
+      qb.andWhere(
+        `(coupon.code LIKE :search OR locale_coupon.title LIKE :search)`,
+        { search: `%${name}%` },
+      );
+    }
+
+    // -------------------------------------
+    // Pagination + Sorting
+    // -------------------------------------
+    qb.orderBy('coupon.created_at', 'DESC').take(take).skip(skip);
+
+    // -------------------------------------
+    // Execute query
+    // -------------------------------------
+    const [data, total] = await qb.getManyAndCount();
+
+    // -------------------------------------
+    // Result Format
+    // -------------------------------------
     return {
       data,
       total,
