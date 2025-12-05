@@ -6,45 +6,33 @@ import {
 } from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import axios from 'axios';
-import * as dayjs from 'dayjs';
-import { v4 as uuidv4 } from 'uuid';
-import * as fs from 'fs';
-import * as fastcsv from 'fast-csv';
 import * as csv from 'csv-parser';
-import * as path from 'path';
+import * as dayjs from 'dayjs';
+import * as fastcsv from 'fast-csv';
+import * as fs from 'fs';
+import { v4 as uuidv4 } from 'uuid';
 // import { v4 as uuidv4 } from 'uuid';
 import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
+import { CampaignCoupons } from 'src/campaigns/entities/campaign-coupon.entity';
+import { CampaignCustomerSegment } from 'src/campaigns/entities/campaign-customer-segments.entity';
+import { Campaign } from 'src/campaigns/entities/campaign.entity';
 import { CouponTypeService } from 'src/coupon_type/coupon_type/coupon_type.service';
+import { CustomerSegmentMember } from 'src/customer-segment/entities/customer-segment-member.entity';
 import { CustomerSegment } from 'src/customer-segment/entities/customer-segment.entity';
 import { CustomerService } from 'src/customers/customer.service';
 import { CustomerActivity } from 'src/customers/entities/customer-activity.entity';
 import { Customer } from 'src/customers/entities/customer.entity';
+import { LanguageEntity } from 'src/master/language/entities/language.entity';
+import { OciService } from 'src/oci/oci.service';
+import { OpenAIService } from 'src/openai/openai/openai.service';
 import { Tenant } from 'src/tenants/entities/tenant.entity';
+import { Tier } from 'src/tiers/entities/tier.entity';
 import { TiersService } from 'src/tiers/tiers/tiers.service';
 import { User } from 'src/users/entities/user.entity';
 import {
   CouponStatus,
   UserCoupon,
 } from 'src/wallet/entities/user-coupon.entity';
-import { WalletService } from 'src/wallet/wallet/wallet.service';
-import {
-  Brackets,
-  DataSource,
-  ILike,
-  In,
-  LessThanOrEqual,
-  MoreThanOrEqual,
-  Not,
-  Repository,
-} from 'typeorm';
-import { CreateCouponDto } from '../dto/create-coupon.dto';
-import { UpdateCouponDto } from '../dto/update-coupon.dto';
-import { CouponCustomerSegment } from '../entities/coupon-customer-segments.entity';
-import { Coupon } from '../entities/coupon.entity';
-import { Campaign } from 'src/campaigns/entities/campaign.entity';
-import { CampaignCustomerSegment } from 'src/campaigns/entities/campaign-customer-segments.entity';
-import { CustomerSegmentMember } from 'src/customer-segment/entities/customer-segment-member.entity';
-import { CampaignCoupons } from 'src/campaigns/entities/campaign-coupon.entity';
 import { WalletOrder } from 'src/wallet/entities/wallet-order.entity';
 import { WalletSettings } from 'src/wallet/entities/wallet-settings.entity';
 import {
@@ -52,15 +40,25 @@ import {
   WalletTransactionStatus,
   WalletTransactionType,
 } from 'src/wallet/entities/wallet-transaction.entity';
-import { OciService } from 'src/oci/oci.service';
+import { WalletService } from 'src/wallet/wallet/wallet.service';
+import { Readable } from 'stream';
+import {
+  DataSource,
+  ILike,
+  In,
+  LessThanOrEqual,
+  MoreThanOrEqual,
+  Not,
+  Repository
+} from 'typeorm';
+import { CreateCouponDto } from '../dto/create-coupon.dto';
+import { UpdateCouponDto } from '../dto/update-coupon.dto';
+import { CouponCustomerSegment } from '../entities/coupon-customer-segments.entity';
+import { CouponLocaleEntity } from '../entities/coupon-locale.entity';
 import { CouponSyncLog } from '../entities/coupon-sync-logs.entity';
 import { CouponUsage } from '../entities/coupon-usages.entity';
+import { Coupon } from '../entities/coupon.entity';
 import { CouponType, CouponTypeName } from '../type/types';
-import { Tier } from 'src/tiers/entities/tier.entity';
-import { LanguageEntity } from 'src/master/language/entities/language.entity';
-import { CouponLocaleEntity } from '../entities/coupon-locale.entity';
-import { OpenAIService } from 'src/openai/openai/openai.service';
-import { Readable } from 'stream';
 
 @Injectable()
 export class CouponsService {
@@ -2000,6 +1998,7 @@ export class CouponsService {
 
     if (metadata?.productitems.products?.length) {
       let totalAmount = 0;
+      let isCouponFound = false;
       for (
         let index = 0;
         index <= metadata?.productitems?.products.length - 1;
@@ -2027,6 +2026,7 @@ export class CouponsService {
           });
 
           if (coupons.length) {
+            isCouponFound = true;
             const matchedCoupons = coupons.filter(async (coupon) => {
               const couponType = await this.couponTypeService.findOne(
                 coupon?.coupon_type_id,
@@ -2078,6 +2078,14 @@ export class CouponsService {
           }
         }
       }
+
+      if (!isCouponFound) {
+        throw new NotFoundException(
+          'Failed to earn coupon',
+          'Your item related coupon not found',
+        );
+      }
+
       return {
         message: 'Coupon earned successfully',
         amount: totalAmount,
@@ -2295,9 +2303,10 @@ export class CouponsService {
           expired.push({
             uuid: singleCoupon.uuid,
             code: singleCoupon.code,
-            title: singleCoupon?.locales?.[0].title,
-            description: singleCoupon?.locales?.[0].description,
-            terms_and_conditions: singleCoupon?.locales?.[0].term_and_condition,
+            title: singleCoupon?.locales?.[0]?.title,
+            description: singleCoupon?.locales?.[0]?.description,
+            terms_and_conditions:
+              singleCoupon?.locales?.[0]?.term_and_condition,
             discount: `${singleCoupon.discount_price}${singleCoupon.discount_type === 'fixed' ? ' SAR' : '% Off'}`,
             expiry_date: singleCoupon.date_to,
             services,
@@ -2307,9 +2316,10 @@ export class CouponsService {
           available.push({
             uuid: singleCoupon.uuid,
             code: singleCoupon.code,
-            title: singleCoupon?.locales?.[0].title,
-            description: singleCoupon?.locales?.[0].description,
-            terms_and_conditions: singleCoupon?.locales?.[0].term_and_condition,
+            title: singleCoupon?.locales?.[0]?.title,
+            description: singleCoupon?.locales?.[0]?.description,
+            terms_and_conditions:
+              singleCoupon?.locales?.[0]?.term_and_condition,
             discount: `${singleCoupon.discount_price}${singleCoupon.discount_type === 'fixed' ? ' SAR' : '% Off'}`,
             expiry_date: singleCoupon.date_to,
             services,
@@ -3302,6 +3312,7 @@ export class CouponsService {
 
     let migratedCount = 0;
     let skipCount = 0;
+    const generateId = () => Date.now() + Math.floor(Math.random() * 1000);
     for (const row of coupons) {
       try {
         const existing = await this.couponRepo.findOne({
@@ -3312,6 +3323,18 @@ export class CouponsService {
           skipCount++;
           continue;
         }
+
+        const conditions: any = [
+          {
+            id: generateId(),
+            type: 'Total Purchase Amount',
+            operator: '>=',
+            value: existing.min_transaction_amount,
+          },
+        ];
+        existing.coupon_type_id = 10;
+        existing.conditions = conditions;
+        await this.couponRepo.save(existing);
 
         const titleEn = row?.title;
         const descriptionEn = row?.description;

@@ -65,7 +65,7 @@ import { OpenAIService } from 'src/openai/openai/openai.service';
 import { BUSINESS_UNITS_WITH_UUID } from './type/type';
 import axios from 'axios';
 import { DeviceToken } from 'src/petromin-it/notification/entities/device-token.entity';
-import { decrypt } from 'src/helpers/encryption';
+import { decrypt, encrypt } from 'src/helpers/encryption';
 
 @Injectable()
 export class CustomerService {
@@ -211,6 +211,8 @@ export class CustomerService {
         customerDto.phone,
       );
 
+      const hashedPhone = encrypt(customerDto.phone);
+
       // Create new customer entity
       const customer = this.customerRepo.create({
         ...customerDto,
@@ -220,6 +222,7 @@ export class CustomerService {
         business_unit: businessUnit,
         tenant: tenant,
         uuid: customerUuid,
+        hashed_number: hashedPhone,
       });
       const saved = await this.customerRepo.save(customer);
 
