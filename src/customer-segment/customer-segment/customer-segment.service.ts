@@ -309,12 +309,7 @@ export class CustomerSegmentsService {
     }
   }
 
-  async bulkUpload(
-    filePath: string,
-    body: CreateCustomerSegmentDto,
-    user: string,
-    permission: any,
-  ) {
+  async bulkUpload(filePath: string, body: any, user: string, permission: any) {
     if (!permission.canCreateCustomerSegments) {
       throw new BadRequestException(
         "You don't have access to create customer segment",
@@ -328,17 +323,26 @@ export class CustomerSegmentsService {
       queryRunner.data = { user };
       const repo = queryRunner.manager.getRepository(CustomerSegment);
 
+      const { locales, id, ...rest } = body;
+      const parsedLocales =
+        typeof locales === 'string' ? JSON.parse(locales) : locales;
+
       // ✅ Create segment
       const segment = repo.create({
-        ...body,
+        ...(id && { id }),
+        ...rest,
         status: 1,
+        locales: parsedLocales?.map((locale) => ({
+          language: { id: locale.languageId },
+          name: locale.name,
+          description: locale.description,
+        })) as any,
       });
 
-      const savedSegment = await repo.save(segment);
+      const savedSegment: any = await repo.save(segment);
       await queryRunner.commitTransaction();
 
       const customers: any[] = [];
-
       await new Promise<void>((resolve, reject) => {
         fs.createReadStream(filePath)
           .pipe(fastcsv.parse({ headers: true }))
