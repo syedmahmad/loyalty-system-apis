@@ -157,4 +157,13 @@ export class Vehicle {
 
   @Column({ type: 'json', nullable: true })
   car_value: any;
+
+  @Column({ type: 'varchar', nullable: true })
+  ggm_url: string;
+
+  @Column({ type: 'int', default: 0 })
+  asking_price: number;
+
+  @Column({ type: 'varchar', length: 120, default: null })
+  listing_status: string; // 1 = listed, 2 = sold, by default 0
 }

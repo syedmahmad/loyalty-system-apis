@@ -9,6 +9,8 @@ import { UserCoupon } from './entities/user-coupon.entity';
 import { WalletSettings } from './entities/wallet-settings.entity';
 import { User } from 'src/users/entities/user.entity';
 import { Referral } from './entities/referrals.entity';
+import { Tenant } from 'src/tenants/entities/tenant.entity';
+import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
 
 @Module({
   imports: [
@@ -20,6 +22,8 @@ import { Referral } from './entities/referrals.entity';
       WalletSettings,
       User,
       WalletOrder,
+      Tenant,
+      BusinessUnit,
     ]),
   ],
   controllers: [WalletController],

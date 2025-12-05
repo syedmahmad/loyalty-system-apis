@@ -28,6 +28,7 @@ import {
 } from 'src/wallet/entities/user-coupon.entity';
 import { WalletService } from 'src/wallet/wallet/wallet.service';
 import {
+  Brackets,
   DataSource,
   ILike,
   In,
@@ -142,7 +143,24 @@ export class CouponsService {
     private readonly openAIService: OpenAIService,
   ) {}
 
-  async create(dto: CreateCouponDto, user: string) {
+  async create(dto: CreateCouponDto, user: string, permissions: any) {
+    const userInfo = await this.userRepository.findOne({
+      where: { uuid: user },
+    });
+
+    if (!userInfo) {
+      throw new BadRequestException('User not found against user-token');
+    }
+
+    // Use the guard's permission object
+    const canCreateCoupons = permissions?.canCreateCoupons;
+
+    if (!canCreateCoupons) {
+      throw new ForbiddenException(
+        "User doesn't have permission to create coupons",
+      );
+    }
+
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -200,20 +218,15 @@ export class CouponsService {
         if (customerFromSegments.length) {
           const userCoupons: UserCoupon[] = [];
 
-          // Loop through each customer that belongs to the segments
           for (let index = 0; index < customerFromSegments.length; index++) {
             const eachCustomer = customerFromSegments[index];
 
-            // Ensure the customer exists in the customer table
             const customer = await this.customerRepo.findOne({
               where: { id: eachCustomer.customer_id, status: 1 },
               relations: ['business_unit'],
             });
 
-            // Skip if the customer does not exist
-            if (!customer) {
-              continue;
-            }
+            if (!customer) continue;
 
             const userCoupon = this.userCouponRepo.create({
               coupon_code: savedCoupon.code,
@@ -227,7 +240,6 @@ export class CouponsService {
             userCoupons.push(userCoupon);
           }
 
-          // Save all the created UserCoupon in one go (bulk insert)
           if (userCoupons.length) {
             await queryRunner.manager.save(UserCoupon, userCoupons);
           }
@@ -244,12 +256,152 @@ export class CouponsService {
     }
   }
 
-  async findAll(
+  // async findAll(
+  //   client_id: number,
+  //   name: string,
+  //   limit: number,
+  //   userId: number,
+  //   business_unit_id: number,
+  //   page: number = 1,
+  //   pageSize: number = 10,
+  // ) {
+  //   const take = pageSize;
+  //   const skip = (page - 1) * take;
+
+  //   const user = await this.userRepository.findOne({ where: { id: userId } });
+  //   if (!user) {
+  //     throw new BadRequestException('User not found against user-token');
+  //   }
+
+  //   const privileges: any[] = user.user_privileges || [];
+
+  //   const hasGlobalCouponAccess = privileges.some(
+  //     (p: any) =>
+  //       // 1. Specific tenant access
+  //       (p.module === 'tenants' && p?.name !== 'all_tenants') ||
+  //       // 2. Specific business unit access
+  //       (p.module === 'businessUnits' &&
+  //         p?.name.startsWith(`${tenantName}_`) &&
+  //         p?.name !== `${tenantName}_All Business Unit`) ||
+  //       // 3. Global access
+  //       p?.name === 'all_tenants' ||
+  //       p?.name?.includes('_All Business Unit') ||
+  //       (p.module === 'coupons_module' && p?.name?.includes('view_coupons')),
+  //   );
+
+  //   if (!hasGlobalCouponAccess) {
+  //     throw new ForbiddenException(
+  //       "User doesn't have permission to get coupons",
+  //     );
+  //   }
+
+  //   const tenant = await this.tenantRepository.findOne({
+  //     where: { id: client_id },
+  //   });
+  //   if (!tenant) {
+  //     throw new BadRequestException('Tenant not found');
+  //   }
+
+  //   const tenantName = tenant.name;
+
+  //   const isSuperAdmin = privileges.some((p: any) => p.name === 'all_tenants');
+
+  //   const hasGlobalAccess = privileges.some(
+  //     (p) =>
+  //       p.module === 'businessUnits' &&
+  //       p.name === `${tenantName}_All Business Unit`,
+  //   );
+
+  //   const baseConditions = {
+  //     status: Not(2),
+  //     tenant_id: client_id,
+  //     ...(business_unit_id &&
+  //     typeof business_unit_id === 'string' &&
+  //     business_unit_id !== '1'
+  //       ? { business_unit_id }
+  //       : {}),
+  //   };
+  //   let whereClause = {};
+
+  //   if (hasGlobalAccess || isSuperAdmin) {
+  //     whereClause = name
+  //       ? [
+  //           { ...baseConditions, code: ILike(`%${name}%`) },
+  //           { ...baseConditions, coupon_title: ILike(`%${name}%`) },
+  //         ]
+  //       : [baseConditions];
+  //   } else {
+  //     const accessibleBusinessUnitNames = privileges
+  //       .filter(
+  //         (p) =>
+  //           p.module === 'businessUnits' &&
+  //           p.name.startsWith(`${tenantName}_`) &&
+  //           p.name !== `${tenantName}_All Business Unit`,
+  //       )
+  //       .map((p) => p.name.replace(`${tenantName}_`, ''));
+
+  //     const businessUnits = await this.businessUnitRepository.find({
+  //       where: {
+  //         status: 1,
+  //         tenant_id: client_id,
+  //         name: In(accessibleBusinessUnitNames),
+  //       },
+  //     });
+
+  //     const availableBusinessUnitIds = businessUnits.map((unit) => unit.id);
+
+  //     const [data, total] = await this.couponsRepository.findAndCount({
+  //       where: {
+  //         ...whereClause,
+  //         ...(business_unit_id &&
+  //         typeof business_unit_id === 'string' &&
+  //         business_unit_id !== '1'
+  //           ? { business_unit_id: business_unit_id }
+  //           : { business_unit: In(availableBusinessUnitIds) }),
+  //       },
+  //       relations: { business_unit: true },
+  //       order: { created_at: 'DESC' },
+  //       take,
+  //       skip,
+  //     });
+
+  //     return {
+  //       data,
+  //       total,
+  //       page,
+  //       pageSize,
+  //       totalPages: Math.ceil(total / pageSize),
+  //     };
+  //   }
+
+  //   const [data, total] = await this.couponsRepository.findAndCount({
+  //     where: whereClause,
+  //     relations: [
+  //       'business_unit',
+  //       'customerSegments',
+  //       'customerSegments.segment',
+  //     ],
+  //     order: { created_at: 'DESC' },
+  //     take,
+  //     skip,
+  //   });
+
+  //   return {
+  //     data,
+  //     total,
+  //     page,
+  //     pageSize,
+  //     totalPages: Math.ceil(total / pageSize),
+  //   };
+  // }
+
+  /*
+  async findAllWithPermissionsOld(
+    permissions: any,
     client_id: number,
-    name: string,
-    limit: number,
-    userId: number,
-    business_unit_id: number,
+    name?: string,
+    limit?: number,
+    bu?: number,
     page: number = 1,
     pageSize: number = 10,
     langCode: string = 'en',
@@ -257,100 +409,189 @@ export class CouponsService {
     const take = pageSize;
     const skip = (page - 1) * take;
 
-    const user = await this.userRepository.findOne({ where: { id: userId } });
-    if (!user) {
-      throw new BadRequestException('User not found against user-token');
+    const {
+      allowedTenantIds,
+      allowedBusinessUnitIds,
+      allowAllTenants,
+      allowAllBU,
+      canViewCoupons,
+    } = permissions;
+
+    if (!canViewCoupons) {
+      throw new ForbiddenException(
+        'User does not have permission to access the coupons',
+      );
     }
 
-    const privileges: any[] = user.user_privileges || [];
+    if (!allowAllTenants && !allowedTenantIds.includes(client_id)) {
+      // -----------------------------------------------------
+      // 1. Tenant filtering
+      // -----------------------------------------------------
+      throw new ForbiddenException(
+        'User does not have permission to access this tenant',
+      );
+    }
 
-    const tenant = await this.tenantRepository.findOne({
-      where: { id: client_id },
+    const baseWhere: any = {
+      tenant_id: client_id,
+      status: Not(2),
+    };
+
+    // -----------------------------------------------------
+    // 2. Resolve Business Unit filtering
+    // -----------------------------------------------------
+
+    // Priority rule: If frontend explicitly sends BU filter → apply only if allowed
+    if (bu && !isNaN(Number(bu))) {
+      if (!allowAllBU && !allowedBusinessUnitIds.includes(Number(bu))) {
+        throw new ForbiddenException(
+          'User does not have permission for this business unit',
+        );
+      }
+
+      baseWhere.business_unit_id = Number(bu);
+    } else {
+      // No BU filter from frontend → apply internal permissions
+      if (!allowAllBU) {
+        baseWhere.business_unit_id = In(allowedBusinessUnitIds);
+      }
+      // else allow all BUs under that tenant
+    }
+
+    // -----------------------------------------------------
+    // 3. Name search
+    // -----------------------------------------------------
+    let where: any = baseWhere;
+
+    if (name) {
+      where = [
+        { ...baseWhere, code: ILike(`%${name}%`) },
+        { ...baseWhere, coupon_title: ILike(`%${name}%`) },
+      ];
+    }
+
+    // -----------------------------------------------------
+    // 4. Fetch results
+    // -----------------------------------------------------
+    const [data, total] = await this.couponsRepository.findAndCount({
+      where,
+      relations: [
+        'business_unit',
+        'customerSegments',
+        'customerSegments.segment',
+      ],
+      order: { created_at: 'DESC' },
+      take,
+      skip,
     });
-    if (!tenant) {
-      throw new BadRequestException('Tenant not found');
+
+    // -----------------------------------------------------
+    // 5. Return response format
+    // -----------------------------------------------------
+    return {
+      data,
+      total,
+      page,
+      pageSize,
+      totalPages: Math.ceil(total / pageSize),
+    };
+  }
+*/
+
+  async findAllWithPermissions(
+    permissions: any,
+    client_id: number,
+    name?: string,
+    limit?: number,
+    bu?: number,
+    page: number = 1,
+    pageSize: number = 10,
+    langCode: string = 'en',
+  ) {
+    const take = pageSize;
+    const skip = (page - 1) * take;
+
+    const {
+      allowedTenantIds,
+      allowedBusinessUnitIds,
+      allowAllTenants,
+      allowAllBU,
+      canViewCoupons,
+    } = permissions;
+
+    if (!canViewCoupons) {
+      throw new ForbiddenException(
+        'User does not have permission to access the coupons',
+      );
     }
 
-    const tenantName = tenant.name;
+    if (!allowAllTenants && !allowedTenantIds.includes(client_id)) {
+      throw new ForbiddenException(
+        'User does not have permission to access this tenant',
+      );
+    }
 
-    const isSuperAdmin = privileges.some((p: any) => p.name === 'all_tenants');
-    const hasGlobalAccess = privileges.some(
-      (p) =>
-        p.module === 'businessUnits' &&
-        p.name === `${tenantName}_All Business Unit`,
-    );
-
-    const query = this.couponsRepository
+    // -------------------------------------
+    // Base QueryBuilder
+    // -------------------------------------
+    const qb = this.couponsRepository
       .createQueryBuilder('coupon')
       .leftJoinAndSelect('coupon.business_unit', 'business_unit')
       .leftJoinAndSelect('coupon.locales', 'locale_coupon')
       .leftJoinAndSelect('locale_coupon.language', 'language')
       .leftJoinAndSelect('coupon.customerSegments', 'customerSegments')
       .leftJoinAndSelect('customerSegments.segment', 'segment')
-      .where('coupon.status != :status', { status: 2 })
-      .andWhere('coupon.tenant_id = :tenantId', { tenantId: client_id });
+      .where('coupon.tenant_id = :tenantId', { tenantId: client_id })
+      .andWhere('coupon.status != :deleted', { deleted: 2 });
 
-    if (
-      business_unit_id &&
-      typeof business_unit_id === 'string' &&
-      business_unit_id !== '1'
-    ) {
-      query.andWhere('coupon.business_unit_id = :businessUnitId', {
-        businessUnitId: business_unit_id,
-      });
+    // -------------------------------------
+    // Business Unit filtering
+    // -------------------------------------
+    if (bu && !isNaN(Number(bu))) {
+      // frontend is explicitly requesting BU
+      if (!allowAllBU && !allowedBusinessUnitIds.includes(Number(bu))) {
+        throw new ForbiddenException(
+          'User does not have permission for this business unit',
+        );
+      }
+
+      qb.andWhere('coupon.business_unit_id = :bu', { bu: Number(bu) });
+    } else {
+      // no frontend BU → apply permission-based BU filtering
+      if (!allowAllBU) {
+        qb.andWhere('coupon.business_unit_id IN (:...allowedBU)', {
+          allowedBU: allowedBusinessUnitIds,
+        });
+      }
     }
 
     if (langCode) {
-      query.andWhere('language.code = :langCode', { langCode });
+      qb.andWhere('language.code = :langCode', { langCode });
     }
 
+    // -------------------------------------
+    // Name search
+    // -------------------------------------
     if (name && name.trim() !== '') {
-      query.andWhere(
+      qb.andWhere(
         `(coupon.code LIKE :search OR locale_coupon.title LIKE :search)`,
         { search: `%${name}%` },
       );
     }
 
-    if (!hasGlobalAccess && !isSuperAdmin) {
-      const accessibleBusinessUnitNames = privileges
-        .filter(
-          (p) =>
-            p.module === 'businessUnits' &&
-            p.name.startsWith(`${tenantName}_`) &&
-            p.name !== `${tenantName}_All Business Unit`,
-        )
-        .map((p) => p.name.replace(`${tenantName}_`, ''));
+    // -------------------------------------
+    // Pagination + Sorting
+    // -------------------------------------
+    qb.orderBy('coupon.created_at', 'DESC').take(take).skip(skip);
 
-      if (!accessibleBusinessUnitNames.length) {
-        return {
-          data: [],
-          total: 0,
-          page,
-          pageSize,
-          totalPages: 0,
-        };
-      }
+    // -------------------------------------
+    // Execute query
+    // -------------------------------------
+    const [data, total] = await qb.getManyAndCount();
 
-      const businessUnits = await this.businessUnitRepository.find({
-        where: {
-          status: 1,
-          tenant_id: client_id,
-          name: In(accessibleBusinessUnitNames),
-        },
-      });
-
-      const availableBusinessUnitIds = businessUnits.map((unit) => unit.id);
-      if (availableBusinessUnitIds.length) {
-        query.andWhere('coupon.business_unit_id IN (:...ids)', {
-          ids: availableBusinessUnitIds,
-        });
-      }
-    }
-
-    query.orderBy('coupon.created_at', 'DESC').skip(skip).take(take);
-
-    const [data, total] = await query.getManyAndCount();
-
+    // -------------------------------------
+    // Result Format
+    // -------------------------------------
     return {
       data,
       total,
@@ -429,7 +670,21 @@ export class CouponsService {
     return { ...coupon };
   }
 
-  async update(id: number, dto: UpdateCouponDto, user: string) {
+  async update(
+    id: number,
+    dto: UpdateCouponDto,
+    user: string,
+    permissions: any,
+  ) {
+    // Use the guard's permission object
+    const canEditCoupons = permissions?.canEditCoupons;
+
+    if (!canEditCoupons) {
+      throw new ForbiddenException(
+        "User doesn't have permission to get coupons",
+      );
+    }
+
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -584,7 +839,16 @@ export class CouponsService {
     }
   }
 
-  async remove(id: number, user: string) {
+  async remove(id: number, user: string, permissions: any) {
+    // Use the guard's permission object
+    const canDeleteCoupons = permissions?.canEditCoupons;
+
+    if (!canDeleteCoupons) {
+      throw new ForbiddenException(
+        "User doesn't have permission to delete coupons",
+      );
+    }
+
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -2786,7 +3050,7 @@ export class CouponsService {
     return result;
   }
 
-  async validateCoupon(bodyPayload, language_code: string = 'en') {
+  async validateCoupon(bodyPayload) {
     const today = new Date();
     const { customer_id, campaign_id, metadata } = bodyPayload;
 

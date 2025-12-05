@@ -9,6 +9,7 @@ import {
   Post,
   Put,
   Query,
+  Req,
   UploadedFile,
   UseGuards,
   UseInterceptors,
@@ -21,6 +22,8 @@ import { AuthTokenGuard } from 'src/users/guards/authTokenGuard';
 import { Repository } from 'typeorm';
 import { CreateOfferDto, UpdateOfferDto } from '../dto/offers.dto';
 import { OffersService } from './offers.service';
+import { OfferAccessGuard } from './offers-access.guard';
+import { OFFERSAccess } from './offers-access.decorator';
 
 @Controller('offers')
 export class OffersController {
@@ -31,11 +34,13 @@ export class OffersController {
     private readonly service: OffersService,
   ) {}
 
-  @UseGuards(AuthTokenGuard)
+  @UseGuards(AuthTokenGuard, OfferAccessGuard)
+  @OFFERSAccess()
   @Post()
   async create(
     @Body() dto: CreateOfferDto,
     @Headers('user-secret') userSecret: string,
+    @Req() req: any,
   ) {
     try {
       if (!userSecret) {
@@ -52,7 +57,7 @@ export class OffersController {
       if (!user) {
         throw new BadRequestException('user not found against provided token');
       }
-      return await this.service.create(dto, user.uuid);
+      return await this.service.create(dto, user.uuid, req.permission);
     } catch (error) {
       return {
         success: true,
@@ -62,9 +67,12 @@ export class OffersController {
     }
   }
 
+  @UseGuards(OfferAccessGuard)
+  @OFFERSAccess()
   @Get('/:client_id')
   async findAll(
     @Param('client_id') client_id: number,
+    @Req() req: any,
     @Headers('user-secret') userSecret: string,
     @Query('name') name?: string,
     @Query('bu') bu?: number,
@@ -97,6 +105,7 @@ export class OffersController {
       page,
       pageSize,
       langCode,
+      req.permission,
     );
   }
 
@@ -127,9 +136,11 @@ export class OffersController {
     return await this.service.removeFile(fileUrl);
   }
 
-  @UseGuards(AuthTokenGuard)
+  @UseGuards(AuthTokenGuard, OfferAccessGuard)
+  @OFFERSAccess()
   @Delete(':uuid')
   async remove(
+    @Req() req: any,
     @Param('uuid') uuid: string,
     @Headers('user-secret') userSecret: string,
   ) {
@@ -147,12 +158,14 @@ export class OffersController {
     if (!user) {
       throw new BadRequestException('user not found against provided token');
     }
-    return await this.service.remove(uuid, user.uuid);
+    return await this.service.remove(uuid, user.uuid, req.permission);
   }
 
-  @UseGuards(AuthTokenGuard)
+  @UseGuards(AuthTokenGuard, OfferAccessGuard)
+  @OFFERSAccess()
   @Put(':id')
   async update(
+    @Req() req: any,
     @Param('id') id: string,
     @Headers('user-secret') userSecret: string,
     @Body() dto: UpdateOfferDto,
@@ -171,7 +184,7 @@ export class OffersController {
     if (!user) {
       throw new BadRequestException('user not found against provided token');
     }
-    return await this.service.update(id, dto, user.uuid);
+    return await this.service.update(id, dto, user.uuid, req.permission);
   }
 
   @Post('upload-file-to-bucket')

@@ -52,7 +52,7 @@ export class RestyInvoicesInfo {
   @Column('int', { nullable: true })
   claimed_points: number | null;
 
-  @Column({ type: 'varchar', length: 36, nullable: true })
+  @Column({ type: 'varchar', length: 255, nullable: true })
   claim_id: string | null;
 
   @Column({ type: 'varchar', length: 30, nullable: true })

@@ -273,8 +273,14 @@ export class CustomerService {
     client_id: number,
     page: number = 1,
     pageSize: number = 20,
+    permission: any,
     search?: string,
   ) {
+    if (!permission.canViewCustomers) {
+      throw new BadRequestException(
+        "You don't have permission to access customers",
+      );
+    }
     const take = pageSize;
     const skip = (page - 1) * take;
 
