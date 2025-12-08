@@ -266,7 +266,8 @@ export class BurningService {
         amount: transaction_amount,
         point_balance: pointsToBurn,
         status: WalletTransactionStatus.NOT_CONFIRMED,
-        source_type: matchedRule?.locales?.[0].name,
+        // source_type: matchedRule?.locales?.[0].name,
+        source_type: 'transaction',
         source_id: matchedRule.id,
         description: remarks
           ? remarks

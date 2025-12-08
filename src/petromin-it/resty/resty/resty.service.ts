@@ -378,7 +378,7 @@ export class RestyService {
               status: WalletTransactionStatus.ACTIVE,
               amount: singleInvoice.InvoiceTotalAmount,
               points_balance: points,
-              source_type: 'invoice',
+              source_type: 'transaction',
               description: `Points earned for invoice ${singleInvoice.InvoiceNumber}`,
               created_by: 0,
               prev_available_points: wallet.available_balance,

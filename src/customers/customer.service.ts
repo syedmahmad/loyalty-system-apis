@@ -558,7 +558,7 @@ export class CustomerService {
         query.andWhere('language.code = :langCode', { langCode });
       }
 
-      const rule = await query.getOne();
+      rule = await query.getOne();
 
       if (rule.reward_points === 0) {
         throw new BadRequestException(
@@ -568,58 +568,59 @@ export class CustomerService {
       if (!rule)
         throw new NotFoundException('Earning rule not found for this event');
     } else {
-      const rules = await this.ruleRepo.find({
-        where: {
-          status: 1,
-          // shoudl add tenant..
-          rule_type: Not('burn'),
-          tenant_id: Number(tenantId),
-          dynamic_conditions: Not(IsNull()),
-        },
-      });
-      /*
-        rule.dynamic_conditions: [{"condition_type":"store_id","condition_operator":"==","condition_value":"NCMC001"},
-        {"condition_type":"name","condition_operator":"==","condition_value":"gasoline"},
-        {"condition_type":"quantity","condition_operator":"==","condition_value":"3.5 litter"},
-        {"condition_type":"amount","condition_operator":"==","condition_value":"10"}]
+      throw new NotFoundException('Earning rule not found for this event');
+      // const rules = await this.ruleRepo.find({
+      //   where: {
+      //     status: 1,
+      //     // shoudl add tenant..
+      //     rule_type: Not('burn'),
+      //     tenant_id: Number(tenantId),
+      //     dynamic_conditions: Not(IsNull()),
+      //   },
+      // });
+      // /*
+      //   rule.dynamic_conditions: [{"condition_type":"store_id","condition_operator":"==","condition_value":"NCMC001"},
+      //   {"condition_type":"name","condition_operator":"==","condition_value":"gasoline"},
+      //   {"condition_type":"quantity","condition_operator":"==","condition_value":"3.5 litter"},
+      //   {"condition_type":"amount","condition_operator":"==","condition_value":"10"}]
 
-        "metadata": {
-          "store_id": "NCMC_station_002"
-          "name": "High Octance",
-          "quantity": "5 Litter",
-          "amount": 10
-        }
-      */
-      const matchingRules = rules.filter((rule) =>
-        this.validateRuleAgainstMetadata(rule, metadata),
-      );
+      //   "metadata": {
+      //     "store_id": "NCMC_station_002"
+      //     "name": "High Octance",
+      //     "quantity": "5 Litter",
+      //     "amount": 10
+      //   }
+      // */
+      // const matchingRules = rules.filter((rule) =>
+      //   this.validateRuleAgainstMetadata(rule, metadata),
+      // );
 
-      if (!matchingRules.length) {
-        throw new NotFoundException(`Earning rule not found for this station`);
-      }
+      // if (!matchingRules.length) {
+      //   throw new NotFoundException(`Earning rule not found for this station`);
+      // }
 
-      if (matchingRules.length == 1) {
-        rule = matchingRules[0];
-      } else {
-        rule = matchingRules
-          .filter((singleRule) => singleRule.is_priority === 1)
-          .reduce(
-            (latest, current) =>
-              !latest ||
-              new Date(current.created_at) > new Date(latest.created_at)
-                ? current
-                : latest,
-            null,
-          );
-        if (!rule) {
-          // Find the one with the latest created_at
-          rule = matchingRules.reduce((latest, current) => {
-            return new Date(current.created_at) > new Date(latest.created_at)
-              ? current
-              : latest;
-          }, matchingRules[0]);
-        }
-      }
+      // if (matchingRules.length == 1) {
+      //   rule = matchingRules[0];
+      // } else {
+      //   rule = matchingRules
+      //     .filter((singleRule) => singleRule.is_priority === 1)
+      //     .reduce(
+      //       (latest, current) =>
+      //         !latest ||
+      //         new Date(current.created_at) > new Date(latest.created_at)
+      //           ? current
+      //           : latest,
+      //       null,
+      //     );
+      //   if (!rule) {
+      //     // Find the one with the latest created_at
+      //     rule = matchingRules.reduce((latest, current) => {
+      //       return new Date(current.created_at) > new Date(latest.created_at)
+      //         ? current
+      //         : latest;
+      //     }, matchingRules[0]);
+      //   }
+      // }
     }
     // 3. Get customer wallet info
     const wallet = await this.walletService.getSingleCustomerWalletInfoById(
@@ -634,7 +635,8 @@ export class CustomerService {
       wallet: { id: wallet.id },
       business_unit: { id: parseInt(BUId) },
       type: 'earn',
-      source_type: event,
+      source_type: rule.event_triggerer,
+      // source_type: event, // for the existing users, this should be same with new code otherwise, exisitng users will get points again.
     };
     // if (walletOrderId) txWhere.wallet_order_id = walletOrderId;
 

@@ -156,13 +156,11 @@ export class VehiclesService {
       }
 
       vehicle = await this.vehiclesRepository.save(vehicle);
-      console.log('/////////////////vehicle', vehicle);
       // get car valuation.
       // 🔹 Step X: Fetch car valuation from Gogomotor API
       try {
         // if (variantInfo?.variantId && year && restBody?.last_mileage) {
         if (!vehicle.car_value && variantInfo?.variantId && year) {
-          console.log('/////////////////initiating car valuation');
           const valuation = await this.getCarValuation({
             km: restBody?.last_mileage || 0,
             trimId: variantInfo?.variantId || variant_id, // cannot pass modelId as bluebook does not work with it.
@@ -174,7 +172,6 @@ export class VehiclesService {
           //   vGood: { min: 68429.9997, max: 83636.6663 },
           //   excellent: { min: 70991.62056, max: 86767.53624 }
           // }
-          console.log('/////////////////data', valuation?.data);
           if (valuation?.data) {
             vehicle.last_valuation_date = new Date();
             const { good } = valuation.data;
@@ -616,8 +613,6 @@ export class VehiclesService {
         };
       }
 
-      console.log('////////////////lastService', lastService);
-
       // This code checks whether the vehicle associated with the last recorded service is still an active vehicle for the customer.
       // It first fetches the list of active vehicles for the customer from the local database (status: 1).
       // Then it creates a set of the plate numbers for these active vehicles.
@@ -725,8 +720,6 @@ export class VehiclesService {
               String(item),
         );
       }
-
-      console.log('//////////////lastservice', lastService);
 
       // Step 7: Prepare response
       const result = {
