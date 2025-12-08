@@ -73,11 +73,6 @@ export class OciService {
   // Decrypt data
   async decryptData(ciphertext: string): Promise<any> {
     try {
-      console.log('///////////////////////');
-      console.log('///////////////////////');
-      console.log('///////////////////////');
-      console.log('///////////////////////', ciphertext);
-
       if (!ciphertext) {
         return '';
       }
