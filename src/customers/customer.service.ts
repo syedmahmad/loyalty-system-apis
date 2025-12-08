@@ -812,7 +812,7 @@ export class CustomerService {
               .toDate()
           : dayjs().add(rule.validity_after_assignment, 'day').toDate()
         : dayjs()
-            .add(parseInt(walletSettings.expiration_value), 'day')
+            .add(parseInt(walletSettings?.expiration_value), 'day')
             .toDate(),
     };
     // Save transaction
@@ -824,7 +824,7 @@ export class CustomerService {
       },
     });
 
-    if (customerPreferences.push_notification) {
+    if (customerPreferences?.push_notification) {
       // There could be duplicate entries or multiple, so fetch the last one (most recently created)
       const deviceTokens = await this.deviceTokenRepo.find({
         where: { customer: { id: customer.id } },
