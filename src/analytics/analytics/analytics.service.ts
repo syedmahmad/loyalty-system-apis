@@ -27,11 +27,13 @@ export class LoyaltyAnalyticsService {
     startDate?: string,
     endDate?: string,
   ) {
+    console.log('/////////////////////Loading Analytics/////////////////////');
     if (!permission.canViewAnalytics) {
       throw new BadRequestException(
         "You don't have permission to access analytics",
       );
     }
+    console.log('/////////////////////Loaded Analytics/////////////////////');
     const [pointSplits, customerByPoints, summary, itemUsage, barChart] =
       await Promise.all([
         this.getPointsSplit(startDate, endDate),
@@ -40,7 +42,7 @@ export class LoyaltyAnalyticsService {
         this.getItemUsage(startDate, endDate),
         this.getBarChartData(startDate, endDate),
       ]);
-
+    console.log('/////////////////////Loaded Analytics/////////////////////');
     return {
       pointSplits,
       customerByPoints,
