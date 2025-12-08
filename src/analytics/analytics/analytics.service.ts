@@ -33,15 +33,14 @@ export class LoyaltyAnalyticsService {
         "You don't have permission to access analytics",
       );
     }
+    // Fetch each analytic serially to prevent Out Of Memory (OOM) errors.
+    // Note: This mitigates memory spikes, but may increase response time since metrics are not loaded in parallel.
     console.log('/////////////////////Loaded Analytics/////////////////////');
-    const [pointSplits, customerByPoints, summary, itemUsage, barChart] =
-      await Promise.all([
-        this.getPointsSplit(startDate, endDate),
-        this.getCustomerPointDistribution(),
-        this.getPointSummary(startDate, endDate),
-        this.getItemUsage(startDate, endDate),
-        this.getBarChartData(startDate, endDate),
-      ]);
+    const pointSplits = await this.getPointsSplit(startDate, endDate);
+    const customerByPoints = await this.getCustomerPointDistribution();
+    const summary = await this.getPointSummary(startDate, endDate);
+    const itemUsage = await this.getItemUsage(startDate, endDate);
+    const barChart = await this.getBarChartData(startDate, endDate);
     console.log('/////////////////////Loaded Analytics/////////////////////');
     return {
       pointSplits,
