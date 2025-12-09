@@ -2206,9 +2206,10 @@ export class CouponsService {
           expired.push({
             uuid: singleCoupon.uuid,
             code: singleCoupon.code,
-            title: singleCoupon?.locales?.[0].title,
-            description: singleCoupon?.locales?.[0].description,
-            terms_and_conditions: singleCoupon?.locales?.[0].term_and_condition,
+            title: singleCoupon?.locales?.[0]?.title,
+            description: singleCoupon?.locales?.[0]?.description,
+            terms_and_conditions:
+              singleCoupon?.locales?.[0]?.term_and_condition,
             discount: `${singleCoupon.discount_price}${singleCoupon.discount_type === 'fixed' ? ' SAR' : '% Off'}`,
             expiry_date: singleCoupon.date_to,
             services,
@@ -2218,9 +2219,10 @@ export class CouponsService {
           available.push({
             uuid: singleCoupon.uuid,
             code: singleCoupon.code,
-            title: singleCoupon?.locales?.[0].title,
-            description: singleCoupon?.locales?.[0].description,
-            terms_and_conditions: singleCoupon?.locales?.[0].term_and_condition,
+            title: singleCoupon?.locales?.[0]?.title,
+            description: singleCoupon?.locales?.[0]?.description,
+            terms_and_conditions:
+              singleCoupon?.locales?.[0]?.term_and_condition,
             discount: `${singleCoupon.discount_price}${singleCoupon.discount_type === 'fixed' ? ' SAR' : '% Off'}`,
             expiry_date: singleCoupon.date_to,
             services,
@@ -2693,7 +2695,7 @@ export class CouponsService {
       coupons.push({
         uuid: singleCoupon.uuid,
         code: singleCoupon.code,
-        title: singleCoupon?.locales?.[0].title,
+        title: singleCoupon?.locales?.[0]?.title,
         expiry_date: singleCoupon.date_to,
         status:
           singleCoupon.date_to && singleCoupon.date_to < today
