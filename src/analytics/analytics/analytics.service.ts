@@ -218,6 +218,7 @@ export class LoyaltyAnalyticsService {
   }
 
   private async getBarChartData(startDate?: string, endDate?: string) {
+    /*
     const whereClause: any = {};
     if (startDate && endDate) {
       whereClause.created_at = Between(new Date(startDate), new Date(endDate));
@@ -261,6 +262,41 @@ export class LoyaltyAnalyticsService {
     );
 
     return result;
+    */
+
+    const query = this.walletTransactionRepository
+      .createQueryBuilder('tx')
+      .select('DATE(tx.created_at)', 'date')
+      .addSelect(
+        `
+    SUM(CASE WHEN tx.type IN ('earn', 'adjustment') THEN tx.amount ELSE 0 END)
+  `,
+        'earned',
+      )
+      .addSelect(
+        `
+    SUM(CASE WHEN tx.type = 'burn' THEN tx.amount ELSE 0 END)
+  `,
+        'burnt',
+      )
+      .where('tx.status = :status', { status: 'active' });
+
+    if (startDate && endDate) {
+      query.andWhere('tx.created_at BETWEEN :start AND :end', {
+        start: startDate,
+        end: endDate,
+      });
+    }
+
+    query.groupBy('DATE(tx.created_at)');
+    query.orderBy('DATE(tx.created_at)', 'ASC');
+
+    const raw = await query.getRawMany();
+    return raw.map((row) => ({
+      date: row.date ? row.date.toISOString().split('T')[0] : null,
+      earned: Number(row.earned || 0),
+      burnt: Number(row.burnt || 0),
+    }));
   }
 
   async getCouponAnalytics(
