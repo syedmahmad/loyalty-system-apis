@@ -856,7 +856,7 @@ export class CampaignsService {
       type: WalletTransactionType.BURN,
       amount: discountAmount,
       status: WalletTransactionStatus.ACTIVE,
-      source_type: rule?.locales?.[0]?.name || '',
+      source_type: rule?.locales?.[0]?.name || '', //TODO: need to update it with rule event triggerer
       source_id: rule.id,
       description: `Burned ${pointsToBurn} points for discount of ${discountAmount} on amount ${total_amount}`,
     };
@@ -1081,7 +1081,7 @@ export class CampaignsService {
       type: WalletTransactionType.BURN,
       amount: discountAmount,
       status: WalletTransactionStatus.ACTIVE,
-      source_type: rule?.locales?.[0]?.name || '',
+      source_type: rule?.locales?.[0]?.name || '', //TODO: need to update it with rule event triggerer
       source_id: rule.id,
       description: `Burned ${pointsToBurn} points for discount of ${discountAmount} on amount ${total_amount}`,
     };

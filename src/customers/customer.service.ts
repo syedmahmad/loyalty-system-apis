@@ -547,7 +547,7 @@ export class CustomerService {
     let rule;
     if (event) {
       const query = this.ruleRepo
-        .createQueryBuilder('rule')
+        .createQueryBuilder('rules')
         .leftJoinAndSelect('rule.locales', 'locale')
         .leftJoinAndSelect('locale.language', 'language')
         .where('rule.status = :status', { status: 1 })
@@ -635,7 +635,7 @@ export class CustomerService {
       wallet: { id: wallet.id },
       business_unit: { id: parseInt(BUId) },
       type: 'earn',
-      source_type: rule.event_triggerer,
+      source_type: rule?.event_triggerer,
       // source_type: event, // for the existing users, this should be same with new code otherwise, exisitng users will get points again.
     };
     // if (walletOrderId) txWhere.wallet_order_id = walletOrderId;
@@ -782,7 +782,7 @@ export class CustomerService {
       // wallet_order_id: walletOrderId,
       business_unit: wallet.business_unit, // pass the full BusinessUnit entity instance
       type: WalletTransactionType.EARN,
-      source_type: event,
+      source_type: rule?.event_triggerer,
       created_at: dayjs().toDate(),
       updated_at: dayjs().toDate(),
       amount: Orderamount || 0,
@@ -2089,7 +2089,7 @@ export class CustomerService {
       orders: walletOrderResponse,
       business_unit: wallet.business_unit,
       type: WalletTransactionType.EARN,
-      source_type: sourceType,
+      source_type: sourceType, //TODO: need to update it with rule event triggerer
       amount,
       status:
         pendingDays > 0
