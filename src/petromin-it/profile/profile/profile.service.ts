@@ -199,7 +199,7 @@ export class CustomerProfileService {
     });
 
     // Additional Points for Email
-    if (profile.email) {
+    if (dto?.email) {
       const earnEmailPhonePoints = {
         customer_id: customer.uuid,
         event: 'Additional Points for Email', // this is important what if someone changes this event name form Frontend
@@ -231,7 +231,7 @@ export class CustomerProfileService {
     }
 
     // Additional Points for Gener
-    if (profile.gender) {
+    if (dto?.gender) {
       const earnGenderPhonePoints = {
         customer_id: customer.uuid,
         event: 'Additional Points for Gender', // this is important what if someone changes this event name form Frontend
