@@ -548,10 +548,10 @@ export class CustomerService {
     if (event) {
       const query = this.ruleRepo
         .createQueryBuilder('rules')
-        .leftJoinAndSelect('rule.locales', 'locale')
+        .leftJoinAndSelect('rules.locales', 'locale')
         .leftJoinAndSelect('locale.language', 'language')
-        .where('rule.status = :status', { status: 1 })
-        .andWhere('rule.rule_type != :ruleType', { ruleType: 'burn' })
+        .where('rules.status = :status', { status: 1 })
+        .andWhere('rules.rule_type != :ruleType', { ruleType: 'burn' })
         .andWhere('locale.name = :event', { event });
 
       if (langCode) {
