@@ -49,7 +49,7 @@ import {
   LessThanOrEqual,
   MoreThanOrEqual,
   Not,
-  Repository
+  Repository,
 } from 'typeorm';
 import { CreateCouponDto } from '../dto/create-coupon.dto';
 import { UpdateCouponDto } from '../dto/update-coupon.dto';
@@ -2890,7 +2890,7 @@ export class CouponsService {
   makeCriteriaFromCouponPayload(conditions, tiers = []) {
     const result = {};
 
-    conditions.forEach((coupon) => {
+    conditions?.forEach((coupon) => {
       const { selectedCouponType, dynamicRows } = coupon;
 
       switch (selectedCouponType) {

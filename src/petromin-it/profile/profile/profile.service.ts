@@ -82,14 +82,14 @@ export class CustomerProfileService {
       const decryptedEmail = await this.ociService.decryptData(customer.email);
       customer.email = decryptedEmail;
     } catch (err) {
-      console.error('Email Decryption failed:', err);
+      console.error('Email Decryption failed:');
     }
 
     try {
       const decryptedPhone = await this.ociService.decryptData(customer.phone);
       customer.phone = decryptedPhone;
     } catch (err) {
-      console.error('Phone Decryption failed:', err);
+      console.error('Phone Decryption failed:');
     }
 
     const customerCoupons = await this.couponsService.getCustomerCoupons({
