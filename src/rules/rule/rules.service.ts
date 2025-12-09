@@ -191,7 +191,7 @@ export class RulesService extends BaseService {
 
     // Filter out rules that customer has already earned
     const availableRules = rules.filter(
-      (rule) => !earnedRuleNames.has(rule?.locales?.[0]?.name),
+      (rule) => !earnedRuleNames.has(rule?.event_triggerer),
     );
 
     // The error message "Unknown column 'distinctAlias.Rule_id' in 'field list'" suggests that TypeORM is generating a query asking for 'Rule_id',
