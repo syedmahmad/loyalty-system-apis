@@ -409,6 +409,7 @@ export class WalletService {
     }
     if (typeof obj.total_balance === 'number') {
       wallet.total_balance = obj.total_balance;
+      wallet.total_earned_points = obj.total_balance;
     }
 
     const data = await this.walletRepo.save(wallet);

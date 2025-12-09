@@ -645,6 +645,7 @@ export class CustomerService {
       order: { created_at: 'DESC' },
     });
 
+    console.log('/////////previousTx////////////', previousTx, wallet, rule);
     // Frequency logic
     if (rule.frequency === 'once' && previousTx) {
       throw new BadRequestException(
