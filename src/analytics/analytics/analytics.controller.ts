@@ -11,13 +11,65 @@ export class LoyaltyAnalyticsController {
 
   @UseGuards(AnalyticAccessGuard)
   @ANALYTICSAccess()
-  @Get('dashboard')
-  getLoyaltyDashboard(
+  @Get('get-point-splits')
+  getPointsSplit(
     @Req() req: any,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
   ) {
-    return this.loyaltyAnalyticsService.getLoyaltyDashboard(
+    return this.loyaltyAnalyticsService.pointsSplit(
+      req.permission,
+      startDate,
+      endDate,
+    );
+  }
+
+  @UseGuards(AnalyticAccessGuard)
+  @ANALYTICSAccess()
+  @Get('customer-by-points')
+  getCustomerByPoints(@Req() req: any) {
+    return this.loyaltyAnalyticsService.getCustomerByPoints(req.permission);
+  }
+
+  @UseGuards(AnalyticAccessGuard)
+  @ANALYTICSAccess()
+  @Get('get-point-summary')
+  getSummary(
+    @Req() req: any,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    return this.loyaltyAnalyticsService.getSummary(
+      req.permission,
+      startDate,
+      endDate,
+    );
+  }
+
+  @UseGuards(AnalyticAccessGuard)
+  @ANALYTICSAccess()
+  @Get('get-item-usage')
+  getItemUsage(
+    @Req() req: any,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    return this.loyaltyAnalyticsService.itemUsage(
+      req.permission,
+      startDate,
+      endDate,
+    );
+  }
+
+  @UseGuards(AnalyticAccessGuard)
+  @ANALYTICSAccess()
+  @Get('get-bar-chart')
+  getBarChart(
+    @Req() req: any,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    return this.loyaltyAnalyticsService.barChart(
       req.permission,
       startDate,
       endDate,
