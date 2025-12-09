@@ -32,8 +32,15 @@ export class ReferralService {
     if (!customer) throw new NotFoundException(`Customer not found`);
 
     // Get all referrals and referees in one go
+    // referee_id: customer who referred another customer
+    // if external_system_id is present then we need to fetch referral history via external_system_id instead of id as
+    // after migration adn during migration, we did not maintain history of this thing.
+    let idToFetchHistory: any = customer.id;
+    if (customer && customer.external_customer_id) {
+      idToFetchHistory = customer.external_customer_id;
+    }
     const referrals = await this.referralRepo.find({
-      where: { referrer_id: customer.id },
+      where: { referrer_id: idToFetchHistory },
       relations: ['business_unit'],
       order: { created_at: 'DESC' },
     });
