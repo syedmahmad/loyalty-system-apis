@@ -26,7 +26,15 @@ export class ReferralService {
     // Optimized: combine queries, reduce lookups, and use a map for referees
     const customer = await this.customerRepo.findOne({
       where: { uuid: customerId, status: 1 },
-      select: ['id', 'name', 'email', 'phone', 'referral_code', 'status'],
+      select: [
+        'id',
+        'name',
+        'email',
+        'phone',
+        'referral_code',
+        'status',
+        'external_customer_id',
+      ],
     });
 
     if (!customer) throw new NotFoundException(`Customer not found`);
@@ -36,26 +44,16 @@ export class ReferralService {
     // if external_system_id is present then we need to fetch referral history via external_system_id instead of id as
     // after migration adn during migration, we did not maintain history of this thing.
     let idToFetchHistory: any = customer.id;
-    if (customer?.external_customer_id) {
+    if (customer && customer?.external_customer_id) {
       idToFetchHistory = customer.external_customer_id;
-      console.log(
-        '///////////////idToFetchHistory/////////',
-        idToFetchHistory,
-        customer.id,
-      );
     }
-    console.log(
-      '///////////////idToFetchHistory/////////',
-      idToFetchHistory,
-      customer.id,
-    );
+
     const referrals = await this.referralRepo.find({
       where: { referrer_id: idToFetchHistory },
       relations: ['business_unit'],
       order: { created_at: 'DESC' },
     });
 
-    console.log('///////////////referrals/////////', referrals);
     if (!referrals.length) {
       return {
         success: true,
@@ -67,7 +65,6 @@ export class ReferralService {
         errors: [],
       };
     }
-    console.log('///////////////referrals After/////////');
     const refereeIds = Array.from(new Set(referrals.map((r) => r.referee_id)));
     const referees = await this.customerRepo.find({
       where: { id: In(refereeIds) },
