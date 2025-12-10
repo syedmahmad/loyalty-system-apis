@@ -3321,7 +3321,11 @@ export class CouponsService {
           where: { external_system_id: row.id },
         });
 
-        if (!existing) {
+        const existingLocale = await this.couponLocaleRepo.findOne({
+          where: { coupon: { id: existing.id } },
+        });
+
+        if (existingLocale) {
           skipCount++;
           continue;
         }
