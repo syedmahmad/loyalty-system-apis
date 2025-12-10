@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  HttpStatus,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -445,10 +446,11 @@ export class CustomerProfileService {
     });
 
     if (customer.referrer_id) {
-      throw new BadRequestException(
-        'You have already refered by someone else.',
-        'Failed to earn points',
-      );
+      throw new NotFoundException({
+        message: 'Already Refered',
+        error: 'Already Refered',
+        statusCode: HttpStatus.NOT_MODIFIED,
+      });
     }
 
     customer.referrer_id = referrer_user.id;
