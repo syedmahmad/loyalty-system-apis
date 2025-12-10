@@ -444,6 +444,13 @@ export class CustomerProfileService {
       relations: ['business_unit', 'tenant'],
     });
 
+    if (customer.referrer_id) {
+      throw new BadRequestException(
+        'You have already refered by someone else.',
+        'Failed to earn points',
+      );
+    }
+
     customer.referrer_id = referrer_user.id;
     customer.is_new_user = 0;
     // rewards points to referrer
@@ -453,6 +460,7 @@ export class CustomerProfileService {
       tenantId: String(referrer_user.tenant.id),
       BUId: String(referrer_user.business_unit.id),
     };
+
     try {
       const earnedPoints =
         await this.customerService.earnWithEvent(earnReferrerPoints);
