@@ -1257,6 +1257,32 @@ export class VehiclesService {
 
   async selfCarListing(body: CreateCarListingDto) {
     try {
+      const customer_uuid = body.user.customer_id;
+
+      const customer = await this.customerRepo.findOne({
+        where: { uuid: customer_uuid },
+      });
+
+      if (!customer) {
+        throw new BadRequestException(
+          'Customer not found against provided uuid',
+        );
+      }
+
+      const vehicle = await this.vehiclesRepository.findOne({
+        where: {
+          plate_no: body.plate_no,
+          status: 1,
+          customer: { id: customer.id },
+        },
+      });
+
+      if (!vehicle) {
+        throw new BadRequestException(
+          `Vehicle not found aginst this customer and plate_no`,
+        );
+      }
+
       // 1. Create auth client
       const authClient = new GGMCommonAuth({
         clientId: process.env.GGM_CLIENT_ID,
@@ -1279,26 +1305,6 @@ export class VehiclesService {
       const url = `${process.env.GGM_BASE_URL}/vehicle-details`;
       const { data } = await axios.post(url, body, { headers });
 
-      const customer_uuid = body.user.customer_id;
-
-      const customer = await this.customerRepo.findOne({
-        where: { uuid: customer_uuid },
-      });
-
-      if (!customer) {
-        throw new BadRequestException(
-          'Customer not found against provided uuid',
-        );
-      }
-
-      const vehicle = await this.vehiclesRepository.findOne({
-        where: {
-          plate_no: body.plate_no,
-          status: 1,
-          customer: { id: customer.id },
-        },
-      });
-
       await this.vehiclesRepository.update(
         { id: vehicle.id },
         {
@@ -1315,7 +1321,7 @@ export class VehiclesService {
         'Error fetching car listing:',
         error?.response?.data || error.message,
       );
-      return { message: 'Vehicle Not added', error: error, data: [] };
+      throw new BadRequestException(`Vehicle Not added`);
     }
   }
 
