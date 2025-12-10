@@ -39,12 +39,18 @@ export class ReferralService {
     if (customer && customer.external_customer_id) {
       idToFetchHistory = customer.external_customer_id;
     }
+    console.log(
+      '///////////////idToFetchHistory/////////',
+      idToFetchHistory,
+      customer.id,
+    );
     const referrals = await this.referralRepo.find({
       where: { referrer_id: idToFetchHistory },
       relations: ['business_unit'],
       order: { created_at: 'DESC' },
     });
 
+    console.log('///////////////referrals/////////', referrals);
     if (!referrals.length) {
       return {
         success: true,
@@ -56,7 +62,7 @@ export class ReferralService {
         errors: [],
       };
     }
-
+    console.log('///////////////referrals After/////////');
     const refereeIds = Array.from(new Set(referrals.map((r) => r.referee_id)));
     const referees = await this.customerRepo.find({
       where: { id: In(refereeIds) },
