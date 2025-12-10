@@ -446,7 +446,7 @@ export class CustomerProfileService {
     });
 
     if (customer.referrer_id) {
-      throw new NotFoundException({
+      throw new BadRequestException({
         message: 'Already Refered',
         error: 'Already Refered',
         statusCode: HttpStatus.NOT_MODIFIED,
