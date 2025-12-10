@@ -84,15 +84,15 @@ export class OffersEntity {
   @Column({ type: 'tinyint', default: ActiveStatus.ACTIVE })
   status: number; // 0 = inactive, 1 = active, 2 = deleted
 
-  @Column({ nullable: true })
+  @Column({ type: 'longtext', nullable: true })
   description_en: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'longtext', nullable: true })
   description_ar: string;
 
   @Column({
     nullable: true,
-    type: 'text',
+    type: 'longtext',
     transformer: {
       to: (value: string) => value, // when saving
       from: (value: string) => (value ? value.replace(/\r?\n|\r/g, '') : value), // when reading
@@ -102,7 +102,7 @@ export class OffersEntity {
 
   @Column({
     nullable: true,
-    type: 'text',
+    type: 'longtext',
     transformer: {
       to: (value: string) => value, // when saving
       from: (value: string) => (value ? value.replace(/\r?\n|\r/g, '') : value), // when reading
