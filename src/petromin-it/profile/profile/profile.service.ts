@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  HttpException,
   HttpStatus,
   Injectable,
   NotFoundException,
@@ -446,11 +447,19 @@ export class CustomerProfileService {
     });
 
     if (customer.referrer_id) {
-      throw new BadRequestException({
-        message: 'Already Refered',
-        error: 'Already Refered',
-        statusCode: HttpStatus.NOT_MODIFIED,
-      });
+      // throw new BadRequestException({
+      //   message: 'Already Refered',
+      //   error: 'Already Refered',
+      //   statusCode: HttpStatus.NOT_MODIFIED,
+      // });
+      throw new HttpException(
+        {
+          message: 'Already Referred',
+          error: 'Already Referred',
+          statusCode: HttpStatus.NOT_MODIFIED,
+        },
+        HttpStatus.NOT_MODIFIED,
+      );
     }
 
     customer.referrer_id = referrer_user.id;
