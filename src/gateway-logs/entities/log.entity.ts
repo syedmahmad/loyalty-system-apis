@@ -11,7 +11,7 @@ export class GateWayLog {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column('text')
+  @Column('longtext')
   requestBody: string;
 
   @Column('text', { nullable: true })
