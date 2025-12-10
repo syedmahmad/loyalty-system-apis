@@ -32,15 +32,12 @@ export class VariantService {
       const { models } = await this.modelService.getAll();
 
       for (const model of models) {
-        const [response, responseAr] = await Promise.all([
+        const [variantsEn, variantsAr] = await Promise.all([
+          // English
           firstValueFrom(
             this.httpService.get(
               `${process.env.CENTRAL_API_BASE_URL}/master-data/models/${model.modelId}/trims`,
-              {
-                params: {
-                  languageId: 1,
-                },
-              },
+              { params: { languageId: 1 } },
             ),
           ).then((res) =>
             (res?.data?.data || []).map(
@@ -54,7 +51,6 @@ export class VariantService {
                 FuelType,
               }) => ({
                 variantId: TrimId,
-                model: { id: model.id },
                 name: Trim,
                 active: Number(IsActive),
                 transmissionId: TransmissionTypeId,
@@ -64,14 +60,12 @@ export class VariantService {
               }),
             ),
           ),
+
+          // Arabic
           firstValueFrom(
             this.httpService.get(
               `${process.env.CENTRAL_API_BASE_URL}/master-data/models/${model.modelId}/trims`,
-              {
-                params: {
-                  languageId: 2,
-                },
-              },
+              { params: { languageId: 2 } },
             ),
           ).then((res) =>
             (res?.data?.data || []).map(
@@ -85,33 +79,41 @@ export class VariantService {
           ),
         ]);
 
-        await this.variant.upsert(response, ['variantId']);
-        await this.variant.upsert(responseAr, {
-          conflictPaths: ['variantId'],
-          skipUpdateIfNoValuesChanged: true,
+        // Merge English + Arabic
+        const mergedVariants = variantsEn.map((en) => {
+          const ar = variantsAr.find((a) => a.variantId === en.variantId);
+
+          return {
+            ...en,
+            ...ar,
+            model: { id: model.id },
+          };
         });
 
-        const inactiveVariant = await this.variant.find({
-          where: {
-            active: 1,
-            model: {
-              id: model.id,
-            },
-            variantId: Not(In(response.map(({ variantId }) => variantId))),
-          },
-        });
+        // Save / Update variants
+        for (const variant of mergedVariants) {
+          const existing = await this.variant.findOne({
+            where: { variantId: variant.variantId },
+          });
 
-        if (inactiveVariant.length > 0) {
-          await this.variant.update(
-            {
-              variantId: In(inactiveVariant.map(({ variantId }) => variantId)),
-              model: {
-                id: model.id,
-              },
-            },
-            { active: 0 },
-          );
+          if (existing) {
+            await this.variant.update(existing.id, variant);
+          } else {
+            const newVariant = this.variant.create(variant);
+            await this.variant.save(newVariant);
+          }
         }
+
+        // Deactivate removed variants
+        const activeVariantIds = mergedVariants.map((v) => v.variantId);
+
+        await this.variant.update(
+          {
+            model: { id: model.id },
+            variantId: Not(In(activeVariantIds)),
+          },
+          { active: 0 },
+        );
       }
 
       return {
@@ -119,6 +121,7 @@ export class VariantService {
       };
     } catch (error) {
       console.error('fetchVariantAndSave Error:', error);
+
       return {
         success: false,
         message: 'Failed to sync variants',

@@ -25,64 +25,83 @@ export class MakeService {
    */
   async fetchMakesAndSave() {
     try {
+      // -------- ENGLISH DATA --------
       const response = await firstValueFrom(
         this.httpService.get(
           `${process.env.CENTRAL_API_BASE_URL}/master-data/makes`,
-          {
-            params: {
-              languageId: 1,
-            },
-          },
-        ),
-      ).then((res) =>
-        (res?.data?.data || []).map(
-          ({ MakeId, Make, IsActive = true, Logo }) => ({
-            makeId: MakeId,
-            name: Make,
-            active: Number(IsActive),
-            logo: Logo || null,
-          }),
+          { params: { languageId: 1 } },
         ),
       );
 
+      const makesEn = (response?.data?.data || []).map(
+        ({ MakeId, Make, IsActive = true, Logo }) => ({
+          makeId: MakeId,
+          name: Make,
+          active: Number(IsActive),
+          logo: Logo || null,
+        }),
+      );
+
+      // -------- ARABIC DATA --------
       const responseAr = await firstValueFrom(
         this.httpService.get(
           `${process.env.CENTRAL_API_BASE_URL}/master-data/makes`,
-          {
-            params: {
-              languageId: 2,
-            },
-          },
+          { params: { languageId: 2 } },
         ),
-      ).then((res) =>
-        (res?.data?.data || []).map(({ MakeId, Make }) => ({
-          makeId: MakeId,
-          nameAr: Make,
-        })),
       );
 
-      await this.make.upsert(response, ['makeId']);
-      await this.make.upsert(responseAr, ['makeId']);
+      const makesAr = (responseAr?.data?.data || []).map(
+        ({ MakeId, Make }) => ({
+          makeId: MakeId,
+          nameAr: Make,
+        }),
+      );
 
-      const inactiveMakes = await this.make.find({
-        where: {
-          active: 1,
-          makeId: Not(In(response.map(({ makeId }) => makeId))),
-        },
-      });
+      // -------- SAVE / UPDATE ENGLISH --------
+      for (const make of makesEn) {
+        const exist = await this.make.findOne({
+          where: { makeId: make.makeId },
+        });
 
-      if (inactiveMakes.length > 0) {
-        await this.make.update(
-          { makeId: In(response.map(({ makeId }) => makeId)) },
-          { active: 0 },
-        );
+        if (exist) {
+          await this.make.update(
+            { makeId: make.makeId },
+            {
+              name: make.name,
+              active: make.active,
+              logo: make.logo,
+            },
+          );
+        } else {
+          await this.make.save(make);
+        }
       }
 
+      // -------- SAVE / UPDATE ARABIC --------
+      for (const make of makesAr) {
+        const exist = await this.make.findOne({
+          where: { makeId: make.makeId },
+        });
+
+        if (exist) {
+          await this.make.update(
+            { makeId: make.makeId },
+            { nameAr: make.nameAr },
+          );
+        }
+      }
+
+      // -------- MARK INACTIVE MAKES --------
+      const activeMakeIds = makesEn.map((m) => m.makeId);
+      await this.make.update({ makeId: Not(In(activeMakeIds)) }, { active: 0 });
+
       return {
+        success: true,
         message: 'Makes synced successfully',
       };
     } catch (error) {
       console.error('fetchMakesAndSave Error:', error);
+
       return {
         success: false,
         message: 'Failed to sync makes',

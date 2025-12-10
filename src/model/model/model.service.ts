@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { MakeService } from 'src/make/make/make.service';
-import { In, Repository } from 'typeorm';
+import { In, Not, Repository } from 'typeorm';
 import { GetModelsDto, GetYearsDto } from '../dto/model.dto';
 import { ModelEntity } from '../entities/model.entity';
 import { firstValueFrom } from 'rxjs';
@@ -32,15 +32,11 @@ export class ModelService {
       const { makes } = await this.makeService.getAll();
 
       for (const make of makes) {
-        const [response, responseAr] = await Promise.all([
+        const [modelsEn, modelsAr] = await Promise.all([
           firstValueFrom(
             this.httpService.get(
               `${process.env.CENTRAL_API_BASE_URL}/master-data/${make.makeId}/models`,
-              {
-                params: {
-                  languageId: 1,
-                },
-              },
+              { params: { languageId: 1 } },
             ),
           ).then((res) =>
             (res?.data?.data || []).map(
@@ -52,7 +48,6 @@ export class ModelService {
                 ProfileImageUrlPath,
               }) => ({
                 modelId: ModelId,
-                make: { id: make.id },
                 name: Model,
                 year: Number(ModelYear),
                 active: Number(IsActive),
@@ -60,70 +55,62 @@ export class ModelService {
               }),
             ),
           ),
+
           firstValueFrom(
             this.httpService.get(
               `${process.env.CENTRAL_API_BASE_URL}/master-data/${make.makeId}/models`,
-              {
-                params: {
-                  languageId: 2,
-                },
-              },
+              { params: { languageId: 2 } },
             ),
           ).then((res) =>
-            (res?.data?.data || []).map(
-              ({ ModelId, Model, ModelYear, ProfileImageUrlPath }) => ({
-                modelId: ModelId,
-                nameAr: Model,
-                year: Number(ModelYear),
-                logo: ProfileImageUrlPath || null,
-              }),
-            ),
+            (res?.data?.data || []).map(({ ModelId, Model }) => ({
+              modelId: ModelId,
+              nameAr: Model,
+            })),
           ),
         ]);
 
-        // Upsert English and Arabic responses
-        await this.model.upsert(
-          response.map((item) => ({
-            ...item,
+        // Merge English & Arabic data together
+        const mergedModels = modelsEn.map((en) => {
+          const ar = modelsAr.find((a) => a.modelId === en.modelId);
+          return {
+            ...en,
+            ...ar,
             make: { id: make.id },
-          })),
-          ['modelId'],
-        );
-        await this.model.upsert(
-          responseAr.map((item, idx) => ({
-            ...item,
-            make: { id: make.id },
-            modelId: response[idx]?.modelId ?? item.modelId,
-          })),
-          {
-            conflictPaths: ['modelId'],
-            skipUpdateIfNoValuesChanged: true,
-          },
-        );
-
-        // Find models that are currently active but not present in the latest response
-        const responseModelIds = response.map(({ modelId }) => modelId);
-        const activeModels = await this.model.find({
-          where: {
-            make: { id: make.id },
-            active: 1,
-          },
+          };
         });
 
-        const toDeactivateIds = activeModels
-          .filter((model) => !responseModelIds.includes(model.modelId))
-          .map((model) => model.id);
+        // Save / Update models
+        for (const model of mergedModels) {
+          const existing = await this.model.findOne({
+            where: { modelId: model.modelId },
+          });
 
-        if (toDeactivateIds.length > 0) {
-          await this.model.update({ id: In(toDeactivateIds) }, { active: 0 });
+          if (existing) {
+            await this.model.update(existing.id, model);
+          } else {
+            const newModel = this.model.create(model);
+            await this.model.save(newModel);
+          }
         }
+
+        // Deactivate outdated models
+        const activeModelIds = mergedModels.map((m) => m.modelId);
+
+        await this.model.update(
+          {
+            make: { id: make.id },
+            modelId: Not(In(activeModelIds)),
+          },
+          { active: 0 },
+        );
       }
 
       return {
         message: 'Models synced successfully',
       };
     } catch (error) {
-      console.error('fetchMakesAndSave Error:', error);
+      console.error('fetchModelAndSave Error:', error);
+
       return {
         success: false,
         message: 'Failed to sync models',
