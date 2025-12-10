@@ -36,8 +36,13 @@ export class ReferralService {
     // if external_system_id is present then we need to fetch referral history via external_system_id instead of id as
     // after migration adn during migration, we did not maintain history of this thing.
     let idToFetchHistory: any = customer.id;
-    if (customer && customer.external_customer_id) {
+    if (customer?.external_customer_id) {
       idToFetchHistory = customer.external_customer_id;
+      console.log(
+        '///////////////idToFetchHistory/////////',
+        idToFetchHistory,
+        customer.id,
+      );
     }
     console.log(
       '///////////////idToFetchHistory/////////',
