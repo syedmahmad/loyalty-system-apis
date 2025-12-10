@@ -28,10 +28,10 @@ export class OfferLocalEntity extends BaseEntityBeta {
   @Column({ name: 'mobile_image', nullable: true })
   mobile_image: string;
 
-  @Column({ type: 'text', name: 'description', nullable: true })
+  @Column({ type: 'longtext', name: 'description', nullable: true })
   description: string;
 
-  @Column({ type: 'text', name: 'term_and_condition', nullable: true })
+  @Column({ type: 'longtext', name: 'term_and_condition', nullable: true })
   term_and_condition: string;
 
   @Column({ type: 'simple-json', nullable: true })
