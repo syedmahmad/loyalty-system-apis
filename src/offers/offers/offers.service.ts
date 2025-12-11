@@ -594,7 +594,7 @@ export class OffersService {
       throw new BadRequestException('Invalid language code');
     }
 
-    const offers = await this.offerRepository.find({
+    const allOffers = await this.offerRepository.find({
       where: {
         all_users: 1,
         status: ActiveStatus.ACTIVE,
@@ -624,28 +624,6 @@ export class OffersService {
       'deletedAt',
     ];
 
-    // language-based extra fields
-    if (langCode === 'en') {
-      removeExtraFields.push(
-        'offer_title_ar',
-        'offer_subtitle_ar',
-        'description_ar',
-        'terms_and_conditions_ar',
-        'name_ar',
-        'ar',
-      );
-    } else {
-      removeExtraFields.push(
-        'offer_title',
-        'offer_subtitle',
-        'description_en',
-        'terms_and_conditions_en',
-        'name_en',
-        'en',
-      );
-    }
-    const allOffers = this.omitExtraFields(offers, removeExtraFields);
-
     const today = new Date();
     const available = [];
     const expired = [];
@@ -653,7 +631,7 @@ export class OffersService {
     for (const eachOffer of allOffers) {
       const locale: any = eachOffer.locales.find(
         (loc) =>
-          loc.language?.code === langCode || loc.language.id === language.id,
+          loc.language?.code === langCode || loc.language?.id === language?.id,
       );
 
       const filtered =
