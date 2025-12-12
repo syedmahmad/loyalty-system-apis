@@ -1319,7 +1319,19 @@ export class VehiclesService {
         'Error fetching car listing:',
         error?.response?.data || error.message,
       );
-      throw new BadRequestException(`Vehicle Not added`);
+      // throw new BadRequestException(
+      //   `Vehicle Not added`,
+      //   error?.response?.data || error.message,
+      // );
+      if (error?.response?.data || error.message) {
+        throw new BadRequestException(error?.response?.data || error.message);
+      } else {
+        throw new BadRequestException({
+          message: ['Vehicle Not added'],
+          error: 'Request Error',
+          statusCode: 500,
+        });
+      }
     }
   }
 
