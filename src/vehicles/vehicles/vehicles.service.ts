@@ -128,6 +128,7 @@ export class VehiclesService {
         carCondition: restBody?.carCondition ?? null,
         minPrice: restBody?.minPrice ?? null,
         maxPrice: restBody?.maxPrice ?? null,
+        model_year_id: restBody?.model_year_id ?? null,
       };
 
       // Step 2: Find vehicle by plate_no (regardless of customer)
@@ -143,56 +144,67 @@ export class VehiclesService {
       if (vehicle) {
         // Don't update plate_no if vehicle already exists
         Object.assign(vehicle, prePareData);
+
+        // UPDATE last_valuation_date ONLY if user update these values...
+        if (body.minPrice && body.maxPrice && body.carCondition) {
+          vehicle.last_valuation_date = new Date();
+          // Update the specific condition inside car_value with new min and max
+          vehicle.car_value = {
+            ...vehicle.car_value,
+            [body.carCondition]: {
+              min: body.minPrice,
+              max: body.maxPrice,
+            },
+          };
+          // vehicle = await this.vehiclesRepository.save(vehicle);
+        }
       } else {
         // Include plate_no only in creation
+        // create car.
         vehicle = this.vehiclesRepository.create({
           customer: { id: customer.id },
           ...prePareData,
           plate_no: plate_no ?? null,
         });
 
+        // get car valuation.
+        // 🔹 Step X: Fetch car valuation from Gogomotor API
+        try {
+          // if (variantInfo?.variantId && year && restBody?.last_mileage) {
+          if (!vehicle.car_value && variantInfo?.variantId && year) {
+            const valuation = await this.getCarValuation({
+              km: restBody?.last_mileage || 0,
+              trimId: variantInfo?.variantId || variant_id, // cannot pass modelId as bluebook does not work with it.
+              year,
+            });
+            // {
+            //   fair: { min: 61138.22472, max: 74724.49687999999 },
+            //   good: { min: 65514.6, max: 80073.4 },
+            //   vGood: { min: 68429.9997, max: 83636.6663 },
+            //   excellent: { min: 70991.62056, max: 86767.53624 }
+            // }
+            if (valuation?.data) {
+              vehicle.last_valuation_date = new Date();
+              const { good } = valuation.data;
+              vehicle.car_value = valuation.data; // store only "data" object
+              vehicle.carCondition = 'good';
+              vehicle.minPrice = good.min;
+              vehicle.maxPrice = good.max;
+              // vehicle = await this.vehiclesRepository.save(vehicle);
+            }
+          }
+        } catch (err) {
+          console.error(
+            'Car valuation integration failed:',
+            err?.message || err,
+          );
+        }
+
         // give rewards points when someone adds new car
         await this.authService.rewardPoints(customer, 'Add New Car Points');
       }
 
       vehicle = await this.vehiclesRepository.save(vehicle);
-      // get car valuation.
-      // 🔹 Step X: Fetch car valuation from Gogomotor API
-      try {
-        // if (variantInfo?.variantId && year && restBody?.last_mileage) {
-        if (!vehicle.car_value && variantInfo?.variantId && year) {
-          const valuation = await this.getCarValuation({
-            km: restBody?.last_mileage || 0,
-            trimId: variantInfo?.variantId || variant_id, // cannot pass modelId as bluebook does not work with it.
-            year,
-          });
-          // {
-          //   fair: { min: 61138.22472, max: 74724.49687999999 },
-          //   good: { min: 65514.6, max: 80073.4 },
-          //   vGood: { min: 68429.9997, max: 83636.6663 },
-          //   excellent: { min: 70991.62056, max: 86767.53624 }
-          // }
-          if (valuation?.data) {
-            vehicle.last_valuation_date = new Date();
-            const { good } = valuation.data;
-            vehicle.car_value = valuation.data; // store only "data" object
-            vehicle.carCondition = 'good';
-            vehicle.minPrice = good.min;
-            vehicle.maxPrice = good.max;
-            vehicle = await this.vehiclesRepository.save(vehicle);
-          }
-        }
-
-        // UPDATE last_valuation_date ONLY if user sent it
-        if (restBody?.last_valuation_date) {
-          vehicle.last_valuation_date = this.parseDate(
-            restBody?.last_valuation_date,
-          );
-          vehicle = await this.vehiclesRepository.save(vehicle);
-        }
-      } catch (err) {
-        console.error('Car valuation integration failed:', err?.message || err);
-      }
 
       // Step 3: Sync with Resty
       let loginInfo: any;
@@ -1250,6 +1262,32 @@ export class VehiclesService {
 
   async selfCarListing(body: CreateCarListingDto) {
     try {
+      const customer_uuid = body.user.customer_id;
+
+      const customer = await this.customerRepo.findOne({
+        where: { uuid: customer_uuid },
+      });
+
+      if (!customer) {
+        throw new BadRequestException(
+          'Customer not found against provided uuid',
+        );
+      }
+
+      const vehicle = await this.vehiclesRepository.findOne({
+        where: {
+          plate_no: body.plate_no,
+          status: 1,
+          customer: { id: customer.id },
+        },
+      });
+
+      if (!vehicle) {
+        throw new BadRequestException(
+          `Vehicle not found aginst this customer and plate_no`,
+        );
+      }
+
       // 1. Create auth client
       const authClient = new GGMCommonAuth({
         clientId: process.env.GGM_CLIENT_ID,
@@ -1272,26 +1310,6 @@ export class VehiclesService {
       const url = `${process.env.GGM_BASE_URL}/vehicle-details`;
       const { data } = await axios.post(url, body, { headers });
 
-      const customer_uuid = body.user.customer_id;
-
-      const customer = await this.customerRepo.findOne({
-        where: { uuid: customer_uuid },
-      });
-
-      if (!customer) {
-        throw new BadRequestException(
-          'Customer not found against provided uuid',
-        );
-      }
-
-      const vehicle = await this.vehiclesRepository.findOne({
-        where: {
-          plate_no: body.plate_no,
-          status: 1,
-          customer: { id: customer.id },
-        },
-      });
-
       await this.vehiclesRepository.update(
         { id: vehicle.id },
         {
@@ -1308,7 +1326,19 @@ export class VehiclesService {
         'Error fetching car listing:',
         error?.response?.data || error.message,
       );
-      return { message: 'Vehicle Not added', error: error, data: [] };
+      // throw new BadRequestException(
+      //   `Vehicle Not added`,
+      //   error?.response?.data || error.message,
+      // );
+      if (error?.response?.data || error.message) {
+        throw new BadRequestException(error?.response?.data || error.message);
+      } else {
+        throw new BadRequestException({
+          message: ['Vehicle Not added'],
+          error: 'Request Error',
+          statusCode: 500,
+        });
+      }
     }
   }
 

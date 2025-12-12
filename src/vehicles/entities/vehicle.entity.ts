@@ -166,4 +166,7 @@ export class Vehicle {
 
   @Column({ type: 'varchar', length: 120, default: null })
   listing_status: string; // 1 = listed, 2 = sold, by default 0
+
+  @Column({ type: 'varchar', length: 36, nullable: true })
+  model_year_id: string;
 }

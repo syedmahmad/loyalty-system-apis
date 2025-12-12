@@ -91,12 +91,6 @@ export class CreateCarListingDto {
   plate_no: string;
 
   @IsString()
-  spec: string;
-
-  @IsNumber()
-  specCode: number;
-
-  @IsString()
   odometerReading: string;
 
   @IsBoolean()
