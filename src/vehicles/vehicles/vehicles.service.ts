@@ -1319,7 +1319,18 @@ export class VehiclesService {
         'Error fetching car listing:',
         error?.response?.data || error.message,
       );
-      throw new BadRequestException(`Vehicle Not added`);
+      // This error message will be shown to the user who hits this API if the vehicle could not be added
+      // The `BadRequestException` will be sent as a response with status code 400 and a message payload like:
+      // {
+      //   "statusCode": 400,
+      //   "message": "Vehicle Not added",
+      //   "error": "<detailed error from GGM or local process>"
+      // }
+      // The `message` appears to the end-user or developer via the REST API response body.
+      throw new BadRequestException({
+        message: 'Vehicle Not added',
+        details: error?.response?.data || error.message,
+      });
     }
   }
 
