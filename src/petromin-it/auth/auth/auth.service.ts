@@ -148,13 +148,8 @@ export class AuthService {
       // Send OTP via SMS and WhatsApp in parallel, but don't block on them
       if (!testUsers.includes(plainMobile)) {
         Promise.all([
-          TriggerSMS(encryptedPhone, otp, body.language_code, this.logRepo),
-          TriggerWhatsapp(
-            encryptedPhone,
-            otp,
-            body.language_code,
-            this.logRepo,
-          ),
+          TriggerSMS(plainMobile, otp, body.language_code, this.logRepo),
+          TriggerWhatsapp(plainMobile, otp, body.language_code, this.logRepo),
         ]).catch(() => {
           // Optionally log or handle errors, but don't block the main flow
         });

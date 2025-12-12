@@ -128,6 +128,7 @@ export class VehiclesService {
         carCondition: restBody?.carCondition ?? null,
         minPrice: restBody?.minPrice ?? null,
         maxPrice: restBody?.maxPrice ?? null,
+        model_year_id: restBody?.model_year_id ?? null,
       };
 
       // Step 2: Find vehicle by plate_no (regardless of customer)
@@ -156,13 +157,11 @@ export class VehiclesService {
       }
 
       vehicle = await this.vehiclesRepository.save(vehicle);
-      console.log('/////////////////vehicle', vehicle);
       // get car valuation.
       // 🔹 Step X: Fetch car valuation from Gogomotor API
       try {
         // if (variantInfo?.variantId && year && restBody?.last_mileage) {
         if (!vehicle.car_value && variantInfo?.variantId && year) {
-          console.log('/////////////////initiating car valuation');
           const valuation = await this.getCarValuation({
             km: restBody?.last_mileage || 0,
             trimId: variantInfo?.variantId || variant_id, // cannot pass modelId as bluebook does not work with it.
@@ -174,7 +173,6 @@ export class VehiclesService {
           //   vGood: { min: 68429.9997, max: 83636.6663 },
           //   excellent: { min: 70991.62056, max: 86767.53624 }
           // }
-          console.log('/////////////////data', valuation?.data);
           if (valuation?.data) {
             vehicle.last_valuation_date = new Date();
             const { good } = valuation.data;
