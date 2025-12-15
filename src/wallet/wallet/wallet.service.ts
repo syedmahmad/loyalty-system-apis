@@ -81,6 +81,7 @@ export class WalletService {
       relations: ['business_unit'],
     });
 
+    console.log('////////////////again wallet////////////', wallet);
     if (!wallet) {
       throw new BadRequestException('Wallet not found');
     }

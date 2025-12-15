@@ -171,6 +171,7 @@ export class BurningService {
         relations: ['tenant', 'business_unit'],
       });
 
+      console.log('customer///////////////', customer);
       if (!customer) {
         throw new NotFoundException(`Customer not found`);
       }
@@ -190,6 +191,8 @@ export class BurningService {
         customer.id,
         customer.business_unit.id,
       );
+
+      console.log('////////////wallet///////////////////', wallet);
 
       if (!wallet) {
         throw new NotFoundException(`Customer wallet not configured`);
