@@ -1,17 +1,18 @@
 import {
   Body,
   Controller,
-  Delete,
+  // Delete,
   Get,
   Headers,
   Param,
-  Patch,
+  // Patch,
   Post,
 } from '@nestjs/common';
 import { VehiclesService } from './vehicles.service';
 import {
   CreateCarListingDto,
-  MarkVehicleSoldDto,
+  GogoWebhookDto,
+  // MarkVehicleSoldDto,
 } from '../dto/create-car-listing.dto';
 
 @Controller('vehicles')
@@ -115,18 +116,23 @@ export class VehiclesController {
     return await this.service.selfCarListing(body);
   }
 
-  @Patch('mark-sold')
-  async markVehicleSold(@Body() dto: MarkVehicleSoldDto) {
-    return this.service.markAsSold(dto);
-  }
+  // @Patch('mark-sold')
+  // async markVehicleSold(@Body() dto: MarkVehicleSoldDto) {
+  //   return this.service.markAsSold(dto);
+  // }
 
-  @Delete('delete-self-listing')
-  async deleteVehicleFromGogo(@Body() dto: MarkVehicleSoldDto) {
-    return this.service.removeVehicleFromGogoMotor(dto);
-  }
+  // @Delete('delete-self-listing')
+  // async deleteVehicleFromGogo(@Body() dto: MarkVehicleSoldDto) {
+  //   return this.service.removeVehicleFromGogoMotor(dto);
+  // }
 
-  @Patch('update-self-listing-details')
-  async updateSelfListingDetails(@Body() dto: MarkVehicleSoldDto) {
-    return this.service.updateVehicleDetailsOnGogoMotor(dto);
+  // @Patch('update-self-listing-details')
+  // async updateSelfListingDetails(@Body() dto: MarkVehicleSoldDto) {
+  //   return this.service.updateVehicleDetailsOnGogoMotor(dto);
+  // }
+
+  @Post('/self-listing-webhook')
+  async receiveWebhook(@Body() dto: GogoWebhookDto) {
+    return this.service.handleGogoWebhook(dto);
   }
 }
