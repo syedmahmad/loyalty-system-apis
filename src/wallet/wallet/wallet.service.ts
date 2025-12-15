@@ -150,6 +150,14 @@ export class WalletService {
 
     const amount = Number(dto.amount);
 
+    console.log('/////////////////////');
+    console.log('/////////////////////');
+    console.log(
+      '/////////////////////',
+      wallet.available_balance,
+      settings?.allow_negative_balance,
+      amount,
+    );
     if (
       dto.type === WalletTransactionType.BURN &&
       !settings?.allow_negative_balance &&
