@@ -1481,7 +1481,7 @@ export class VehiclesService {
     if (km !== undefined) {
       vehicle.last_mileage = km;
     }
-
+    vehicle.last_valuation_date = new Date();
     // STEP 6: If sold → soft delete
     // if (listing_status?.toLowerCase() === 'sold') {
     //   vehicle.status = 3;
