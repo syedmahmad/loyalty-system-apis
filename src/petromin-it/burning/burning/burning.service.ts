@@ -56,10 +56,9 @@ export class BurningService {
 
     // Step 2: Find customer (by uuid or phone hash)
     const customer = await this.customerRepo.findOne({
-      where: [
-        { hashed_number: hashedPhone, status: 1 },
-        { uuid: dto.custom_customer_unique_id, status: 1 },
-      ],
+      where: { hashed_number: hashedPhone, status: 1 },
+      // { uuid: dto.custom_customer_unique_id, status: 1 },
+      // ],
     });
 
     if (!customer) {
@@ -68,10 +67,6 @@ export class BurningService {
 
     if (customer.status === 0) {
       throw new NotFoundException('Customer is inactive');
-    }
-
-    if (customer.status === 3) {
-      throw new NotFoundException('Customer is deleted');
     }
 
     // Step 3: Fetch customer wallet
@@ -158,7 +153,7 @@ export class BurningService {
     } = body;
 
     const hashedPhone = encrypt(customer_phone_number);
-
+    console.log('/////////customer_id//////////', customer_id);
     //#endregion
 
     try {
@@ -166,7 +161,7 @@ export class BurningService {
       const customer = await this.customerRepo.findOne({
         where: [
           { hashed_number: hashedPhone, status: 1 },
-          { uuid: customer_id, status: 1 },
+          // { uuid: customer_id, status: 1 },
         ],
         relations: ['tenant', 'business_unit'],
       });
