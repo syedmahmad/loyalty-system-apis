@@ -11,6 +11,7 @@ import {
 import { VehiclesService } from './vehicles.service';
 import {
   CreateCarListingDto,
+  GogoWebhookDto,
   MarkVehicleSoldDto,
 } from '../dto/create-car-listing.dto';
 
@@ -115,18 +116,23 @@ export class VehiclesController {
     return await this.service.selfCarListing(body);
   }
 
-  @Patch('mark-sold')
-  async markVehicleSold(@Body() dto: MarkVehicleSoldDto) {
-    return this.service.markAsSold(dto);
-  }
+  // @Patch('mark-sold')
+  // async markVehicleSold(@Body() dto: MarkVehicleSoldDto) {
+  //   return this.service.markAsSold(dto);
+  // }
 
-  @Delete('delete-self-listing')
-  async deleteVehicleFromGogo(@Body() dto: MarkVehicleSoldDto) {
-    return this.service.removeVehicleFromGogoMotor(dto);
-  }
+  // @Delete('delete-self-listing')
+  // async deleteVehicleFromGogo(@Body() dto: MarkVehicleSoldDto) {
+  //   return this.service.removeVehicleFromGogoMotor(dto);
+  // }
 
-  @Patch('update-self-listing-details')
-  async updateSelfListingDetails(@Body() dto: MarkVehicleSoldDto) {
-    return this.service.updateVehicleDetailsOnGogoMotor(dto);
+  // @Patch('update-self-listing-details')
+  // async updateSelfListingDetails(@Body() dto: MarkVehicleSoldDto) {
+  //   return this.service.updateVehicleDetailsOnGogoMotor(dto);
+  // }
+
+  @Post('/self-listing-webhook')
+  async receiveWebhook(@Body() dto: GogoWebhookDto) {
+    return this.service.handleGogoWebhook(dto);
   }
 }

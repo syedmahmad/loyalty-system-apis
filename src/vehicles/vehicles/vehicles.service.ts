@@ -22,6 +22,7 @@ import { GGMCommonAuth, GGMCommonAuthHeaders } from '@gogomotor/common-auth';
 import { v4 as uuidv4 } from 'uuid';
 import {
   CreateCarListingDto,
+  GogoWebhookDto,
   MarkVehicleSoldDto,
 } from '../dto/create-car-listing.dto';
 
@@ -1437,5 +1438,84 @@ export class VehiclesService {
     // Try parse ISO / string formats
     const parsed = new Date(value);
     return isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  async handleGogoWebhook(dto: GogoWebhookDto) {
+    try {
+      const { plate_no, km, asking_price, listing_status, images } = dto;
+
+      if (!plate_no) {
+        throw new BadRequestException('plate_no is required');
+      }
+
+      // STEP 1: Find vehicle
+      const vehicle = await this.vehiclesRepository.findOne({
+        where: { plate_no, status: 1 },
+        relations: ['customer'],
+      });
+
+      if (!vehicle) {
+        throw new NotFoundException('Vehicle not found');
+      }
+
+      // STEP 2: Validate images format if provided
+      if (images) {
+        const isValid = this.validateGogoImageFormat(images);
+        if (!isValid) {
+          throw new BadRequestException('Please send proper images format');
+        }
+        vehicle.images = images;
+      }
+
+      // STEP 3: Update asking price
+      if (asking_price !== undefined) {
+        vehicle.asking_price = asking_price;
+      }
+
+      // STEP 4: Update listing_status
+      if (listing_status !== undefined) {
+        vehicle.listing_status = listing_status;
+      }
+
+      // STEP 5: Update KM
+      if (km !== undefined) {
+        vehicle.last_mileage = km;
+      }
+
+      // STEP 6: If sold → soft delete
+      if (listing_status?.toLowerCase() === 'sold') {
+        vehicle.status = 3;
+        vehicle.delete_requested_at = new Date();
+        vehicle.reason_for_deletion = 'Sold on GoGoMotor platform';
+      }
+
+      await this.vehiclesRepository.save(vehicle);
+
+      return {
+        success: true,
+        message: 'Vehicle updated via webhook',
+        result: { vehicle },
+        errors: [],
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: error.message,
+        result: {},
+        errors: [error],
+      };
+    }
+  }
+
+  private validateGogoImageFormat(images: any[]): boolean {
+    if (!Array.isArray(images)) return false;
+
+    return images.every(
+      (img) =>
+        img &&
+        typeof img.url === 'string' &&
+        typeof img.type === 'string' &&
+        img.url.startsWith('http'),
+    );
   }
 }

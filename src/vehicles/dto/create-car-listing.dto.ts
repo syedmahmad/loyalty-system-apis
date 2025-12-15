@@ -5,11 +5,11 @@ import {
   ValidateNested,
   IsArray,
   IsUUID,
+  IsNotEmpty,
   IsDateString,
   IsOptional,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-
 export class CarListingUserDto {
   @IsUUID()
   customer_id: string;
@@ -114,4 +114,33 @@ export class MarkVehicleSoldDto {
 
   @IsUUID()
   customerId: string;
+}
+
+// dto/gogo-webhook.dto.ts
+class GogoImageDto {
+  @IsString()
+  url: string;
+
+  @IsString()
+  type: string;
+}
+export class GogoWebhookDto {
+  @IsString()
+  @IsNotEmpty()
+  plate_no: string;
+
+  @IsOptional()
+  asking_price?: number;
+
+  @IsOptional()
+  listing_status?: string;
+
+  @IsOptional()
+  km?: number;
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => GogoImageDto)
+  @IsOptional()
+  images?: GogoImageDto[];
 }
