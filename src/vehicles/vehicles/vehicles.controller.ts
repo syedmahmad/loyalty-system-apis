@@ -1,18 +1,18 @@
 import {
   Body,
   Controller,
-  Delete,
+  // Delete,
   Get,
   Headers,
   Param,
-  Patch,
+  // Patch,
   Post,
 } from '@nestjs/common';
 import { VehiclesService } from './vehicles.service';
 import {
   CreateCarListingDto,
   GogoWebhookDto,
-  MarkVehicleSoldDto,
+  // MarkVehicleSoldDto,
 } from '../dto/create-car-listing.dto';
 
 @Controller('vehicles')

@@ -139,8 +139,8 @@ export class GogoWebhookDto {
   km?: number;
 
   @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => GogoImageDto)
+  // @ValidateNested({ each: true })
+  // @Type(() => GogoImageDto)
   @IsOptional()
   images?: GogoImageDto[];
 }
