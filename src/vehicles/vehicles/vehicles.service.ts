@@ -911,7 +911,6 @@ export class VehiclesService {
                 // national_id: eachVehicle?.national_id ?? null,
               };
 
-              console.log('///////////prePareData', prePareData);
               await this.vehiclesRepository.save({
                 ...prePareData,
                 customer: { id: customer.id },
@@ -919,11 +918,32 @@ export class VehiclesService {
                 last_service_date: eachVehicle.last_service_date || null,
               });
             } else {
-              await this.vehiclesRepository.save({
-                customer: { id: customer.id },
-                last_mileage: eachVehicle.last_mileage || null,
-                last_service_date: eachVehicle.last_service_date || null,
+              // Attempt to find an existing vehicle with the same plate_no and customer
+              const existingVehicle = await this.vehiclesRepository.findOne({
+                where: {
+                  customer: { id: customer.id },
+                  plate_no: eachVehicle?.plate_no ?? null,
+                },
               });
+
+              if (existingVehicle) {
+                // Update the existing vehicle with the new data
+                await this.vehiclesRepository.save({
+                  ...existingVehicle,
+                  vin_number: eachVehicle?.vin ?? existingVehicle.vin_number,
+                  year: eachVehicle?.model_year
+                    ? eachVehicle?.model_year
+                    : eachVehicle.model_year,
+                  last_mileage:
+                    eachVehicle.last_mileage ||
+                    existingVehicle.last_mileage ||
+                    null,
+                  last_service_date:
+                    eachVehicle.last_service_date ||
+                    existingVehicle.last_service_date ||
+                    null,
+                });
+              }
             }
           }
         }
