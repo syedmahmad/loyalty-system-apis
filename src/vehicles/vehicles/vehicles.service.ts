@@ -919,7 +919,6 @@ export class VehiclesService {
               });
             } else {
               console.log('/////////////////else condition////////////');
-              console.log('/////////////////else condition////////////');
               // Attempt to find an existing vehicle with the same plate_no and customer
               const existingVehicle = await this.vehiclesRepository.findOne({
                 where: {
@@ -930,6 +929,12 @@ export class VehiclesService {
               console.log(
                 '/////////////////existingVehicle////////////',
                 existingVehicle.last_service_date,
+                existingVehicle.plate_no,
+              );
+
+              console.log(
+                '/////////////////eachVehicle////////////',
+                eachVehicle.last_service_date,
               );
 
               if (existingVehicle) {
