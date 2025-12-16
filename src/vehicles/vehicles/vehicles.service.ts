@@ -918,6 +918,8 @@ export class VehiclesService {
                 last_service_date: eachVehicle.last_service_date || null,
               });
             } else {
+              console.log('/////////////////else condition////////////');
+              console.log('/////////////////else condition////////////');
               // Attempt to find an existing vehicle with the same plate_no and customer
               const existingVehicle = await this.vehiclesRepository.findOne({
                 where: {
@@ -925,6 +927,10 @@ export class VehiclesService {
                   plate_no: eachVehicle?.plate_no ?? null,
                 },
               });
+              console.log(
+                '/////////////////existingVehicle////////////',
+                existingVehicle.last_service_date,
+              );
 
               if (existingVehicle) {
                 // Update the existing vehicle with the new data
@@ -934,14 +940,8 @@ export class VehiclesService {
                   year: eachVehicle?.model_year
                     ? eachVehicle?.model_year
                     : eachVehicle.model_year,
-                  last_mileage:
-                    eachVehicle.last_mileage ||
-                    existingVehicle.last_mileage ||
-                    null,
-                  last_service_date:
-                    eachVehicle.last_service_date ||
-                    existingVehicle.last_service_date ||
-                    null,
+                  last_mileage: eachVehicle.last_mileage,
+                  last_service_date: eachVehicle.last_service_date,
                 });
               }
             }
