@@ -65,9 +65,9 @@ export class BurningService {
       throw new NotFoundException('Customer not found');
     }
 
-    if (customer.status === 0) {
-      throw new NotFoundException('Customer is inactive');
-    }
+    // if (customer.status === 0) {
+    //   throw new NotFoundException('Customer is inactive');
+    // }
 
     // Step 3: Fetch customer wallet
     const wallet = await this.walletRepo.findOne({
@@ -159,25 +159,23 @@ export class BurningService {
     try {
       //#region Step 2: Find customer
       const customer = await this.customerRepo.findOne({
-        where: [
-          { hashed_number: hashedPhone, status: 1 },
-          // { uuid: customer_id, status: 1 },
-        ],
+        where: { hashed_number: hashedPhone, status: 1 },
+        // { uuid: customer_id, status: 1 },
+        // ],
         relations: ['tenant', 'business_unit'],
       });
 
-      console.log('customer///////////////', customer);
       if (!customer) {
         throw new NotFoundException(`Customer not found`);
       }
 
-      if (customer.status === 0) {
-        throw new BadRequestException(`Customer is inactive`);
-      }
+      // if (customer.status === 0) {
+      //   throw new BadRequestException(`Customer is inactive`);
+      // }
 
-      if (customer.status === 3) {
-        throw new BadRequestException(`Customer is deleted`);
-      }
+      // if (customer.status === 3) {
+      //   throw new BadRequestException(`Customer is deleted`);
+      // }
 
       //#endregion
 
@@ -186,8 +184,6 @@ export class BurningService {
         customer.id,
         customer.business_unit.id,
       );
-
-      console.log('////////////wallet///////////////////', wallet);
 
       if (!wallet) {
         throw new NotFoundException(`Customer wallet not configured`);
@@ -362,13 +358,13 @@ export class BurningService {
         throw new NotFoundException(`Customer not found`);
       }
 
-      if (customer.status === 0) {
-        throw new BadRequestException(`Customer is inactive`);
-      }
+      // if (customer.status === 0) {
+      //   throw new BadRequestException(`Customer is inactive`);
+      // }
 
-      if (customer.status === 3) {
-        throw new BadRequestException(`Customer is deleted`);
-      }
+      // if (customer.status === 3) {
+      //   throw new BadRequestException(`Customer is deleted`);
+      // }
 
       const wallet = await this.walletService.getSingleCustomerWalletInfo(
         customer.id,

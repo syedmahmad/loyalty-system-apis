@@ -81,7 +81,6 @@ export class WalletService {
       relations: ['business_unit'],
     });
 
-    console.log('////////////////again wallet////////////', wallet);
     if (!wallet) {
       throw new BadRequestException('Wallet not found');
     }
@@ -149,20 +148,10 @@ export class WalletService {
       expiryDate = dto?.expiry_date;
     }
 
-    const amount = Number(dto.amount);
-
-    console.log('/////////////////////');
-    console.log('/////////////////////');
-    console.log(
-      '/////////////////////',
-      wallet.available_balance,
-      settings?.allow_negative_balance,
-      amount,
-    );
+    // const amount = Number(dto.amount);
     if (
       dto.type === WalletTransactionType.BURN &&
-      !settings?.allow_negative_balance &&
-      wallet.available_balance < amount
+      wallet.available_balance < dto.points_balance // dto.points_balance is equal to pointsToBurn
     ) {
       throw new BadRequestException('Insufficient balance');
     }
