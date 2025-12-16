@@ -189,10 +189,21 @@ export class RulesService extends BaseService {
         .filter((sourceType) => sourceType !== null),
     );
 
-    // Filter out rules that customer has already earned
-    const availableRules = rules.filter(
-      (rule) => !earnedRuleNames.has(rule?.event_triggerer),
-    );
+    // Filter out rules:
+    // - Always include if NOT already earned
+    // - If already earned, only exclude if frequency is 'only once'
+    const availableRules = rules.filter((rule) => {
+      const isEarned = earnedRuleNames.has(rule?.event_triggerer);
+
+      // If not earned, keep
+      if (!isEarned) return true;
+
+      // If earned and frequency is 'only once', skip
+      if (isEarned && rule?.frequency?.toLowerCase() === 'once') return false;
+
+      // Else (earned, but frequency != only once), keep
+      return true;
+    });
 
     // The error message "Unknown column 'distinctAlias.Rule_id' in 'field list'" suggests that TypeORM is generating a query asking for 'Rule_id',
     // but the column in your database is probably called 'id' (or another field name), not 'Rule_id'.
