@@ -6,6 +6,7 @@ import { WalletOrder } from 'src/wallet/entities/wallet-order.entity';
 import { Between, IsNull, Not, Repository } from 'typeorm';
 import { Coupon } from 'src/coupons/entities/coupon.entity';
 import { UserCoupon } from 'src/wallet/entities/user-coupon.entity';
+import { CouponUsage } from 'src/coupons/entities/coupon-usages.entity';
 
 @Injectable()
 export class LoyaltyAnalyticsService {
@@ -24,6 +25,9 @@ export class LoyaltyAnalyticsService {
 
     @InjectRepository(UserCoupon)
     private userCouponRepository: Repository<UserCoupon>,
+
+    @InjectRepository(CouponUsage)
+    private couponUsageRepo: Repository<CouponUsage>,
   ) {}
 
   async pointsSplit(permission: any, startDate?: string, endDate?: string) {
@@ -419,28 +423,28 @@ export class LoyaltyAnalyticsService {
     const data = await usageData.getRawMany();
     */
 
-    const usedCouponQuery = this.userCouponRepository
-      .createQueryBuilder('uc')
-      .select("DATE_FORMAT(uc.created_at, '%Y-%m-%d')", 'date')
-      .addSelect('COUNT(*)', 'count')
-      .where('uc.status = :status', { status: 'used' });
+    const usedCouponQuery = this.couponUsageRepo
+      .createQueryBuilder('couponUsage')
+      .select("DATE_FORMAT(couponUsage.used_at, '%Y-%m-%d')", 'date')
+      .addSelect('COUNT(*)', 'count');
 
     if (startDate && endDate) {
-      usedCouponQuery.andWhere('uc.created_at BETWEEN :start AND :end', {
+      usedCouponQuery.andWhere('couponUsage.used_at BETWEEN :start AND :end', {
         start: startDate,
         end: endDate,
       });
     }
-    usedCouponQuery.groupBy("DATE_FORMAT(uc.created_at, '%Y-%m-%d')");
+    usedCouponQuery.groupBy("DATE_FORMAT(couponUsage.used_at, '%Y-%m-%d')");
     const data = await usedCouponQuery.getRawMany();
 
     return data.map((item) => ({
-      date: item.date,
+      date: `${item.date}`,
       count: parseInt(item.count, 10),
     }));
   }
 
-  async getCouponBarData(startDate, endDate, language_code = 'en') {
+  async getCouponBarData(startDate, endDate) {
+    /*
     const qb = this.walletTransactionRepository
       .createQueryBuilder('tx')
       .innerJoin('coupons', 'c', 'tx.source_id = c.id')
@@ -469,5 +473,26 @@ export class LoyaltyAnalyticsService {
     }));
 
     return barData;
+    */
+
+    const issuedCouponQuery = this.userCouponRepository
+      .createQueryBuilder('uc')
+      .select("DATE_FORMAT(uc.created_at, '%Y-%m-%d')", 'date')
+      .addSelect('COUNT(*)', 'count')
+      .where('uc.status = :status', { status: 'issued' });
+
+    if (startDate && endDate) {
+      issuedCouponQuery.andWhere('uc.created_at BETWEEN :start AND :end', {
+        start: startDate,
+        end: endDate,
+      });
+    }
+    issuedCouponQuery.groupBy("DATE_FORMAT(uc.created_at, '%Y-%m-%d')");
+    const data = await issuedCouponQuery.getRawMany();
+
+    return data.map((item) => ({
+      name: `${item.date}`,
+      count: parseInt(item.count, 10),
+    }));
   }
 }

@@ -10,6 +10,7 @@ import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
 import { Tenant } from 'src/tenants/entities/tenant.entity';
 import { User } from 'src/users/entities/user.entity';
 import { UserCoupon } from 'src/wallet/entities/user-coupon.entity';
+import { CouponUsage } from 'src/coupons/entities/coupon-usages.entity';
 
 @Module({
   imports: [
@@ -21,7 +22,8 @@ import { UserCoupon } from 'src/wallet/entities/user-coupon.entity';
       Tenant,
       BusinessUnit,
       User,
-      UserCoupon
+      UserCoupon,
+      CouponUsage
     ]),
   ],
   controllers: [LoyaltyAnalyticsController],
