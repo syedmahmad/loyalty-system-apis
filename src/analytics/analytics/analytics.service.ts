@@ -357,20 +357,16 @@ export class LoyaltyAnalyticsService {
     */
 
     // 🟦 Used Coupons
-    const userCouponQuery = this.userCouponRepository
-      .createQueryBuilder('user_coupon')
-      .select('COUNT(*)', 'totalCouponsUsage')
-      .where('user_coupon.status = :status', { status: 'used' });
+    const usedCouponQuery = this.couponUsageRepo
+      .createQueryBuilder('couponUsage')
+      .select('COUNT(*)', 'totalCouponsUsage');
     if (startDate && endDate) {
-      userCouponQuery.andWhere(
-        'user_coupon.created_at BETWEEN :start AND :end',
-        {
-          start: startDate,
-          end: endDate,
-        },
-      );
+      usedCouponQuery.andWhere('couponUsage.used_at BETWEEN :start AND :end', {
+        start: startDate,
+        end: endDate,
+      });
     }
-    const { totalCouponsUsage } = await userCouponQuery.getRawOne();
+    const { totalCouponsUsage } = await usedCouponQuery.getRawOne();
 
     if (type === 'couponSummary') {
       return [
