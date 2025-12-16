@@ -153,6 +153,7 @@ export class RulesService extends BaseService {
         'rule.event_triggerer',
         'rule.validity_after_assignment',
         'rule.status',
+        'rule.frequency',
       ])
       .leftJoinAndSelect('rule.locales', 'locale')
       .leftJoinAndSelect('locale.language', 'language')
@@ -189,11 +190,6 @@ export class RulesService extends BaseService {
         .filter((sourceType) => sourceType !== null),
     );
 
-    // // Filter out rules that customer has already earned
-    // const availableRules = rules.filter(
-    //   (rule) => !earnedRuleNames.has(rule?.event_triggerer),
-    // );
-    console.log('/////////////rules////////////////////', rules);
     const availableRules = rules.filter((rule) => {
       return rule.frequency === 'once'
         ? !earnedRuleNames.has(rule.event_triggerer)
