@@ -796,7 +796,6 @@ export class VehiclesService {
           loginInfo,
         });
 
-        console.log('customerInfoFromResty///////////', customerInfoFromResty);
         let restyVehicles = null;
         if (customerInfoFromResty.length) {
           // 5. Get Vehicles from Resty
@@ -805,7 +804,6 @@ export class VehiclesService {
             loginInfo,
           });
 
-          console.log('restyVehicles///////////', restyVehicles);
           if (!restyVehicles.length) {
             restyVehicles = null;
           }
@@ -829,7 +827,6 @@ export class VehiclesService {
           const localVinSet = new Set(localVehicles.map((v) => v.plate_no));
 
           for (const eachVehicle of restyVehicles) {
-            console.log('//////////////inside loop eachVehicle', eachVehicle);
             // if new record comes from resty which does not exist in local vehicles
             // add them in local vehicles but
             // do not again add deleted or inactive vehicles.
@@ -921,6 +918,12 @@ export class VehiclesService {
                 last_mileage: eachVehicle.last_mileage || null,
                 last_service_date: eachVehicle.last_service_date || null,
               });
+            } else {
+              await this.vehiclesRepository.save({
+                customer: { id: customer.id },
+                last_mileage: eachVehicle.last_mileage || null,
+                last_service_date: eachVehicle.last_service_date || null,
+              });
             }
           }
         }
@@ -930,11 +933,6 @@ export class VehiclesService {
       const combineVehicles = await this.vehiclesRepository.find({
         where: { customer: { id: customer.id }, status: 1 },
       });
-
-      console.log('///////////combineVehicles');
-      console.log('///////////combineVehicles');
-      console.log('///////////combineVehicles');
-      console.log('///////////combineVehicles', combineVehicles);
 
       return {
         success: true,
