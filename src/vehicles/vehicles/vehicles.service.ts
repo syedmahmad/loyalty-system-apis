@@ -736,8 +736,6 @@ export class VehiclesService {
         );
       }
 
-      console.log('//////////////lastservice', lastService);
-
       // Step 7: Prepare response
       const result = {
         feedback: feedback
@@ -771,6 +769,17 @@ export class VehiclesService {
     }
   }
 
+  /**
+   * Fetches vehicles for a customer, syncing local and Resty data.
+   *
+   * Does this method create multiple vehicles locally if they already exist?
+   * - No, this method does not create duplicate vehicles for the same plate_no and customer (with status 1).
+   * - It first loads all local vehicles with status:1 (active) for the customer to a Set for easy lookup.
+   * - For each vehicle coming from Resty, if a local vehicle (same plate_no, active) exists, it updates instead of inserting.
+   * - The `.save()` method in TypeORM can both insert and update records. If you pass an entity object with a primary key (`id`), it performs an UPDATE. If no id is present, it does an INSERT.
+   * - To ensure updates, code fetches `existingVehicle` using customer, plate_no, and status:1, and when found passes the whole object (with id) to .save() with potential field modifications.
+   * - This means for any (customer, plate_no) with active status, duplicates are never created. If the plate_no is not present for active status, it may save a new one, but it explicitly checks for prior deactivated/deleted by this customer and skips in that case.
+   */
   async getCustomerVehicle({ customerId, tenantId, businessUnitId }) {
     try {
       // 1. Validate Customer
@@ -782,13 +791,12 @@ export class VehiclesService {
           tenant: { id: parseInt(tenantId) },
         },
       });
-
       if (!customer) throw new NotFoundException('Customer not found');
 
       // 3. Login to Resty
       const loginInfo = await this.customerLoginInResty();
       if (loginInfo?.access_token) {
-        //TODO: it could return multiple customers profile, so we need to take decision here.
+        // it could return multiple customers profile, after merging, so we need to take decision here.
         // but for now, we are only getting first profile.
         // 4. Get Customer Info from Resty
         const customerInfoFromResty = await this.getCustomerInfoFromResty({
@@ -819,13 +827,15 @@ export class VehiclesService {
           // we need to add his vehicle again.
 
           // 2. Get local vehicles, if customer re-add vehicles, these will come here, don't need to check
-          // edither he has deleted or not.
+          // either he has deleted or not.
           const localVehicles = await this.vehiclesRepository.find({
             where: { customer: { id: customer.id }, status: 1 },
           });
-          // 6. Compare and sync
-          const localVinSet = new Set(localVehicles.map((v) => v.plate_no));
 
+          // This line creates a Set of plate numbers (plate_no) from the localVehicles array.
+          // It is used to quickly check if a vehicle from Resty is already present locally by its plate number.
+          const localVinSet = new Set(localVehicles.map((v) => v.plate_no));
+          // 6. Compare and sync
           for (const eachVehicle of restyVehicles) {
             // if new record comes from resty which does not exist in local vehicles
             // add them in local vehicles but
@@ -918,7 +928,6 @@ export class VehiclesService {
                 last_service_date: eachVehicle.last_service_date || null,
               });
             } else {
-              console.log('/////////////////else condition////////////');
               // Attempt to find an existing vehicle with the same plate_no and customer
               const existingVehicle = await this.vehiclesRepository.findOne({
                 where: {
@@ -927,16 +936,6 @@ export class VehiclesService {
                   status: 1,
                 },
               });
-              console.log(
-                '/////////////////existingVehicle////////////',
-                existingVehicle.last_service_date,
-                existingVehicle.plate_no,
-              );
-
-              console.log(
-                '/////////////////eachVehicle////////////',
-                eachVehicle.last_service_date,
-              );
 
               if (existingVehicle) {
                 // Update the existing vehicle with the new data
