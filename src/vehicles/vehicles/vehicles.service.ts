@@ -924,6 +924,7 @@ export class VehiclesService {
                 where: {
                   customer: { id: customer.id },
                   plate_no: eachVehicle?.plate_no ?? null,
+                  status: 1,
                 },
               });
               console.log(
@@ -1412,7 +1413,7 @@ export class VehiclesService {
     const { plate_no, customerId } = dto;
 
     const vehicle = await this.vehiclesRepository.findOne({
-      where: { plate_no: plate_no },
+      where: { plate_no: plate_no, status: 1 },
       relations: ['customer'],
     });
 
@@ -1436,7 +1437,7 @@ export class VehiclesService {
     const { plate_no, customerId } = dto;
 
     const vehicle = await this.vehiclesRepository.findOne({
-      where: { plate_no: plate_no },
+      where: { plate_no: plate_no, status: 1 },
       relations: ['customer'],
     });
 
