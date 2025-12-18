@@ -2234,7 +2234,8 @@ export class CouponsService {
 
     const couponsForAllUser = await this.couponsRepository.find({
       where: [
-        { all_users: 1, status: 1, business_unit: { id: parseInt(bUId) } },
+        // { all_users: 1, status: 1, business_unit: { id: parseInt(bUId) } },
+        { all_users: 1, status: 1 },
       ],
       relations: ['locales', 'locales.language'],
     });
