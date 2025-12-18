@@ -509,15 +509,15 @@ export class TiersService {
 
     // Step 2: Find the matching tier
     const query = this.tiersRepository
-      .createQueryBuilder('tier')
-      .leftJoinAndSelect('tier.locales', 'locale')
+      .createQueryBuilder('tiers')
+      .leftJoinAndSelect('tiers.locales', 'locale')
       .leftJoinAndSelect('locale.language', 'language')
-      .where('tier.min_points <= :points', { points })
-      .andWhere('tier.status = :status', { status: 1 })
-      .andWhere('tier.business_unit_id = :business_unit_id', {
+      .where('tiers.min_points <= :points', { points })
+      .andWhere('tiers.status = :status', { status: 1 })
+      .andWhere('tiers.business_unit_id = :business_unit_id', {
         business_unit_id: customerWallet.business_unit?.id,
       })
-      .orderBy('tier.min_points', 'DESC');
+      .orderBy('tiers.min_points', 'DESC');
 
     // if (language_code) {
     //   query.andWhere('language.code = :language_code', { language_code });
