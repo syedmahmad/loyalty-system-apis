@@ -508,24 +508,21 @@ export class TiersService {
     const points = customerWallet.total_balance;
 
     const query = this.tiersRepository
-      .createQueryBuilder('tiers')
-      .leftJoinAndSelect('tiers.locales', 'locale')
+      .createQueryBuilder('tier')
+      .leftJoinAndSelect('tier.locales', 'locale')
       .leftJoinAndSelect('locale.language', 'language')
-      .where('tiers.min_points <= :points', { points })
-      .andWhere('tiers.status = :status', { status: 1 })
-      .andWhere('tiers.business_unit_id = :business_unit_id', {
+      .where('tier.min_points <= :points', { points })
+      .andWhere('tier.status = :status', { status: 1 })
+      .andWhere('tier.business_unit_id = :business_unit_id', {
         business_unit_id: customerWallet.business_unit?.id,
       })
-      .orderBy('tiers.min_points', 'DESC');
+      .orderBy('tier.min_points', 'DESC');
 
     if (language_code) {
       query.andWhere('(language.code = :language_code OR locale.id IS NULL)', {
         language_code,
       });
     }
-
-    console.log(query.getSql());
-    console.log(query.getParameters());
 
     const matchingTier = await query.getOne();
 

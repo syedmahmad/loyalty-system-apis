@@ -94,7 +94,7 @@ export class CustomerProfileService {
     }
 
     const customerCoupons = await this.couponsService.getCustomerCoupons({
-      customerId: customer.uuid,
+      customerId: customerInfo.uuid,
       bUId: customerInfo.business_unit.id,
     });
 
@@ -103,7 +103,7 @@ export class CustomerProfileService {
     });
 
     const currentCustomerTier = await this.tierService.getCurrentCustomerTier(
-      customer?.id,
+      customerInfo?.id,
       language_code,
     );
 
