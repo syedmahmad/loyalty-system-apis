@@ -507,7 +507,6 @@ export class TiersService {
 
     const points = customerWallet.total_balance;
 
-    // Step 2: Find the matching tier
     const query = this.tiersRepository
       .createQueryBuilder('tiers')
       .leftJoinAndSelect('tiers.locales', 'locale')
@@ -519,17 +518,40 @@ export class TiersService {
       })
       .orderBy('tiers.min_points', 'DESC');
 
-    // if (language_code) {
-    //   query.andWhere('language.code = :language_code', { language_code });
-    // }
-
     if (language_code) {
       query.andWhere('(language.code = :language_code OR locale.id IS NULL)', {
         language_code,
       });
     }
 
+    console.log(query.getSql());
+    console.log(query.getParameters());
+
     const matchingTier = await query.getOne();
+
+    // // Step 2: Find the matching tier
+    // const query = this.tiersRepository
+    //   .createQueryBuilder('tiers')
+    //   .leftJoinAndSelect('tiers.locales', 'locale')
+    //   .leftJoinAndSelect('locale.language', 'language')
+    //   .where('tiers.min_points <= :points', { points })
+    //   .andWhere('tiers.status = :status', { status: 1 })
+    //   .andWhere('tiers.business_unit_id = :business_unit_id', {
+    //     business_unit_id: customerWallet.business_unit?.id,
+    //   })
+    //   .orderBy('tiers.min_points', 'DESC');
+
+    // // if (language_code) {
+    // //   query.andWhere('language.code = :language_code', { language_code });
+    // // }
+
+    // if (language_code) {
+    //   query.andWhere('(language.code = :language_code OR locale.id IS NULL)', {
+    //     language_code,
+    //   });
+    // }
+
+    // const matchingTier = await query.getOne();
 
     if (!matchingTier) {
       return {
