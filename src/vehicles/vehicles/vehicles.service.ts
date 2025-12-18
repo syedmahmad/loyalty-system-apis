@@ -1482,7 +1482,7 @@ export class VehiclesService {
 
     // STEP 1: Find vehicle
     const vehicle = await this.vehiclesRepository.findOne({
-      where: { self_listed_id, status: 1 },
+      where: { self_listed_id: Number(self_listed_id), status: 1 },
       relations: ['customer'],
     });
 
