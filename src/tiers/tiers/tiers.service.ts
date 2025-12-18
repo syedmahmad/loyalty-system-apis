@@ -162,8 +162,15 @@ export class TiersService {
       .andWhere('tier.tenant_id = :tenant_id', { tenant_id: client_id })
       .orderBy('tier.created_at', 'DESC');
 
+    // if (langCode) {
+    //   queryBuilder.andWhere('language.code = :langCode', { langCode });
+    // }
+
     if (langCode) {
-      queryBuilder.andWhere('language.code = :langCode', { langCode });
+      queryBuilder.andWhere(
+        '(language.code = :langCode OR locale.id IS NULL)',
+        { langCode },
+      );
     }
 
     if (name) {
@@ -465,8 +472,14 @@ export class TiersService {
       .andWhere('tier.status = :status', { status: 1 })
       .orderBy('tier.created_at', 'DESC');
 
+    // if (language_code) {
+    //   query.andWhere('language.code = :language_code', { language_code });
+    // }
+
     if (language_code) {
-      query.andWhere('language.code = :language_code', { language_code });
+      query.andWhere('(language.code = :language_code OR locale.id IS NULL)', {
+        language_code,
+      });
     }
 
     const tiers = await query.getMany();
@@ -506,8 +519,14 @@ export class TiersService {
       })
       .orderBy('tier.min_points', 'DESC');
 
+    // if (language_code) {
+    //   query.andWhere('language.code = :language_code', { language_code });
+    // }
+
     if (language_code) {
-      query.andWhere('language.code = :language_code', { language_code });
+      query.andWhere('(language.code = :language_code OR locale.id IS NULL)', {
+        language_code,
+      });
     }
 
     const matchingTier = await query.getOne();
@@ -588,8 +607,14 @@ export class TiersService {
         .andWhere('tier.status = :status', { status: 1 })
         .orderBy('tier.min_points', 'ASC');
 
+      // if (language_code) {
+      //   query.andWhere('language.code = :language_code', { language_code });
+      // }
       if (language_code) {
-        query.andWhere('language.code = :language_code', { language_code });
+        query.andWhere(
+          '(language.code = :language_code OR locale.id IS NULL)',
+          { language_code },
+        );
       }
       const allTiers = await query.getMany();
 
