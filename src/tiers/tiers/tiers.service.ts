@@ -505,7 +505,7 @@ export class TiersService {
       throw new NotFoundException('Customer wallet not found');
     }
 
-    const points = customerWallet.total_balance;
+    const points = customerWallet.total_balance; // tier will be based on total points.
 
     const query = this.tiersRepository
       .createQueryBuilder('tier')
@@ -599,18 +599,20 @@ export class TiersService {
       });
 
       if (!customer) throw new NotFoundException('Customer not found');
-      if (customer && customer.status == 0) {
-        throw new NotFoundException('Customer is inactive');
-      }
+      // if (customer && customer.status == 0) {
+      //   throw new NotFoundException('Customer is inactive');
+      // }
 
-      if (customer.status === 3) {
-        throw new NotFoundException('Customer is deleted');
-      }
+      // if (customer.status === 3) {
+      //   throw new NotFoundException('Customer is deleted');
+      // }
 
       const wallet = await this.walletService.getSingleCustomerWalletInfoById(
         customer.id,
       );
       if (!wallet) throw new NotFoundException("customer's Wallet not found");
+
+      console.log('//////////.wallet.........wallet//////', wallet);
 
       const customerTierInfo = await this.getCurrentCustomerTier(
         customer.id,
@@ -741,14 +743,15 @@ export class TiersService {
         success: true,
         message: 'Successfully fetched the data!',
         result: {
-          points: customerTierInfo.points,
+          // points: customerTierInfo.points,
+          points: wallet.available_balance,
           points_expiry_date: dayjs(lastWalletTransactions.created_at)
             .add(parseInt(walletSettings?.expiration_value ?? '365'), 'day')
             .toDate(),
           converted_amount:
             (burningRule?.points_conversion_factor
               ? burningRule.points_conversion_factor
-              : 0.01) * customerTierInfo.points,
+              : 0.01) * wallet.available_balance,
           currentTier: {
             ...restTier,
             name: restTier.name,
