@@ -127,7 +127,7 @@ class GogoImageDto {
 export class GogoWebhookDto {
   @IsString()
   @IsNotEmpty()
-  plate_no: string;
+  self_listed_id: string;
 
   @IsOptional()
   asking_price?: number;

@@ -1351,6 +1351,7 @@ export class VehiclesService {
         {
           ggm_url: data.data.myAccountUrl,
           asking_price: body.askingPrice,
+          self_listed_id: data.data.vehicleListingId,
           listing_status: data.data?.vehicleStatus || '',
         },
       );
@@ -1472,16 +1473,16 @@ export class VehiclesService {
   }
 
   async handleGogoWebhook(dto: GogoWebhookDto) {
-    const { plate_no, km, asking_price, listing_status, images } = dto;
+    const { self_listed_id, km, asking_price, listing_status, images } = dto;
 
-    if (!plate_no) {
+    if (!self_listed_id) {
       // Throwing exception lets nestjs set correct 400/422 code in response
-      throw new BadRequestException('plate_no is required');
+      throw new BadRequestException('self_listed_id is required');
     }
 
     // STEP 1: Find vehicle
     const vehicle = await this.vehiclesRepository.findOne({
-      where: { plate_no, status: 1 },
+      where: { self_listed_id, status: 1 },
       relations: ['customer'],
     });
 

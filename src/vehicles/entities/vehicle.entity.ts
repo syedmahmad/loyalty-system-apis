@@ -169,4 +169,7 @@ export class Vehicle {
 
   @Column({ type: 'varchar', length: 36, nullable: true })
   model_year_id: string;
+
+  @Column({ type: 'varchar', length: 120, default: null })
+  self_listed_id: string; // need to save this field so can communicate with GoGoMotor via webhook
 }
