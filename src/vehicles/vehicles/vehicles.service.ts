@@ -957,10 +957,55 @@ export class VehiclesService {
         where: { customer: { id: customer.id }, status: 1 },
       });
 
+      let isFetchAgain = false;
+
+      // 🔹 Step: Ensure valuation exists or fetch missing valuation
+      for (const vehicle of combineVehicles) {
+        const variantId = vehicle?.variant_id;
+        const year = vehicle?.year;
+
+        if (!variantId || !year) {
+          continue; // Cannot fetch valuation without these
+        }
+
+        // CASE 1: No car_value → fetch valuation
+        if (!vehicle.car_value) {
+          const valuation = await this.getCarValuation({
+            km: vehicle.last_mileage || 0,
+            trimId: Number(variantId),
+            year: Number(year),
+          });
+          isFetchAgain = true;
+
+          if (valuation?.data) {
+            const { good } = valuation.data;
+
+            vehicle.last_valuation_date = new Date();
+            vehicle.car_value = valuation.data;
+            vehicle.carCondition = 'good';
+            vehicle.minPrice = good.min;
+            vehicle.maxPrice = good.max;
+
+            await this.vehiclesRepository.save(vehicle);
+          }
+
+          continue;
+        }
+      }
+
+      let finalVehicles: any[] = [];
+      if (isFetchAgain) {
+        finalVehicles = await this.vehiclesRepository.find({
+          where: { customer: { id: customer.id }, status: 1 },
+        });
+      } else {
+        finalVehicles = combineVehicles;
+      }
+
       return {
         success: true,
         message: 'Successfully fetched the data!',
-        result: { vehicles: combineVehicles },
+        result: { vehicles: finalVehicles },
         errors: [],
       };
     } catch (error) {
