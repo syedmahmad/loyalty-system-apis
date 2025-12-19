@@ -51,7 +51,8 @@ export class VariantService {
                 FuelType,
               }) => ({
                 variantId: TrimId,
-                name: Trim,
+                // name: Trim,
+                name: Trim?.trim() || '', // ✅ NEVER NULL
                 active: Number(IsActive),
                 transmissionId: TransmissionTypeId,
                 transmission: Transmission,
@@ -86,12 +87,18 @@ export class VariantService {
           return {
             ...en,
             ...ar,
+            name: en.name || ar?.nameAr || '', // ✅ FINAL GUARANTEE
             model: { id: model.id },
           };
         });
 
         // Save / Update variants
         for (const variant of mergedVariants) {
+          if (!variant.name) {
+            console.warn(
+              `Variant ${variant.variantId} has no English or Arabic name`,
+            );
+          }
           const existing = await this.variant.findOne({
             where: { variantId: variant.variantId },
           });
