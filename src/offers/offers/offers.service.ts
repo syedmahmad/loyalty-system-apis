@@ -520,7 +520,7 @@ export class OffersService {
 
     const removeExtraFields = [
       'id',
-      'uuid',
+      // 'uuid',
       'tenant_id',
       'business_unit_id',
       'external_system_id',
@@ -606,7 +606,7 @@ export class OffersService {
 
     const removeExtraFields = [
       'id',
-      'uuid',
+      // 'uuid',
       'tenant_id',
       'business_unit_id',
       'external_system_id',
