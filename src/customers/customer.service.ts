@@ -3338,6 +3338,7 @@ export class CustomerService {
   }
 
   async uploadVehicleImage(customerId, files) {
+    console.log('//////////////////inside uploadVehicleImage');
     const customer = await this.customerRepo.findOne({
       where: { uuid: customerId, status: 1 },
       relations: ['tenant', 'business_unit'],
@@ -3376,6 +3377,10 @@ export class CustomerService {
             // Optionally include analysisResult for more detail if valid, or leave out if not required
           };
         } catch (error) {
+          console.error(
+            'openaiService while analyzeCarImage////////////////////Error',
+            Error,
+          );
           // If OpenAI analysis throws due to invalid image, simply return isValid: false for this image
           return {
             // url: fileUrl,

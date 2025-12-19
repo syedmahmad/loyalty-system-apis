@@ -235,6 +235,7 @@ export class CustomerController {
     @Param('customerId') customerId: string,
     @UploadedFiles() files: Express.Multer.File[],
   ) {
+    console.log('upload-vehicle-image//////////// upload-vehicle-image');
     return await this.customerService.uploadVehicleImage(customerId, files);
   }
 }
