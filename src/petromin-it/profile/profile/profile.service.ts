@@ -24,6 +24,7 @@ import { OpenAIService } from 'src/openai/openai/openai.service';
 import { Vehicle } from 'src/vehicles/entities/vehicle.entity';
 import axios from 'axios';
 import { decrypt } from 'src/helpers/encryption';
+import { ReferralService } from 'src/petromin-it/referral/referral/referral.service';
 
 @Injectable()
 export class CustomerProfileService {
@@ -46,6 +47,8 @@ export class CustomerProfileService {
 
     @InjectRepository(Vehicle)
     private vehiclesRepository: Repository<Vehicle>,
+
+    private readonly referralService: ReferralService,
   ) {}
 
   async getProfile(customerId: string, language_code: string = 'en') {
@@ -437,21 +440,32 @@ export class CustomerProfileService {
       }
     }
 
+    const referralHistory = await this.referralService.getReferralHistory(
+      referrer_user.uuid,
+    );
+
     const customer = await this.customerRepo.findOne({
       where: {
         uuid: customer_id,
-        status: 1,
       },
       relations: ['business_unit', 'tenant'],
     });
 
-    if (customer.referrer_id) {
+    const customerPhoneExists = referralHistory?.result?.history.find(
+      (eachCustomer) => {
+        return eachCustomer.referee_phone == decrypt(customer.hashed_number);
+      },
+    );
+
+    // If customer has referrer_id OR customer's phone number already existing referralHistory then dont referr again
+    if (customer.referrer_id || customerPhoneExists) {
       throw new BadRequestException({
         message: 'Already Refered',
         error: 'Already Refered',
         statusCode: HttpStatus.NOT_MODIFIED,
       });
     }
+
 
     customer.referrer_id = referrer_user.id;
     customer.is_new_user = 0;
