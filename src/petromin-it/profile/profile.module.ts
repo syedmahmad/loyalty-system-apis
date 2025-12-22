@@ -13,6 +13,7 @@ import { TiersModule } from 'src/tiers/tiers.module';
 import { RestyCustomerProfileSelection } from 'src/customers/entities/resty_customer_profile_selection.entity';
 import { OpenaiModule } from 'src/openai/openai.module';
 import { Vehicle } from 'src/vehicles/entities/vehicle.entity';
+import { ReferralService } from '../referral/referral/referral.service';
 
 @Module({
   imports: [
@@ -31,6 +32,6 @@ import { Vehicle } from 'src/vehicles/entities/vehicle.entity';
     OpenaiModule,
   ],
   controllers: [CustomerProfileController],
-  providers: [CustomerProfileService],
+  providers: [CustomerProfileService, ReferralService],
 })
 export class CustomerProfileModule {}
