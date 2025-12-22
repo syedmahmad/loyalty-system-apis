@@ -8,7 +8,7 @@ export class CouponDto {
 
   @IsString()
   @IsNotEmpty()
-  customer_phone_no: string; // (required)
+  customer_phone: string; // (required)
 
   @IsString()
   @IsNotEmpty()
