@@ -154,6 +154,7 @@ export class BurningService {
     } = body;
 
     const hashedPhone = encrypt(customer_phone_number);
+    console.log('/////////customer_id//////////', customer_id);
     //#endregion
 
     try {
@@ -296,6 +297,7 @@ export class BurningService {
           max_burn_point: pointsToBurn,
           max_burn_amount: discountAmount,
           redemption_factor: matchedRule.points_conversion_factor,
+          from_app: from_app,
         },
         errors: [],
       };
