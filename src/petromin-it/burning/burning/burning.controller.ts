@@ -37,7 +37,6 @@ export class BurningController {
   ) {
     return this.burningService.burnTransaction(burnTransactionDto);
   }
-  //#endregion
 
   @Post('confirm-transaction')
   async confirmBurn(
@@ -45,4 +44,5 @@ export class BurningController {
   ) {
     return this.burningService.confirmBurnTransaction(body);
   }
+  //#endregion
 }

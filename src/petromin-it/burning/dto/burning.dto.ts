@@ -6,7 +6,6 @@ import {
   IsUUID,
   IsInt,
   Min,
-  Matches,
 } from 'class-validator';
 
 /**
@@ -23,11 +22,8 @@ export class GetCustomerDataDto {
   @IsString({ message: 'Phone number must be a string' })
   customer_phone_number: string;
 
-  @IsNotEmpty()
+  @IsOptional()
   @IsString()
-  @Matches(/^(en|ar)$/, {
-    message: "language_code must be either 'en' or 'ar'",
-  })
   language_code: 'en' | 'ar';
 }
 
@@ -54,6 +50,10 @@ export class BurnTransactionDto {
   @IsOptional()
   @IsString()
   remarks?: string; // Additional description
+
+  @IsOptional()
+  @IsString()
+  invoice_id?: string; // Additional description
   //#endregion
 }
 

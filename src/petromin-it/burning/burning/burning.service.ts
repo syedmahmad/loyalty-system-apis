@@ -150,10 +150,10 @@ export class BurningService {
       transaction_amount,
       from_app,
       remarks,
+      invoice_id,
     } = body;
 
     const hashedPhone = encrypt(customer_phone_number);
-    console.log('/////////customer_id//////////', customer_id);
     //#endregion
 
     try {
@@ -253,6 +253,7 @@ export class BurningService {
 
       //#region Step 6: Create burn transaction in wallet
       const burnPayload = {
+        invoice_id: invoice_id,
         customer_id: customer.id,
         business_unit_id: customer.business_unit.id,
         wallet_id: wallet.id,
