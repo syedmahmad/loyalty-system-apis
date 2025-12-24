@@ -3275,7 +3275,7 @@ export class CustomerService {
           type: In([WalletTransactionType.BURN, WalletTransactionType.EARN]),
           status: WalletTransactionStatus.ACTIVE,
           wallet: { id: wallet.id },
-          business_unit: { id: wallet.business_unit.id },
+          business_unit: { id: wallet?.business_unit?.id },
         },
         take,
         skip,
