@@ -3254,7 +3254,7 @@ export class CustomerService {
 
       const wallet = await this.walletService.getSingleCustomerWalletInfo(
         customer.id,
-        customer.business_unit.id,
+        customer.business_unit?.id,
       );
 
       if (!wallet) {

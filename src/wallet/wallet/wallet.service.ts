@@ -365,6 +365,7 @@ export class WalletService {
         customer: { id: customerId },
         business_unit: { id: buId },
       },
+      relations: ['business_unit'],
     });
   }
 

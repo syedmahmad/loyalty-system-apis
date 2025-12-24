@@ -498,8 +498,10 @@ export class TiersService {
     // Step 1: Fetch customer's current point balance (assumes you have a Wallet table)
     const customerWallet = await this.walletRepo.findOne({
       where: { customer: { id: customerId } },
-      relations: ['customer'],
+      relations: ['customer', 'business_unit'],
     });
+
+    console.log('hello///////////////', customerId, customerWallet);
 
     if (!customerWallet) {
       throw new NotFoundException('Customer wallet not found');
@@ -525,7 +527,7 @@ export class TiersService {
     }
 
     const matchingTier = await query.getOne();
-
+    console.log('matchingTier///////////////', matchingTier);
     // // Step 2: Find the matching tier
     // const query = this.tiersRepository
     //   .createQueryBuilder('tiers')
