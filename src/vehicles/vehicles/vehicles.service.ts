@@ -791,6 +791,21 @@ export class VehiclesService {
       });
       if (!customer) throw new NotFoundException('Customer not found');
 
+      // 2. Try to fetch local vehicles first
+      const localVehicles = await this.vehiclesRepository.find({
+        where: { customer: { id: customer.id }, status: 1 },
+      });
+
+      // If local vehicles exist, immediately return them (prevent slow vendor call)
+      if (localVehicles && localVehicles.length > 0) {
+        return {
+          success: true,
+          message: 'Successfully fetched the data!',
+          result: { vehicles: localVehicles },
+          errors: [],
+        };
+      }
+
       // 3. Login to Resty
       const loginInfo = await this.customerLoginInResty();
       if (loginInfo?.access_token) {
