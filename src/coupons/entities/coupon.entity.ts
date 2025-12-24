@@ -11,6 +11,7 @@ import {
   OneToMany,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
+  Index,
 } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 import { ActiveStatus } from '../type/types';
@@ -18,6 +19,13 @@ import { CouponCustomerSegment } from './coupon-customer-segments.entity';
 import { CouponLocaleEntity } from './coupon-locale.entity';
 
 @Entity('coupons')
+@Index('idx_coupon_uuid', ['uuid'])
+@Index('idx_coupon_code', ['code'])
+@Index('idx_coupon_coupon_type', ['coupon_type'])
+@Index('idx_coupon_coupon_status', ['status'])
+@Index('idx_coupon_created_at', ['created_at'])
+@Index('idx_coupon_tenant', ['tenant_id'])
+@Index('idx_coupon_business_unit', ['business_unit_id'])
 export class Coupon {
   @PrimaryGeneratedColumn()
   id: number;
@@ -51,7 +59,6 @@ export class Coupon {
   @ManyToOne(() => BusinessUnit, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'business_unit_id' })
   business_unit: BusinessUnit;
-
   @Column()
   business_unit_id: number;
 

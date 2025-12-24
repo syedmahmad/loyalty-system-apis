@@ -8,10 +8,15 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { Tenant } from 'src/tenants/entities/tenant.entity';
 
-@Entity()
+@Entity('wallet')
+@Index('idx_wallet_tenant_id', ['tenant'])
+@Index('idx_wallet_business_unit_id', ['business_unit'])
+@Index('idx_wallet_customer_id', ['customer'])
+@Index('idx_wallet_tenant_bu_created', ['created_at'])
 export class Wallet {
   @PrimaryGeneratedColumn()
   id: number;
@@ -19,7 +24,7 @@ export class Wallet {
   @Column({ nullable: true })
   external_system_id: number;
 
-  @ManyToOne(() => Customer, { eager: true })
+  @ManyToOne(() => Customer)
   @JoinColumn({ name: 'customer_id' })
   customer: Customer;
 
@@ -27,11 +32,10 @@ export class Wallet {
   @JoinColumn({ name: 'tenant_id' })
   tenant: Tenant;
 
-  @ManyToOne(() => BusinessUnit, { eager: true })
+  @ManyToOne(() => BusinessUnit)
   @JoinColumn({ name: 'business_unit_id' })
   business_unit: BusinessUnit;
 
-  // Monetary + points balances
   @Column({
     type: 'decimal',
     default: 0,
@@ -53,7 +57,6 @@ export class Wallet {
       to: (value: number) => value,
       from: (value: string) => parseFloat(value),
     },
-    comment: 'Loyalty points available for use (unclaimed balance)',
   })
   available_balance: number;
 

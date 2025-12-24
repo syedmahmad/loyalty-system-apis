@@ -6,10 +6,16 @@ import {
   UpdateDateColumn,
   ManyToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { Customer } from 'src/customers/entities/customer.entity';
 
 @Entity({ name: 'vehicles' })
+@Index('idx_vehicles_plate_no', ['plate_no'])
+@Index('idx_vehicles_vin_number', ['vin_number'])
+@Index('idx_vehicles_self_listed_id', ['self_listed_id'])
+@Index('idx_vehicles_customer', ['customer'])
+@Index('idx_vehicles_status', ['status'])
 export class Vehicle {
   @PrimaryGeneratedColumn()
   id: number;

@@ -7,6 +7,7 @@ import {
   CreateDateColumn,
   ManyToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 
 export enum CouponStatus {
@@ -16,6 +17,9 @@ export enum CouponStatus {
 }
 
 @Entity()
+@Index('idx_user_coupon_coupon_id', ['coupon_id'])
+@Index('idx_user_coupon_customer', ['customer'])
+@Index('idx_user_coupon_business_unit', ['business_unit'])
 export class UserCoupon {
   @PrimaryGeneratedColumn()
   id: number;

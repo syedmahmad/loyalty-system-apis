@@ -6,6 +6,7 @@ import {
   UpdateDateColumn,
   JoinColumn,
   BeforeInsert,
+  Index,
 } from 'typeorm';
 import { Wallet } from './wallet.entity';
 import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
@@ -29,6 +30,12 @@ export enum WalletTransactionStatus {
 }
 
 @Entity()
+@Index('idx_wallet_transactions_uuid', ['uuid'])
+@Index('idx_wallet_transactions_business_unit', ['business_unit'])
+@Index('idx_wallet_transactions_wallet', ['wallet'])
+@Index('idx_wallet_transactions_orders', ['orders'])
+@Index('idx_wallet_transactions_status', ['status'])
+@Index('idx_wallet_transactions_customer', ['customer'])
 export class WalletTransaction {
   @PrimaryGeneratedColumn()
   id: number;

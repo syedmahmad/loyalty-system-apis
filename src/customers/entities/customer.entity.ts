@@ -1,4 +1,3 @@
-// customer.entity.ts
 import {
   Entity,
   PrimaryGeneratedColumn,
@@ -8,6 +7,7 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
 import { CustomerSegmentMember } from 'src/customer-segment/entities/customer-segment-member.entity';
@@ -16,6 +16,12 @@ import { DeviceToken } from 'src/petromin-it/notification/entities/device-token.
 import { Vehicle } from 'src/vehicles/entities/vehicle.entity';
 
 @Entity()
+@Index('idx_customer_uuid', ['uuid'])
+@Index('idx_customer_status', ['status'])
+@Index('idx_customer_phone', ['phone'])
+@Index('idx_customer_tenant', ['tenant'])
+@Index('idx_customer_bu', ['business_unit'])
+@Index('idx_customer_hashed_number', ['hashed_number'])
 export class Customer {
   @PrimaryGeneratedColumn()
   id: number;
@@ -33,7 +39,7 @@ export class Customer {
 
   // --- Personal Information ---
   @Column({ nullable: true })
-  name: string; // combined display
+  name: string;
 
   @Column({ nullable: true })
   first_name: string;

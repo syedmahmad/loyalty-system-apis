@@ -52,16 +52,17 @@ export class CustomerProfileService {
   ) {}
 
   async getProfile(customerId: string, language_code: string = 'en') {
-    const customerInfo = await this.customerRepo.findOne({
-      where: { uuid: customerId, status: 1 },
-      relations: ['business_unit', 'tenant'],
-    });
+    // const customerInfo = await this.customerRepo.findOne({
+    //   where: { uuid: customerId, status: 1 },
+    //   relations: ['business_unit', 'tenant'],
+    // });
 
-    if (!customerInfo) throw new NotFoundException('Customer not found');
+    // if (!customerInfo) throw new NotFoundException('Customer not found');
 
     const customer = await this.customerRepo.findOne({
-      where: { id: customerInfo.id, status: 1 },
+      where: { uuid: customerId, status: 1 },
       select: [
+        'id',
         'uuid',
         'is_new_user',
         'first_name',
@@ -78,6 +79,7 @@ export class CustomerProfileService {
         'created_at',
         'external_customer_id',
       ],
+      relations: ['business_unit', 'tenant'],
     });
 
     if (!customer) throw new NotFoundException('Customer not found');
@@ -97,16 +99,16 @@ export class CustomerProfileService {
     }
 
     const customerCoupons = await this.couponsService.getCustomerCoupons({
-      customerId: customerInfo.uuid,
-      bUId: customerInfo.business_unit.id,
+      customerId: customer.uuid,
+      bUId: customer.business_unit.id,
     });
 
     const userWallet = await this.walletRepo.findOne({
-      where: { customer: { id: customerInfo.id } },
+      where: { customer: { id: customer.id } },
     });
 
     const currentCustomerTier = await this.tierService.getCurrentCustomerTier(
-      customerInfo?.id,
+      customer?.id,
       language_code,
     );
 
@@ -465,7 +467,6 @@ export class CustomerProfileService {
         statusCode: HttpStatus.NOT_MODIFIED,
       });
     }
-
 
     customer.referrer_id = referrer_user.id;
     customer.is_new_user = 0;

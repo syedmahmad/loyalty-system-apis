@@ -10,6 +10,7 @@ import {
   OneToMany,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
+  Index,
 } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 import { ActiveStatus } from '../type/types';
@@ -17,6 +18,10 @@ import { OfferCustomerSegment } from './offer-customer-segments.entity';
 import { OfferLocalEntity } from './offer-locale.entity';
 
 @Entity('offers')
+@Index('idx_offers_uuid', ['uuid'])
+@Index('idx_offers_tenant', ['tenant_id'])
+@Index('idx_offers_business_unit', ['business_unit_id'])
+@Index('idx_offers_tenant_bu_uuid', ['tenant_id', 'business_unit_id', 'uuid']) // composite index for fast multi-column lookups
 export class OffersEntity {
   @PrimaryGeneratedColumn()
   id: number;
