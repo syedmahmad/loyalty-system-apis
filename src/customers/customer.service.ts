@@ -645,7 +645,6 @@ export class CustomerService {
       order: { created_at: 'DESC' },
     });
 
-    console.log('/////////previousTx////////////', previousTx, wallet, rule);
     // Frequency logic
     if (rule.frequency === 'once' && previousTx) {
       throw new BadRequestException(
@@ -3245,13 +3244,13 @@ export class CustomerService {
         throw new NotFoundException(`Customer not found`);
       }
 
-      if (customer.status == 0) {
-        throw new BadRequestException(`Customer is inactive`);
-      }
+      // if (customer.status == 0) {
+      //   throw new BadRequestException(`Customer is inactive`);
+      // }
 
-      if (customer.status === 3) {
-        throw new NotFoundException('Customer is deleted');
-      }
+      // if (customer.status === 3) {
+      //   throw new NotFoundException('Customer is deleted');
+      // }
 
       const wallet = await this.walletService.getSingleCustomerWalletInfo(
         customer.id,
@@ -3269,7 +3268,7 @@ export class CustomerService {
           'amount',
           'point_balance',
           'description',
-          'invoice_no',
+          'invoice_id',
           'created_at',
         ],
         where: {

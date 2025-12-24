@@ -21,6 +21,7 @@ import { NotificationService } from 'src/petromin-it/notification/notification/n
 import { OpenAIService } from 'src/openai/openai/openai.service';
 import { CustomerPreference } from 'src/petromin-it/preferences/entities/customer-preference.entity';
 import { DeviceToken } from 'src/petromin-it/notification/entities/device-token.entity';
+import dayjs from 'dayjs';
 
 @Injectable()
 export class BurningService {
@@ -269,6 +270,7 @@ export class BurningService {
           ? remarks
           : `Burned ${pointsToBurn} points for discount of ${discountAmount} on amount ${transaction_amount}`,
         external_program_type: from_app ? from_app : null,
+        created_at: dayjs().toDate(),
       };
 
       const tx = await this.walletService.addTransaction(
