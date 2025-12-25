@@ -501,8 +501,6 @@ export class TiersService {
       relations: ['customer', 'business_unit'],
     });
 
-    console.log('hello///////////////', customerId, customerWallet);
-
     if (!customerWallet) {
       throw new NotFoundException('Customer wallet not found');
     }
@@ -527,7 +525,6 @@ export class TiersService {
     }
 
     const matchingTier = await query.getOne();
-    console.log('matchingTier///////////////', matchingTier);
     // // Step 2: Find the matching tier
     // const query = this.tiersRepository
     //   .createQueryBuilder('tiers')
