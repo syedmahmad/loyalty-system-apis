@@ -2937,15 +2937,20 @@ export class CustomerService {
         throw new NotFoundException(`Customer not found`);
       }
 
-      if (customer.status == 0) {
-        throw new BadRequestException(`Customer is inactive`);
-      }
+      // if (customer.status == 0) {
+      //   throw new BadRequestException(`Customer is inactive`);
+      // }
 
-      if (customer.status === 3) {
-        throw new NotFoundException('Customer is deleted');
-      }
+      // if (customer.status === 3) {
+      //   throw new NotFoundException('Customer is deleted');
+      // }
 
-      const decryptedPhone = await this.ociService.decryptData(customer.phone);
+      let decryptedPhone = null;
+      try {
+        decryptedPhone = await this.ociService.decryptData(customer.phone);
+      } catch {
+        decryptedPhone = customer.phone;
+      }
 
       const wallet = await this.walletService.getSingleCustomerWalletInfo(
         customer.id,

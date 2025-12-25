@@ -256,7 +256,7 @@ export class BurningService {
       const burnPayload = {
         invoice_id: invoice_id,
         customer_id: customer.id,
-        business_unit_id: customer.business_unit.id,
+        business_unit_id: customer.business_unit?.id,
         wallet_id: wallet.id,
         type: WalletTransactionType.BURN,
         amount: transaction_amount,
@@ -304,6 +304,10 @@ export class BurningService {
       };
       //#endregion
     } catch (error) {
+      console.log(
+        '////////error req transaction in burning catch block',
+        error,
+      );
       //#region Step 8: Error handling
       throw new BadRequestException({
         success: false,

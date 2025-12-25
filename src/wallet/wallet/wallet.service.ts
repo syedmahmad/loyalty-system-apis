@@ -78,7 +78,7 @@ export class WalletService {
 
     const wallet = await this.walletRepo.findOne({
       where: { id: dto.wallet_id },
-      relations: ['business_unit'],
+      relations: ['customer', 'business_unit'],
     });
 
     if (!wallet) {
@@ -365,7 +365,7 @@ export class WalletService {
         customer: { id: customerId },
         business_unit: { id: buId },
       },
-      relations: ['business_unit'],
+      relations: ['customer', 'business_unit'],
     });
   }
 
