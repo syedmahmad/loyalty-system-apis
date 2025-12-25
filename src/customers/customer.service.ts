@@ -287,19 +287,58 @@ export class CustomerService {
     const take = pageSize;
     const skip = (page - 1) * take;
 
-    const [data, total] = await this.customerRepo.findAndCount({
-      relations: ['business_unit', 'tenant'],
-      where: {
-        tenant: { id: client_id },
-        ...(search ? { name: Like(`%${search}%`) } : {}),
-      },
-      take,
-      skip,
-      order: { created_at: 'DESC' },
-    });
+    // Build query with subqueries for business_unit and tenant names
+    const queryBuilder = this.customerRepo
+      .createQueryBuilder('customer')
+      .select('customer.id', 'id')
+      .addSelect('customer.name', 'name')
+      .addSelect('customer.email', 'email')
+      .addSelect('customer.phone', 'phone')
+      .addSelect('customer.status', 'status')
+      .addSelect('customer.created_at', 'created_at')
+      .addSelect('customer.city', 'city')
+      .addSelect('customer.uuid', 'uuid')
+      .addSelect((subQuery) => {
+        return subQuery
+          .select('business_unit.name', 'business_unit_name')
+          .from('business_units', 'business_unit')
+          .where('business_unit.id = customer.business_unit_id');
+      }, 'business_unit_name')
+      .addSelect((subQuery) => {
+        return subQuery
+          .select('tenant.name', 'tenant_name')
+          .from('tenant', 'tenant')
+          .where('tenant.id = customer.tenant_id');
+      }, 'tenant_name')
+      .where('customer.tenant_id = :client_id', { client_id })
+      .orderBy('customer.created_at', 'DESC')
+      .offset(skip)
+      .limit(take);
+
+    if (search) {
+      queryBuilder.andWhere('customer.name LIKE :search', {
+        search: `%${search}%`,
+      });
+    }
+
+    // Get total count
+    const total = await this.customerRepo
+      .createQueryBuilder('customer')
+      .where('customer.tenant_id = :client_id', { client_id })
+      .andWhere(search ? 'customer.name LIKE :search' : '1=1', {
+        search: `%${search}%`,
+      })
+      .getCount();
+
+    // Get data with raw results to include subqueries
+    const data = await queryBuilder.getRawAndEntities();
 
     return {
-      data,
+      data: data.raw.map((raw, index) => ({
+        ...data.raw[index],
+        business_unit: { name: raw.business_unit_name },
+        tenant: { name: raw.tenant_name },
+      })),
       total,
       page,
       pageSize,

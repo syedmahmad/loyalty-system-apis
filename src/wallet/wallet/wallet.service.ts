@@ -78,7 +78,7 @@ export class WalletService {
 
     const wallet = await this.walletRepo.findOne({
       where: { id: dto.wallet_id },
-      relations: ['customer', 'business_unit'],
+      relations: ['business_unit', 'customer'],
     });
 
     if (!wallet) {
@@ -279,21 +279,49 @@ export class WalletService {
     const take = pageSize;
     const skip = (page - 1) * take;
 
-    const where: any = {
-      tenant: { id: client_id },
-      ...(buId ? { business_unit: { id: buId } } : {}),
-    };
+    // Build query with subquery for customer name
+    const queryBuilder = this.walletRepo
+      .createQueryBuilder('wallet')
+      .select('wallet.id', 'id')
+      .addSelect('wallet.total_balance', 'total_balance')
+      .addSelect('wallet.total_burned_points', 'total_burned_points')
+      .addSelect('wallet.total_earned_points', 'total_earned_points')
+      .addSelect('wallet.available_balance', 'available_balance')
+      .addSelect('wallet.locked_balance', 'locked_balance')
+      .addSelect('wallet.created_at', 'created_at')
+      .addSelect('wallet.customer_id', 'customer_id')
+      .addSelect((subQuery) => {
+        return subQuery
+          .select('customer.name', 'customer_name')
+          .from('customer', 'customer')
+          .where('customer.id = wallet.customer_id');
+      }, 'customer_name')
+      .where('wallet.tenant_id = :client_id', { client_id })
+      .orderBy('wallet.created_at', 'DESC')
+      .offset(skip)
+      .limit(take);
 
-    const [data, total] = await this.walletRepo.findAndCount({
-      relations: ['business_unit', 'customer'],
-      where,
-      take,
-      skip,
-      order: { created_at: 'DESC' },
-    });
+    if (buId) {
+      queryBuilder.andWhere('wallet.business_unit_id = :buId', { buId });
+    }
+
+    // Get total count
+    const total = await this.walletRepo
+      .createQueryBuilder('wallet')
+      .where('wallet.tenant_id = :client_id', { client_id })
+      .andWhere(buId ? 'wallet.business_unit_id = :buId' : '1=1', { buId })
+      .getCount();
+
+    // Get data with raw results to include subquery
+    const data = await queryBuilder.getRawMany();
 
     return {
-      data,
+      data: data.map((item) => ({
+        ...item,
+        customer: {
+          name: item.customer_name,
+        },
+      })),
       total,
       page,
       pageSize,
