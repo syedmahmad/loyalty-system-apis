@@ -21,8 +21,7 @@ import { NotificationService } from 'src/petromin-it/notification/notification/n
 import { OpenAIService } from 'src/openai/openai/openai.service';
 import { CustomerPreference } from 'src/petromin-it/preferences/entities/customer-preference.entity';
 import { DeviceToken } from 'src/petromin-it/notification/entities/device-token.entity';
-import dayjs from 'dayjs';
-
+import * as dayjs from 'dayjs';
 @Injectable()
 export class BurningService {
   constructor(
