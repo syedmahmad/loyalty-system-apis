@@ -542,6 +542,7 @@ export class VehiclesService {
         errors: [],
       };
     } catch (error: any) {
+      console.log('error in service history', error);
       throw error;
     }
   }

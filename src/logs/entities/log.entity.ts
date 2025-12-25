@@ -14,7 +14,7 @@ export class Log {
   @Column('json')
   requestBody: string;
 
-  @Column('text')
+  @Column('longtext', { nullable: true })
   responseBody: string;
 
   @Column('text')

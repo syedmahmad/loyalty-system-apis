@@ -14,7 +14,7 @@ export class GateWayLog {
   @Column('longtext')
   requestBody: string;
 
-  @Column('text', { nullable: true })
+  @Column('longtext', { nullable: true })
   responseBody: string;
 
   @Column('text')
