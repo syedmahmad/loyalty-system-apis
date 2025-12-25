@@ -221,4 +221,20 @@ export class OffersController {
   ) {
     return await this.service.getAllActiveAndExpiredOffers(tenant_id, langCode);
   }
+
+  @Post('/single-offer')
+  async getSingleOffer(
+    @Body('tenant_id') tenantId: string,
+    @Body('offer_id') offerId: string,
+    @Body('customer_id') customerId: string,
+    @Body('langCode') langCode: string,
+  ) {
+    const result = await this.service.getSingleOffer({
+      tenant_id: tenantId,
+      offer_id: offerId,
+      customer_id: customerId,
+      langCode: langCode,
+    });
+    return result;
+  }
 }

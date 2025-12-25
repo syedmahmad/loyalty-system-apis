@@ -641,13 +641,16 @@ export class OffersService {
           icon: b.icon,
         }));
 
+      // We want uuid of the offer (eachOffer.uuid), not locale uuid
       const normalized = {
         ...locale,
+        uuid: eachOffer.uuid, // force add/overwrite uuid to come from offer, not locale
         status: eachOffer.status,
         date_from: eachOffer.date_from,
         date_to: eachOffer.date_to,
         station_type: eachOffer.station_type,
         benefits: filtered || [],
+        coupon_enabled: true, // TODO: neeed to be dynamic.
       };
 
       // Sort into available or expired
@@ -662,6 +665,89 @@ export class OffersService {
       success: true,
       message: 'Successfully fetched the data!',
       result: { available, expired },
+      errors: [],
+    };
+  }
+
+  async getSingleOffer({
+    tenant_id,
+    offer_id,
+    customer_id,
+    langCode,
+  }: {
+    tenant_id: string;
+    offer_id: string;
+    customer_id: string;
+    langCode: string;
+  }) {
+    // Validate language code and get language entity
+    const language = await this.languageRepo.findOne({
+      where: { code: langCode },
+    });
+
+    if (!language) {
+      throw new BadRequestException('Invalid language code');
+    }
+
+    // Find the offer by UUID, tenant, and show_in_app enabled
+    const offer = await this.offerRepository.findOne({
+      where: {
+        uuid: offer_id,
+        show_in_app: 1,
+      },
+      relations: ['locales'],
+    });
+
+    if (!offer) {
+      throw new BadRequestException('Offer not found');
+    }
+
+    const removeExtraFields = [
+      'id',
+      'tenant_id',
+      'business_unit_id',
+      'external_system_id',
+      'all_users',
+      'created_by',
+      'created_at',
+      'updated_by',
+      'updated_at',
+      'business_unit',
+      'language',
+      'createdAt',
+      'updatedAt',
+      'createdBy',
+      'updatedBy',
+      'deletedAt',
+    ];
+
+    // Find the correct locale
+    const locale: any = offer.locales.find(
+      (loc) =>
+        loc.language?.code === langCode || loc.language?.id === language?.id,
+    );
+
+    const filteredBenefits =
+      locale?.benefits &&
+      locale?.benefits?.map((b) => ({
+        [`name_${langCode}`]: b[`name_${langCode}`],
+        icon: b.icon,
+      }));
+
+    const normalized = {
+      ...locale,
+      status: offer.status,
+      date_from: offer.date_from,
+      date_to: offer.date_to,
+      station_type: offer.station_type,
+      benefits: filteredBenefits || [],
+      coupon_code: 'APPWBUFRKYHF',
+    };
+
+    return {
+      success: true,
+      message: 'Successfully fetched the offer!',
+      result: this.omitExtraFields(normalized, removeExtraFields),
       errors: [],
     };
   }
