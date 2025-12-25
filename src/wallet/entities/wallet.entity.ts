@@ -9,6 +9,7 @@ import {
   UpdateDateColumn,
   JoinColumn,
   Index,
+  OneToOne,
 } from 'typeorm';
 import { Tenant } from 'src/tenants/entities/tenant.entity';
 
@@ -16,7 +17,13 @@ import { Tenant } from 'src/tenants/entities/tenant.entity';
 @Index('idx_wallet_tenant_id', ['tenant'])
 @Index('idx_wallet_business_unit_id', ['business_unit'])
 @Index('idx_wallet_customer_id', ['customer'])
-@Index('idx_wallet_tenant_bu_created', ['created_at'])
+// Composite indexes for optimized queries with ORDER BY created_at
+@Index('idx_wallet_tenant_created', ['tenant', 'created_at'])
+@Index('idx_wallet_tenant_bu_created', [
+  'tenant',
+  'business_unit',
+  'created_at',
+])
 export class Wallet {
   @PrimaryGeneratedColumn()
   id: number;
@@ -24,7 +31,7 @@ export class Wallet {
   @Column({ nullable: true })
   external_system_id: number;
 
-  @ManyToOne(() => Customer)
+  @OneToOne(() => Customer)
   @JoinColumn({ name: 'customer_id' })
   customer: Customer;
 
