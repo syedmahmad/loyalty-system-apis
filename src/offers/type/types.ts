@@ -10,3 +10,8 @@ export enum OfferStatus {
   USED = 'used',
   EXPIRED = 'expired',
 }
+
+export enum CouponSource {
+  UPLOADED = 'uploaded',
+  AUTO_GENERATED = 'auto-generated',
+}

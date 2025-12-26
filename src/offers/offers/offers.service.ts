@@ -18,6 +18,8 @@ import { OfferCustomerSegment } from '../entities/offer-customer-segments.entity
 import { OffersEntity } from '../entities/offers.entity';
 import { UserOffer } from '../entities/user-offer.entity';
 import { ActiveStatus, OfferStatus } from '../type/types';
+import { OfferCouponAssignment } from '../entities/offers-coupon-assignment.entity';
+import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class OffersService {
@@ -51,6 +53,9 @@ export class OffersService {
 
     @InjectRepository(LanguageEntity)
     private languageRepo: Repository<LanguageEntity>,
+
+    @InjectRepository(OfferCouponAssignment)
+    private offerCouponAssignmentRepo: Repository<OfferCouponAssignment>,
 
     @InjectDataSource()
     private readonly dataSource: DataSource,
@@ -86,6 +91,24 @@ export class OffersService {
         })) as any,
       });
       const savedOffer = await this.offerRepository.save(offer);
+
+      // Handle coupon codes if provided
+      if (dto.coupon_codes && dto.coupon_codes.length > 0) {
+        const couponAssignments = dto.coupon_codes.map((couponCode) =>
+          this.offerCouponAssignmentRepo.create({
+            offer: savedOffer,
+            offer_id: savedOffer.id,
+            coupon_code: couponCode,
+            status: 'AVAILABLE',
+            coupon_source: dto.coupon_source,
+          }),
+        );
+
+        await queryRunner.manager.save(
+          OfferCouponAssignment,
+          couponAssignments,
+        );
+      }
 
       if (dto.customer_segment_ids?.length && dto.all_users === 0) {
         const segments = await this.segmentRepository.findBy({
@@ -650,7 +673,7 @@ export class OffersService {
         date_to: eachOffer.date_to,
         station_type: eachOffer.station_type,
         benefits: filtered || [],
-        coupon_enabled: true, // TODO: neeed to be dynamic.
+        coupon_enabled: eachOffer.enable_coupons,
       };
 
       // Sort into available or expired
@@ -669,6 +692,19 @@ export class OffersService {
     };
   }
 
+  /**
+   * Get a single offer for a customer with coupon assignment
+   *
+   * This method retrieves an offer and handles coupon assignment logic based on the offer's coupon source type:
+   * - For 'uploaded' coupons: Assigns a pre-uploaded coupon from the pool to the customer
+   * - For 'auto-generated' coupons: Generates a unique coupon code on-the-fly for the customer
+   *
+   * @param tenant_id - UUID of the tenant
+   * @param offer_id - UUID of the offer
+   * @param customer_id - UUID of the customer
+   * @param langCode - Language code for localization (e.g., 'en', 'ar')
+   * @returns Offer details with assigned coupon code
+   */
   async getSingleOffer({
     tenant_id,
     offer_id,
@@ -680,7 +716,25 @@ export class OffersService {
     customer_id: string;
     langCode: string;
   }) {
-    // Validate language code and get language entity
+    // Step 1: Validate tenant exists
+    const tenant = await this.tenantRepository.findOne({
+      where: { uuid: tenant_id },
+    });
+
+    if (!tenant) {
+      throw new BadRequestException('Tenant not found');
+    }
+
+    // Step 2: Validate customer exists and is active
+    const customer = await this.customerRepo.findOne({
+      where: { uuid: customer_id, status: 1 },
+    });
+
+    if (!customer) {
+      throw new BadRequestException('Customer not found');
+    }
+
+    // Step 3: Validate language code and get language entity
     const language = await this.languageRepo.findOne({
       where: { code: langCode },
     });
@@ -689,10 +743,11 @@ export class OffersService {
       throw new BadRequestException('Invalid language code');
     }
 
-    // Find the offer by UUID, tenant, and show_in_app enabled
+    // Step 4: Find the offer by UUID, tenant, and ensure it's enabled for app display
     const offer = await this.offerRepository.findOne({
       where: {
         uuid: offer_id,
+        tenant_id: tenant.id,
         show_in_app: 1,
       },
       relations: ['locales'],
@@ -721,12 +776,85 @@ export class OffersService {
       'deletedAt',
     ];
 
-    // Find the correct locale
+    let couponCode = null;
+
+    // Step 5: Handle coupon assignment if coupons are enabled for this offer
+    if (offer.enable_coupons) {
+      /**
+       * Check if the customer already has a coupon assigned for this offer
+       * This prevents duplicate assignments and ensures customers get the same coupon
+       * on subsequent requests
+       */
+      const couponAssignment = await this.offerCouponAssignmentRepo.findOne({
+        where: {
+          offer_id: offer.id,
+          customer_id: customer.id,
+        },
+      });
+
+      if (couponAssignment) {
+        // Customer already has a coupon assigned - return the existing one
+        couponCode = couponAssignment.coupon_code;
+      } else if (offer.coupon_source === 'uploaded') {
+        /**
+         * UPLOADED COUPON FLOW:
+         * - Find the first available coupon from the pre-uploaded pool
+         * - Coupons are uploaded in bulk during offer creation
+         * - Each coupon can only be assigned to one customer
+         * - Once assigned, status changes from 'AVAILABLE' to 'ASSIGNED'
+         */
+        const availableCoupon = await this.offerCouponAssignmentRepo.findOne({
+          where: {
+            offer_id: offer.id,
+            status: 'AVAILABLE',
+            customer_id: null, // Not yet assigned to any customer
+          },
+        });
+
+        if (availableCoupon) {
+          // Assign the coupon to this customer
+          availableCoupon.customer_id = customer.id;
+          availableCoupon.status = 'ASSIGNED';
+          await this.offerCouponAssignmentRepo.save(availableCoupon);
+          couponCode = availableCoupon.coupon_code;
+        }
+        // Note: If no available coupons found, couponCode remains null
+        // This could happen if all pre-uploaded coupons have been assigned
+      } else if (offer.coupon_source === 'auto-generated') {
+        /**
+         * AUTO-GENERATED COUPON FLOW:
+         * - Generate a unique coupon code dynamically for this customer
+         * - Each customer gets a unique code generated at the time of request
+         * - No need for pre-uploading coupons
+         * - Useful for unlimited coupon scenarios
+         */
+        const generatedCode = this.generateCouponCode();
+
+        // Create a new coupon assignment record
+        const newCoupon = this.offerCouponAssignmentRepo.create({
+          offer: offer,
+          offer_id: offer.id,
+          coupon_code: generatedCode,
+          customer_id: customer.id,
+          status: 'ASSIGNED',
+          coupon_source: 'auto-generated',
+          is_used: false,
+          is_expired: false,
+        });
+
+        const savedCoupon =
+          await this.offerCouponAssignmentRepo.save(newCoupon);
+        couponCode = savedCoupon.coupon_code;
+      }
+    }
+
+    // Step 6: Get the localized offer content based on language code
     const locale: any = offer.locales.find(
       (loc) =>
         loc.language?.code === langCode || loc.language?.id === language?.id,
     );
 
+    // Step 7: Filter benefits to include only the localized name and icon
     const filteredBenefits =
       locale?.benefits &&
       locale?.benefits?.map((b) => ({
@@ -734,6 +862,7 @@ export class OffersService {
         icon: b.icon,
       }));
 
+    // Step 8: Construct the normalized response object
     const normalized = {
       ...locale,
       status: offer.status,
@@ -741,9 +870,10 @@ export class OffersService {
       date_to: offer.date_to,
       station_type: offer.station_type,
       benefits: filteredBenefits || [],
-      coupon_code: 'APPWBUFRKYHF',
+      coupon_code: couponCode ? couponCode : 'Not Available',
     };
 
+    // Step 9: Return the offer with coupon code
     return {
       success: true,
       message: 'Successfully fetched the offer!',
@@ -788,5 +918,39 @@ export class OffersService {
     };
 
     return recurse(input);
+  }
+
+  /**
+   * Generate a random coupon code for auto-generated coupons
+   *
+   * This method creates a unique, URL-safe coupon code using UUID v4 as the entropy source.
+   * The code is generated by:
+   * 1. Creating a new UUID v4 (provides 122 bits of entropy)
+   * 2. Removing hyphens to get a continuous hex string
+   * 3. Taking the first 8 hex characters
+   * 4. Splitting into 2 chunks of 4 characters each
+   * 5. Converting each chunk from hex to base36 (0-9, a-z)
+   * 6. Joining and taking the first 6 characters
+   * 7. Converting to uppercase for better readability
+   *
+   * Example outputs: "APPF3K", "APP9XM", "APPB2H"
+   *
+   * Why this approach?
+   * - UUID provides cryptographically strong randomness
+   * - Base36 conversion creates alphanumeric codes (letters + numbers)
+   * - Short length (6 chars) makes it easy to type and share
+   * - Uppercase improves readability and avoids confusion with similar characters
+   *
+   * @returns A 6-character uppercase alphanumeric coupon code
+   */
+  private generateCouponCode(): string {
+    const hex = uuidv4().replace(/-/g, '').slice(0, 8);
+    const chunks = hex.match(/.{1,4}/g) || [];
+
+    return chunks
+      .map((part) => parseInt(part, 16).toString(36))
+      .join('')
+      .slice(0, 6)
+      .toUpperCase();
   }
 }

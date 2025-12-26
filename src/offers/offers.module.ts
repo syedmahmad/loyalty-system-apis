@@ -14,11 +14,13 @@ import { Customer } from 'src/customers/entities/customer.entity';
 import { UserOffer } from './entities/user-offer.entity';
 import { OfferLocalEntity } from './entities/offer-locale.entity';
 import { LanguageEntity } from 'src/master/language/entities/language.entity';
+import { OfferCouponAssignment } from './entities/offers-coupon-assignment.entity';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([
       OffersEntity,
+      OfferCouponAssignment,
       BusinessUnit,
       Tenant,
       User,

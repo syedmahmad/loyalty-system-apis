@@ -13,7 +13,7 @@ import {
   Index,
 } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
-import { ActiveStatus } from '../type/types';
+import { ActiveStatus, CouponSource } from '../type/types';
 import { OfferCustomerSegment } from './offer-customer-segments.entity';
 import { OfferLocalEntity } from './offer-locale.entity';
 
@@ -94,4 +94,14 @@ export class OffersEntity {
 
   @Column({ type: 'tinyint', default: 0 })
   show_in_app: number; // 0 = hide in app, 1 = show in app
+
+  @Column({ type: 'tinyint', default: 0 })
+  enable_coupons: number; // 0 = hide in app, 1 = show in app
+
+  @Column({
+    type: 'enum',
+    enum: CouponSource,
+    nullable: true,
+  })
+  coupon_source: CouponSource;
 }

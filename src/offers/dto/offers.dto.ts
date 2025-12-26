@@ -3,6 +3,7 @@ import { Type } from 'class-transformer';
 import {
   IsArray,
   IsDateString,
+  IsEnum,
   IsInt,
   IsNotEmpty,
   IsNumber,
@@ -10,6 +11,7 @@ import {
   IsString,
   ValidateNested,
 } from 'class-validator';
+import { CouponSource } from '../type/types';
 
 class BenefitDto {
   @IsString()
@@ -143,6 +145,19 @@ export class CreateOfferDto {
   @IsNumber()
   @IsOptional()
   show_in_app?: number;
+
+  @IsNumber()
+  @IsOptional()
+  enable_coupons?: number;
+
+  @IsEnum(CouponSource)
+  @IsOptional()
+  coupon_source?: CouponSource;
+
+  @IsArray()
+  @IsOptional()
+  @IsString({ each: true })
+  coupon_codes?: string[];
 }
 
 export class UpdateOfferDto extends PartialType(CreateOfferDto) {
