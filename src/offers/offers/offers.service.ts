@@ -846,7 +846,13 @@ export class OffersService {
 
         const savedCoupon =
           await this.offerCouponAssignmentRepo.save(newCoupon);
+        console.log(
+          'New auto-generated coupon assigned:',
+          savedCoupon.coupon_code,
+        );
         couponCode = savedCoupon.coupon_code;
+
+        console.log('new Generated couponCode', couponCode);
       }
     }
 
@@ -864,6 +870,8 @@ export class OffersService {
         icon: b.icon,
       }));
 
+    console.log('couponCode before assignment', couponCode);
+
     // Step 8: Construct the normalized response object
     const normalized = {
       ...locale,
@@ -874,6 +882,8 @@ export class OffersService {
       benefits: filteredBenefits || [],
       coupon_code: couponCode ? couponCode : 'Not Available',
     };
+
+    console.log('normalized', normalized);
 
     // Step 9: Return the offer with coupon code
     return {
