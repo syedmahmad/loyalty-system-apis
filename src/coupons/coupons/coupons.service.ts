@@ -2553,7 +2553,10 @@ export class CouponsService {
 
                     // Ensure the customer exists in the customer table
                     const customer = await this.customerRepo.findOne({
-                      where: { id: eachCustomer.customer_id, status: 1 },
+                      where: {
+                        id: eachCustomer.customer_id,
+                        status: In([0, 1]),
+                      },
                       relations: ['business_unit'],
                     });
 

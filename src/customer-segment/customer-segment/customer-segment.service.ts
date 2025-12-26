@@ -397,7 +397,7 @@ export class CustomerSegmentsService {
       relations: ['business_unit', 'tenant'],
     });
 
-    if (!customer) {
+    if (!customer || customer?.status == 3) {
       customer = this.customerRepository.create({
         phone: encryptedPhone,
         hashed_number: hashedPhone,
