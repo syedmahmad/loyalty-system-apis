@@ -781,7 +781,7 @@ export class OffersService {
     let couponCode = null;
 
     // Step 5: Handle coupon assignment if coupons are enabled for this offer
-    if (offer.enable_coupons) {
+    if (offer.enable_coupons === 1) {
       /**
        * Check if the customer already has a coupon assigned for this offer
        * This prevents duplicate assignments and ensures customers get the same coupon
