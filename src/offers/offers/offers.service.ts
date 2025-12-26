@@ -716,9 +716,11 @@ export class OffersService {
     customer_id: string;
     langCode: string;
   }) {
+    console.log('Fetching getSingle Offer');
+
     // Step 1: Validate tenant exists
     const tenant = await this.tenantRepository.findOne({
-      where: { uuid: tenant_id },
+      where: { id: parseInt(tenant_id, 10) },
     });
 
     if (!tenant) {
