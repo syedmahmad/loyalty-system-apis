@@ -367,6 +367,26 @@ export class OffersService {
       Object.assign(offer, dto);
       await repo.save(offer);
 
+      // === COUPON CODES UPDATE ===
+      // Handle coupon codes if provided in the update
+      if (dto.coupon_codes && dto.coupon_codes.length > 0) {
+        // Add new coupon codes from the update
+        const couponAssignments = dto.coupon_codes.map((couponCode) =>
+          this.offerCouponAssignmentRepo.create({
+            offer: offer,
+            offer_id: offer.id,
+            coupon_code: couponCode,
+            status: 'AVAILABLE',
+            coupon_source: dto.coupon_source || offer.coupon_source,
+          }),
+        );
+
+        await queryRunner.manager.save(
+          OfferCouponAssignment,
+          couponAssignments,
+        );
+      }
+
       // === CUSTOMER SEGMENTS SYNC ===
       const incomingSegmentIds = dto.customer_segment_ids || [];
       const existingRelations = await this.offerCustomerSegment.find({
