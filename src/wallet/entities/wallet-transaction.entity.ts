@@ -61,18 +61,21 @@ export class WalletTransaction {
   @Column({ type: 'enum', enum: WalletTransactionStatus })
   status: WalletTransactionStatus;
 
-  @Column({
-    type: 'char',
-    length: 36,
-  })
-  uuid: string = uuidv4();
+  // @Column({
+  //   type: 'char',
+  //   length: 36,
+  // })
+  // uuid: string = uuidv4();
 
-  @BeforeInsert()
-  assignUuid() {
-    if (!this.uuid) {
-      this.uuid = uuidv4();
-    }
-  }
+  // @BeforeInsert()
+  // assignUuid() {
+  //   if (!this.uuid) {
+  //     this.uuid = uuidv4();
+  //   }
+  // }
+
+  @Column({ type: 'char', length: 36, generated: 'uuid' })
+  uuid: string;
 
   @Column({ type: 'decimal' })
   amount: number;
