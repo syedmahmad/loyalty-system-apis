@@ -11,17 +11,15 @@ export class GvrEarnBurnWithEventsDto {
     invoice_no: string;
     invoice_amount: number;
     invoice_date: string;
-    productitems: {
-      products: Array<{
-        name: string;
-        quantity: string;
-        amount: number;
-        productcode?: string;
-        unitprice?: string;
-        unit?: string;
-        [key: string]: any;
-      }>;
-    };
+    products: Array<{
+      name: string;
+      quantity: string;
+      amount: number;
+      productcode?: string;
+      unitprice?: string;
+      unit?: string;
+      [key: string]: any;
+    }>;
   };
 
   @IsString()

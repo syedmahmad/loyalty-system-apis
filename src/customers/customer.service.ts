@@ -2272,7 +2272,6 @@ export class CustomerService {
         dynamic_conditions: Not(IsNull()),
       },
     });
-
     // matchedRules holds all earning rules (from the rules array) whose
     // dynamic conditions are satisfied by at least one product in the
     // metadata.productitems.products array.
@@ -2293,7 +2292,7 @@ export class CustomerService {
 
     for (let index = 0; index < rules.length; index++) {
       const eachRule = rules[index];
-      for (const product of metadata?.productitems?.products) {
+      for (const product of metadata?.products) {
         let allMatch = true;
         // Check if the product satisfies all dynamic conditions of the rule
         for (const condition of eachRule?.dynamic_conditions) {
@@ -2303,7 +2302,9 @@ export class CustomerService {
           const isMatch = this.checkMetadataAndDynamicCondition(
             product,
             condition,
+            metadata,
           );
+
           if (!isMatch) {
             allMatch = false;
             break;
@@ -2324,6 +2325,7 @@ export class CustomerService {
     const customerBURules = matchedRules.filter(
       (singleRule) => singleRule.business_unit_id === BUId,
     );
+
     if (customerBURules.length) {
       matchedRules = customerBURules;
     } else {
@@ -2522,14 +2524,14 @@ export class CustomerService {
         // wallet_order_id: walletOrderId,
         business_unit: wallet.business_unit, // pass the full BusinessUnit entity instance
         type: WalletTransactionType.EARN,
-        source_type: rule.name,
+        source_type: rule?.locales[0]?.name,
         amount: Orderamount || 0,
         prev_available_points: wallet.available_balance,
         status:
           pendingDays > 0
             ? WalletTransactionStatus.PENDING
             : WalletTransactionStatus.ACTIVE,
-        description: `Earned ${rewardPoints} points (${rule.name})`,
+        description: `Earned ${rewardPoints} points (${rule?.locales[0]?.name})`,
         // Set the unlock_date for the wallet transaction.
         // If there are pendingDays (i.e., points are locked for a period), set unlock_date to the date after pendingDays.
         // Otherwise, set unlock_date to null (no unlock needed).
@@ -2563,23 +2565,36 @@ export class CustomerService {
     };
   }
 
-  checkMetadataAndDynamicCondition(product, condition) {
+  checkMetadataAndDynamicCondition(product, condition, metadata) {
     const { condition_type, condition_operator, condition_value } = condition;
-    const productValue = product[condition_type];
+
+    const actualValueRaw =
+      product?.[condition_type] ?? metadata?.[condition_type];
+    if (actualValueRaw === undefined || actualValueRaw === null) return false;
+
+    const actualValue =
+      typeof actualValueRaw === 'string'
+        ? actualValueRaw.toLowerCase()
+        : actualValueRaw;
+
+    const conditionValue =
+      typeof condition_value === 'string'
+        ? condition_value.toLowerCase()
+        : condition_value;
 
     switch (condition_operator) {
       case '==':
-        return productValue == condition_value;
+        return actualValue == conditionValue;
       case '!=':
-        return productValue != condition_value;
+        return actualValue != conditionValue;
       case '>':
-        return Number(productValue) > Number(condition_value);
+        return Number(actualValue) > Number(conditionValue);
       case '<':
-        return Number(productValue) < Number(condition_value);
+        return Number(actualValue) < Number(conditionValue);
       case '>=':
-        return Number(productValue) >= Number(condition_value);
+        return Number(actualValue) >= Number(conditionValue);
       case '<=':
-        return Number(productValue) <= Number(condition_value);
+        return Number(actualValue) <= Number(conditionValue);
       default:
         return false;
     }
@@ -2660,12 +2675,13 @@ export class CustomerService {
 
     for (let index = 0; index < rules.length; index++) {
       const eachRule = rules[index];
-      for (const product of metadata.productitems.products) {
+      for (const product of metadata?.products) {
         let allMatch = true;
         for (const condition of eachRule.dynamic_conditions) {
           const isMatch = this.checkMetadataAndDynamicCondition(
             product,
             condition,
+            metadata,
           );
           if (!isMatch) {
             allMatch = false;
@@ -2684,7 +2700,7 @@ export class CustomerService {
     const customerBURules = matchedRules.filter(
       (singleRule) => singleRule.business_unit_id === BUId,
     );
-    if (customerBURules.length) {
+    if (customerBURules?.length) {
       matchedRules = customerBURules;
     } else {
       const grouped = matchedRules.reduce((acc, item) => {
@@ -2702,7 +2718,7 @@ export class CustomerService {
       matchedRules = matchedGroup;
     }
 
-    if (matchedRules.length) {
+    if (matchedRules?.length) {
       for (let index = 0; index <= matchedRules.length - 1; index++) {
         rule = matchedRules[index];
 
@@ -2778,7 +2794,7 @@ export class CustomerService {
         let discountAmount = 0;
         let pointsToBurn = 0;
 
-        if (rule.burn_type === 'FIXED') {
+        if (rule?.max_redeemption_points_limit) {
           pointsToBurn = rule.max_redeemption_points_limit;
           discountAmount = pointsToBurn * conversionRate;
 
@@ -2786,12 +2802,12 @@ export class CustomerService {
             discountAmount = total_amount;
             pointsToBurn = total_amount / conversionRate;
           }
-        } else if (rule.burn_type === 'PERCENTAGE') {
+        }
+
+        if (rule.max_burn_percent_on_invoice) {
           discountAmount =
             (total_amount * rule.max_burn_percent_on_invoice) / 100;
           pointsToBurn = rule.max_redeemption_points_limit;
-        } else {
-          throw new BadRequestException('Invalid burn type in rule');
         }
 
         const burnPayload = {
