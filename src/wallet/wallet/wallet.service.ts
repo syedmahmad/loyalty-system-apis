@@ -19,6 +19,7 @@ import {
 } from '../entities/wallet-transaction.entity';
 import { Wallet } from '../entities/wallet.entity';
 import { v4 as uuidv4 } from 'uuid';
+import { encrypt } from 'src/helpers/encryption';
 
 @Injectable()
 export class WalletService {
@@ -270,6 +271,9 @@ export class WalletService {
     buId?: number,
     page: number = 1,
     pageSize: number = 10,
+    customer_name?: string,
+    customer_status?: number,
+    customer_hashed_number?: string,
   ) {
     if (!permission.canViewWallets) {
       throw new BadRequestException(
@@ -305,12 +309,103 @@ export class WalletService {
       queryBuilder.andWhere('wallet.business_unit_id = :buId', { buId });
     }
 
-    // Get total count
-    const total = await this.walletRepo
+    // Filter by customer name using subquery
+    if (customer_name) {
+      queryBuilder.andWhere((qb) => {
+        const subQuery = qb
+          .subQuery()
+          .select('c.id')
+          .from('customer', 'c')
+          .where('c.name LIKE :customer_name')
+          .getQuery();
+        return `wallet.customer_id IN ${subQuery}`;
+      });
+      queryBuilder.setParameter('customer_name', `%${customer_name}%`);
+    }
+
+    // Filter by customer status using subquery
+    if (customer_status !== undefined && customer_status !== null) {
+      queryBuilder.andWhere((qb) => {
+        const subQuery = qb
+          .subQuery()
+          .select('c.id')
+          .from('customer', 'c')
+          .where('c.status = :customer_status')
+          .getQuery();
+        return `wallet.customer_id IN ${subQuery}`;
+      });
+      queryBuilder.setParameter('customer_status', customer_status);
+    }
+
+    // Filter by customer hashed number using subquery
+    if (customer_hashed_number) {
+      queryBuilder.andWhere((qb) => {
+        const subQuery = qb
+          .subQuery()
+          .select('c.id')
+          .from('customer', 'c')
+          .where('c.hashed_number = :customer_hashed_number')
+          .getQuery();
+        return `wallet.customer_id IN ${subQuery}`;
+      });
+      queryBuilder.setParameter(
+        'customer_hashed_number',
+        encrypt(customer_hashed_number),
+      );
+    }
+
+    // Get total count with same filters
+    const countQueryBuilder = this.walletRepo
       .createQueryBuilder('wallet')
-      .where('wallet.tenant_id = :client_id', { client_id })
-      .andWhere(buId ? 'wallet.business_unit_id = :buId' : '1=1', { buId })
-      .getCount();
+      .where('wallet.tenant_id = :client_id', { client_id });
+
+    if (buId) {
+      countQueryBuilder.andWhere('wallet.business_unit_id = :buId', { buId });
+    }
+
+    if (customer_name) {
+      countQueryBuilder.andWhere((qb) => {
+        const subQuery = qb
+          .subQuery()
+          .select('c.id')
+          .from('customer', 'c')
+          .where('c.name LIKE :customer_name')
+          .getQuery();
+        return `wallet.customer_id IN ${subQuery}`;
+      });
+      countQueryBuilder.setParameter('customer_name', `%${customer_name}%`);
+    }
+
+    if (customer_status !== undefined && customer_status !== null) {
+      countQueryBuilder.andWhere((qb) => {
+        const subQuery = qb
+          .subQuery()
+          .select('c.id')
+          .from('customer', 'c')
+          .where('c.status = :customer_status')
+          .getQuery();
+        return `wallet.customer_id IN ${subQuery}`;
+      });
+      countQueryBuilder.setParameter('customer_status', customer_status);
+    }
+
+    if (customer_hashed_number) {
+      countQueryBuilder.andWhere((qb) => {
+        const subQuery = qb
+          .subQuery()
+          .select('c.id')
+          .from('customer', 'c')
+          .where('c.hashed_number = :customer_hashed_number')
+          .getQuery();
+        return `wallet.customer_id IN ${subQuery}`;
+      });
+      countQueryBuilder.setParameter(
+        'customer_hashed_number',
+        customer_hashed_number,
+      );
+    }
+
+    const total = await countQueryBuilder.getCount();
 
     // Get data with raw results to include subquery
     const data = await queryBuilder.getRawMany();

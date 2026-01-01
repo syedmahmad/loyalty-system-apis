@@ -278,6 +278,8 @@ export class CustomerService {
     pageSize: number = 20,
     permission: any,
     search?: string,
+    hashed_number?: string,
+    status?: number,
   ) {
     if (!permission.canViewCustomers) {
       throw new BadRequestException(
@@ -321,14 +323,38 @@ export class CustomerService {
       });
     }
 
+    if (hashed_number) {
+      queryBuilder.andWhere('customer.hashed_number = :hashed_number', {
+        hashed_number: encrypt(hashed_number),
+      });
+    }
+
+    if (status !== undefined && status !== null) {
+      queryBuilder.andWhere('customer.status = :status', { status });
+    }
+
     // Get total count
-    const total = await this.customerRepo
+    const countQueryBuilder = this.customerRepo
       .createQueryBuilder('customer')
-      .where('customer.tenant_id = :client_id', { client_id })
-      .andWhere(search ? 'customer.name LIKE :search' : '1=1', {
+      .where('customer.tenant_id = :client_id', { client_id });
+
+    if (search) {
+      countQueryBuilder.andWhere('customer.name LIKE :search', {
         search: `%${search}%`,
-      })
-      .getCount();
+      });
+    }
+
+    if (hashed_number) {
+      countQueryBuilder.andWhere('customer.hashed_number = :hashed_number', {
+        hashed_number,
+      });
+    }
+
+    if (status !== undefined && status !== null) {
+      countQueryBuilder.andWhere('customer.status = :status', { status });
+    }
+
+    const total = await countQueryBuilder.getCount();
 
     // Get data with raw results to include subqueries
     const data = await queryBuilder.getRawAndEntities();

@@ -83,6 +83,9 @@ export class WalletController {
     @Query('business_unit') buId?: number,
     @Query('page') page?: number,
     @Query('pageSize') pageSize?: number,
+    @Query('customer_name') customer_name?: string,
+    @Query('customer_status') customer_status?: number,
+    @Query('customer_hashed_number') customer_hashed_number?: string,
   ) {
     return this.walletService.listWallets(
       req.permission,
@@ -90,6 +93,9 @@ export class WalletController {
       buId,
       page,
       pageSize,
+      customer_name,
+      customer_status,
+      customer_hashed_number,
     );
   }
 

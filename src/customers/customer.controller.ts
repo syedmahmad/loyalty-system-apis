@@ -52,6 +52,8 @@ export class CustomerController {
     @Query('page') page?: number,
     @Query('pageSize') pageSize?: number,
     @Query('search') search?: string,
+    @Query('hashed_number') hashed_number?: string,
+    @Query('status') status?: number,
   ) {
     return this.customerService.getAllCustomers(
       client_id,
@@ -59,6 +61,8 @@ export class CustomerController {
       pageSize,
       req.permission,
       search,
+      hashed_number,
+      status,
     );
   }
 
