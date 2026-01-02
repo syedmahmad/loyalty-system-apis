@@ -736,8 +736,6 @@ export class OffersService {
     customer_id: string;
     langCode: string;
   }) {
-    console.log('Fetching getSingle Offer');
-
     // Step 1: Validate tenant exists
     const tenant = await this.tenantRepository.findOne({
       where: { id: parseInt(tenant_id, 10) },
@@ -890,8 +888,6 @@ export class OffersService {
         icon: b.icon,
       }));
 
-    console.log('couponCode before assignment', couponCode);
-
     // Step 8: Construct the normalized response object
     const normalized = {
       ...locale,
@@ -902,8 +898,6 @@ export class OffersService {
       benefits: filteredBenefits || [],
       coupon_code: couponCode ? couponCode : 'Not Available',
     };
-
-    console.log('normalized', normalized);
 
     // Step 9: Return the offer with coupon code
     return {

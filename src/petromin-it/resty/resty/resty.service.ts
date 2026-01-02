@@ -255,6 +255,28 @@ export class RestyService {
     // 🔹 Step 2: Group and process
     const invoicesMap = new Map<string, any>();
 
+    /**
+     * This will group raw invoice rows into a structure like:
+     * [
+     *   {
+     *     CustomerID: 'D61DFD91-14FC-4067-990C-499AE177BAD4',
+     *     CustomerName: 'MOHAMMED SALEEM',
+     *     CustomerMobile: '+966561176415',
+     *     ...other invoice fields...,
+     *     Items: [
+     *       {
+     *         ItemBeforeTaxAmount: 99,
+     *         ItemGroup: 'Oil',
+     *         ServiceBeforeTaxAmount: 0,
+     *         ServiceItem: 'Filter',
+     *         ServiceName: 'Mighty Oil Filter Service',
+     *       },
+     *       // ...other items for this invoice
+     *     ]
+     *   },
+     *   // ...other invoices
+     * ]
+     */
     for (const row of invoices) {
       const invoiceKey = row.InvoiceID;
 
@@ -299,6 +321,14 @@ export class RestyService {
       });
     }
 
+    /**
+     * We use invoicesMap.values() here because invoicesMap is keyed by InvoiceID to ensure uniqueness:
+     * - invoicesMap: Map<string, any> stores each invoice object with its unique InvoiceID as key,
+     *   so there is only one entry per invoice, regardless of how many services/items per invoice.
+     * - After populating the map, invoicesMap.values() will give an iterator over all unique invoice objects.
+     * - Wrapping it with Array.from() gives us a flat array of all invoices, each with their corresponding items array,
+     *   ready for further processing or saving.
+     */
     const processedInvoices = Array.from(invoicesMap.values());
 
     // 🔹 Step 3: Build all entities in memory (bulk)

@@ -51,8 +51,8 @@ export class ScheduleService {
       .createQueryBuilder('campaign')
       .leftJoinAndSelect('campaign.locales', 'locale')
       .where('campaign.end_date = :today', { today })
-      .andWhere('campaign.active = :active', { active: true })
-      .andWhere('locale.language_code = :langCode', { langCode: 'en' });
+      .andWhere('campaign.active = :active', { active: true });
+    // .andWhere('locale.language_code = :langCode', { langCode: 'en' });
 
     const expiredCampaigns: any = await qb.getMany();
 
