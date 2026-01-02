@@ -611,8 +611,6 @@ export class TiersService {
       );
       if (!wallet) throw new NotFoundException("customer's Wallet not found");
 
-      console.log('//////////.wallet.........wallet//////', wallet);
-
       const customerTierInfo = await this.getCurrentCustomerTier(
         customer.id,
         language_code,
