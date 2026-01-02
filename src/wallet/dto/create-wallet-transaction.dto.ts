@@ -3,7 +3,14 @@ import {
   WalletTransactionType,
   WalletTransactionStatus,
 } from '../entities/wallet-transaction.entity';
-import { IsEnum, IsNumber, IsOptional, IsString, IsInt } from 'class-validator';
+import {
+  IsEnum,
+  IsNumber,
+  IsOptional,
+  IsString,
+  IsInt,
+  IsDate,
+} from 'class-validator';
 
 export class CreateWalletTransactionDto {
   @IsInt()
@@ -44,11 +51,23 @@ export class CreateWalletTransactionDto {
 
   @IsOptional()
   @IsString()
+  invoice_id?: string;
+
+  @IsOptional()
+  @IsString()
+  invoice_no?: string;
+
+  @IsOptional()
+  @IsString()
   description?: string;
 
   @IsOptional()
   @IsInt()
   created_by?: number;
+
+  @IsOptional()
+  @IsDate()
+  created_at?: Date;
 
   expiry_date?: Date;
 

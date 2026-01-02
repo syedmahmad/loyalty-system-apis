@@ -16,6 +16,7 @@ import {
   WalletTransactionType,
 } from 'src/wallet/entities/wallet-transaction.entity';
 import { NotificationService } from 'src/petromin-it/notification/notification/notifications.service';
+import * as dayjs from 'dayjs';
 
 @Injectable()
 export class RestyService {
@@ -230,7 +231,7 @@ export class RestyService {
   // there could be multiple customers invoices with multiple items.Final array could be like that but you can
   // give me better optimise json if you want.
 
-  // @Cron(CronExpression.EVERY_30_MINUTES)
+  @Cron(CronExpression.EVERY_30_MINUTES)
   //   ┌──────── minute (0 - 59)
   // │ ┌────── hour (0 - 23)
   // │ │ ┌──── day of month
@@ -238,7 +239,7 @@ export class RestyService {
   // │ │ │ │ ┌─ day of week
   // │ │ │ │ │
   // 30  2   *   *   *
-  @Cron('30 2 * * *', { timeZone: 'UTC' })
+  // @Cron('30 2 * * *', { timeZone: 'UTC' })
   async processLatestInvoices() {
     console.log('processLatestInvoices :::');
 
@@ -336,7 +337,7 @@ export class RestyService {
 
     for (const singleInvoice of processedInvoices) {
       let customer = await this.customerRepo.findOne({
-        where: { hashed_number: encrypt(singleInvoice.CustomerMobile) },
+        where: { hashed_number: encrypt(singleInvoice?.CustomerMobile || '') },
         relations: ['tenant', 'business_unit'],
       });
 
@@ -388,6 +389,11 @@ export class RestyService {
         where: { customer: { id: customer.id } },
       });
 
+      if (!wallet) {
+        console.log('⚠️ Wallet not found for customer:', customer.id);
+        continue;
+      }
+
       const businessUnitId = customer.business_unit.id;
       const earningRule = await this.rulesRepo.findOne({
         where: {
@@ -432,6 +438,9 @@ export class RestyService {
               type: WalletTransactionType.EARN,
               status: WalletTransactionStatus.ACTIVE,
               amount: singleInvoice.InvoiceTotalAmount,
+              invoice_id: singleInvoice.InvoiceNumber,
+              invoice_no: singleInvoice.InvoiceNumber,
+              created_at: dayjs().toDate(),
               points_balance: points,
               source_type: 'transaction',
               description: `Points earned for invoice ${singleInvoice.InvoiceNumber}`,

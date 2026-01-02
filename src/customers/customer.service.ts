@@ -2578,6 +2578,7 @@ export class CustomerService {
                 .toDate()
             : dayjs().add(rule.validity_after_assignment, 'day').toDate()
           : null,
+        created_at: dayjs().toDate(),
       };
 
       // Save transaction
@@ -2887,6 +2888,9 @@ export class CustomerService {
             business_unit_id: customer?.business_unit?.id,
             prev_available_points: wallet.available_balance,
             points_balance: pointsToBurn,
+            invoice_id: metadata.invoice_no,
+            invoice_no: metadata.invoice_no,
+            created_at: dayjs().toDate(),
           },
           customer?.id,
           true,
