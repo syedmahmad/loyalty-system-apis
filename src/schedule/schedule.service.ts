@@ -3,6 +3,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Campaign } from 'src/campaigns/entities/campaign.entity';
 import { Coupon } from 'src/coupons/entities/coupon.entity';
+import { GateWayLog } from 'src/gateway-logs/entities/log.entity';
 import { Log } from 'src/logs/entities/log.entity';
 import {
   WalletTransaction,
@@ -28,6 +29,8 @@ export class ScheduleService {
     private readonly txRepo: Repository<WalletTransaction>,
     @InjectRepository(Log)
     private readonly logRepository: Repository<Log>,
+    @InjectRepository(GateWayLog)
+    private readonly gatewayLogRepository: Repository<GateWayLog>,
     @InjectRepository(Coupon)
     private readonly couponsRepository: Repository<Coupon>,
     private readonly walletService: WalletService,
@@ -74,27 +77,32 @@ export class ScheduleService {
         createdAt: LessThan(date),
       });
       console.log(`Deleted ${result.affected} old logs.`);
+
+      const result1 = await this.gatewayLogRepository.delete({
+        createdAt: LessThan(date),
+      });
+      console.log(`Deleted ${result1.affected} old gateway logs.`);
     } catch (error) {
       console.error('Error deleting old logs:', error);
     }
   }
 
-  @Cron(CronExpression.EVERY_HOUR)
-  async markExpiredCoupons() {
-    console.log('Running coupon expiry check...');
-    // const today = new Date();
-    // today.setHours(0, 0, 0, 0);
+  // @Cron(CronExpression.EVERY_HOUR)
+  // async markExpiredCoupons() {
+  // console.log('Running coupon expiry check...');
+  // const today = new Date();
+  // today.setHours(0, 0, 0, 0);
 
-    // const expiredCoupons = await this.couponsRepository.find({
-    //   where: { date_to: LessThanOrEqual(today), status: 1 },
-    // });
+  // const expiredCoupons = await this.couponsRepository.find({
+  //   where: { date_to: LessThanOrEqual(today), status: 1 },
+  // });
 
-    // for (const coupon of expiredCoupons) {
-    //   coupon.status = 0;
-    //   await this.couponsRepository.save(coupon);
-    //   console.log(`Deactivated coupon: ${coupon.coupon_title}`);
-    // }
-  }
+  // for (const coupon of expiredCoupons) {
+  //   coupon.status = 0;
+  //   await this.couponsRepository.save(coupon);
+  //   console.log(`Deactivated coupon: ${coupon.coupon_title}`);
+  // }
+  // }
 
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
   async unLockWalletPointsAndAddThemInAvailableBalance() {
