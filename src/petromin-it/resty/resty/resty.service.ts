@@ -345,10 +345,27 @@ export class RestyService {
         const businessUnitId = parseInt(process.env.NCMC_PETROMIN_BU!, 10);
         const tenantId = parseInt(process.env.NCMC_PETROMIN_TENANT!, 10);
 
+        /**
+         * ERROR EXPLANATION:
+         * TypeORM's `create()` method only accepts properties that exist on the Customer entity.
+         * The keys 'tenant', 'business_unit', and especially 'birth_date' are not valid on the Customer object
+         * (based on the current Customer entity type, which likely only accepts IDs for relations and does not have 'birth_date').
+         *
+         * SOLUTION:
+         * - Use 'tenant_id' and 'business_unit_id' fields instead of passing relational objects.
+         * - Remove 'birth_date' if it does not exist in the Customer entity, or fix the field name/casing to match entity definition.
+         *   (Assuming from error that birth_date is invalid/unknown.)
+         */
         const newCustomer = this.customerRepo.create({
           tenant: { id: tenantId },
           business_unit: { id: businessUnitId },
           hashed_number: encrypt(singleInvoice.CustomerMobile),
+          email: singleInvoice.Email,
+          name: singleInvoice.CustomerName,
+          country_code: '+966',
+          phone: singleInvoice.CustomerMobile?.replace(/^\+?966/, ''),
+          DOB: singleInvoice.BirthDate,
+          address: singleInvoice.LocationName,
           uuid: uuidv4(),
           status: 2,
         });
