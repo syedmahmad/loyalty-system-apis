@@ -230,7 +230,7 @@ export class RestyService {
   // there could be multiple customers invoices with multiple items.Final array could be like that but you can
   // give me better optimise json if you want.
 
-  @Cron(CronExpression.EVERY_30_MINUTES)
+  // @Cron(CronExpression.EVERY_30_MINUTES)
   //   ┌──────── minute (0 - 59)
   // │ ┌────── hour (0 - 23)
   // │ │ ┌──── day of month
@@ -238,7 +238,7 @@ export class RestyService {
   // │ │ │ │ ┌─ day of week
   // │ │ │ │ │
   // 30  2   *   *   *
-  // @Cron('30 2 * * *', { timeZone: 'UTC' })
+  @Cron('30 2 * * *', { timeZone: 'UTC' })
   async processLatestInvoices() {
     console.log('processLatestInvoices :::');
 
