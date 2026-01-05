@@ -270,6 +270,7 @@ export class BurningService {
           : `Burned ${pointsToBurn} points for discount of ${discountAmount} on amount ${transaction_amount}`,
         external_program_type: from_app ? from_app : null,
         created_at: dayjs().toDate(),
+        transaction_reference: remarks ? remarks : null,
       };
 
       const tx = await this.walletService.addTransaction(

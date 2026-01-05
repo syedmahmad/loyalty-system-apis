@@ -746,15 +746,17 @@ export class OffersService {
     }
 
     // Step 2: Validate customer exists and is active
-    const customer = await this.customerRepo.findOne({
-      where: { uuid: customer_id, status: 1 },
-    });
-
-    if (!customer) {
-      throw new BadRequestException('Customer not found');
+    let customer = null;
+    if (customer_id) {
+      customer = await this.customerRepo.findOne({
+        where: { uuid: customer_id, status: 1 },
+      });
+      if (!customer) {
+        throw new BadRequestException('Customer not found');
+      }
     }
 
-    // Step 3: Validate language code and get language entity
+    // Step 4: Validate language code and get language entity
     const language = await this.languageRepo.findOne({
       where: { code: langCode },
     });
@@ -763,7 +765,7 @@ export class OffersService {
       throw new BadRequestException('Invalid language code');
     }
 
-    // Step 4: Find the offer by UUID, tenant, and ensure it's enabled for app display
+    // Step 5: Find the offer by UUID, tenant, and ensure it's enabled for app display
     const offer = await this.offerRepository.findOne({
       where: {
         uuid: offer_id,
@@ -798,8 +800,9 @@ export class OffersService {
 
     let couponCode = null;
 
-    // Step 5: Handle coupon assignment if coupons are enabled for this offer
-    if (offer.enable_coupons === 1) {
+    // Step 6: Handle coupon assignment if coupons are enabled for this offer
+    // Only assign coupon if customer_id is present and NOT null
+    if (offer.enable_coupons === 1 && customer_id) {
       /**
        * Check if the customer already has a coupon assigned for this offer
        * This prevents duplicate assignments and ensures customers get the same coupon
@@ -864,23 +867,17 @@ export class OffersService {
 
         const savedCoupon =
           await this.offerCouponAssignmentRepo.save(newCoupon);
-        console.log(
-          'New auto-generated coupon assigned:',
-          savedCoupon.coupon_code,
-        );
         couponCode = savedCoupon.coupon_code;
-
-        console.log('new Generated couponCode', couponCode);
       }
     }
 
-    // Step 6: Get the localized offer content based on language code
+    // Step 7: Get the localized offer content based on language code
     const locale: any = offer.locales.find(
       (loc) =>
         loc.language?.code === langCode || loc.language?.id === language?.id,
     );
 
-    // Step 7: Filter benefits to include only the localized name and icon
+    // Step 8: Filter benefits to include only the localized name and icon
     const filteredBenefits =
       locale?.benefits &&
       locale?.benefits?.map((b) => ({
@@ -888,7 +885,8 @@ export class OffersService {
         icon: b.icon,
       }));
 
-    // Step 8: Construct the normalized response object
+    // Step 9: Construct the normalized response object
+    // If customer_id is falsy, always return coupon_code: 'Not Available'
     const normalized = {
       ...locale,
       status: offer.status,
@@ -896,10 +894,11 @@ export class OffersService {
       date_to: offer.date_to,
       station_type: offer.station_type,
       benefits: filteredBenefits || [],
-      coupon_code: couponCode ? couponCode : 'Not Available',
+      coupon_code: customer_id && couponCode ? couponCode : 'Not Available',
+      enable_coupons: offer.enable_coupons,
     };
 
-    // Step 9: Return the offer with coupon code
+    // Step 10: Return the offer with coupon code and enable_coupons
     return {
       success: true,
       message: 'Successfully fetched the offer!',

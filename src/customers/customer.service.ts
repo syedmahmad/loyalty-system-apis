@@ -1105,6 +1105,7 @@ export class CustomerService {
       status: WalletTransactionStatus.ACTIVE,
       source_type: rule.name,
       source_id: rule.id,
+      created_at: dayjs().toDate(),
       description: `Burned ${pointsToBurn} points for discount of ${discountAmount} on amount ${total_amount}`,
     };
 
@@ -2604,6 +2605,7 @@ export class CustomerService {
             : dayjs().add(rule.validity_after_assignment, 'day').toDate()
           : null,
         created_at: dayjs().toDate(),
+        transaction_reference: 'GVR',
       };
 
       // Save transaction
@@ -3137,6 +3139,7 @@ export class CustomerService {
         status: WalletTransactionStatus.ACTIVE,
         source_type: matchedRule.name,
         source_id: matchedRule.id,
+        created_at: dayjs().toDate(),
         description: remarks
           ? remarks
           : `Burned ${pointsToBurn} points for discount of ${discountAmount} on amount ${transaction_amount}`,
