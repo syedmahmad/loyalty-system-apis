@@ -19,6 +19,7 @@ import { CampaignRule } from 'src/campaigns/entities/campaign-rule.entity';
 import { Campaign } from 'src/campaigns/entities/campaign.entity';
 import { CouponTypeService } from 'src/coupon_type/coupon_type/coupon_type.service';
 import { Coupon } from 'src/coupons/entities/coupon.entity';
+import { CouponUsage } from 'src/coupons/entities/coupon-usages.entity';
 import { CustomerSegmentMember } from 'src/customer-segment/entities/customer-segment-member.entity';
 import { EarnWithEvent } from 'src/customers/dto/earn-with-event.dto';
 import { OciService } from 'src/oci/oci.service';
@@ -110,6 +111,9 @@ export class CustomerService {
 
     @InjectRepository(UserCoupon)
     private userCouponRepo: Repository<UserCoupon>,
+
+    @InjectRepository(CouponUsage)
+    private couponUsageRepo: Repository<CouponUsage>,
 
     @InjectRepository(Tier)
     private tierRepo: Repository<Tier>,
@@ -528,14 +532,35 @@ export class CustomerService {
       'points',
     );
 
-    const couponTransactionInfo =
-      await this.walletService.getWalletTransactions(
-        walletinfo?.id,
-        couponPage,
-        pageSize,
-        couponQuery,
-        'coupon',
+    // Get coupon usages with customer and coupon details
+    const take = pageSize;
+    const skip = (couponPage - 1) * take;
+
+    const queryBuilder = this.couponUsageRepo
+      .createQueryBuilder('coupon_usage')
+      .leftJoinAndSelect('coupon_usage.coupon', 'coupon')
+      .leftJoinAndSelect('coupon_usage.customer', 'customer')
+      .where('coupon_usage.customer_id = :customerId', { customerId })
+      .orderBy('coupon_usage.created_at', 'DESC')
+      .skip(skip)
+      .take(take);
+
+    if (couponQuery) {
+      queryBuilder.andWhere(
+        '(coupon_usage.invoice_no LIKE :query OR CAST(coupon_usage.amount AS CHAR) LIKE :query)',
+        { query: `%${couponQuery}%` },
       );
+    }
+
+    const [couponUsages, couponTotal] = await queryBuilder.getManyAndCount();
+
+    const couponTransactionInfo = {
+      data: couponUsages,
+      total: couponTotal,
+      page: couponPage,
+      pageSize: pageSize,
+      totalPages: Math.ceil(couponTotal / pageSize),
+    };
 
     const tiersInfo =
       await this.tiersService.getCurrentCustomerTier(customerId);

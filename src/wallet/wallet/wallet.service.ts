@@ -497,7 +497,7 @@ export class WalletService {
       where: {
         customer: { id: customerId },
       },
-      relations: ['customer'],
+      relations: ['customer', 'business_unit'],
     });
   }
 

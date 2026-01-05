@@ -42,6 +42,7 @@ import { NotificationModule } from 'src/petromin-it/notification/notification.mo
 import { OpenaiModule } from 'src/openai/openai.module';
 import { CustomerPreference } from 'src/petromin-it/preferences/entities/customer-preference.entity';
 import { DeviceToken } from 'src/petromin-it/notification/entities/device-token.entity';
+import { CouponUsage } from 'src/coupons/entities/coupon-usages.entity';
 
 @Module({
   imports: [
@@ -71,6 +72,7 @@ import { DeviceToken } from 'src/petromin-it/notification/entities/device-token.
       UserCoupon,
       CustomerPreference,
       DeviceToken,
+      CouponUsage,
     ]),
     WalletModule,
     OciModule,
