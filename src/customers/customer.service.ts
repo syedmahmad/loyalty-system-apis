@@ -61,7 +61,7 @@ import { Tier } from 'src/tiers/entities/tier.entity';
 import { isValidUrl } from 'src/helpers/helper';
 import { CustomerDto } from './dto/customer.dto';
 import { NotificationService } from 'src/petromin-it/notification/notification/notifications.service';
-import { CustomerPreference } from 'src/petromin-it/preferences/entities/customer-preference.entity';
+// import { CustomerPreference } from 'src/petromin-it/preferences/entities/customer-preference.entity';
 import { OpenAIService } from 'src/openai/openai/openai.service';
 import { BUSINESS_UNITS_WITH_UUID } from './type/type';
 import axios from 'axios';
@@ -118,8 +118,8 @@ export class CustomerService {
     @InjectRepository(Tier)
     private tierRepo: Repository<Tier>,
 
-    @InjectRepository(CustomerPreference)
-    private readonly customerPreferencesRepo: Repository<CustomerPreference>,
+    // @InjectRepository(CustomerPreference)
+    // private readonly customerPreferencesRepo: Repository<CustomerPreference>,
   ) {}
 
   /**
@@ -908,61 +908,61 @@ export class CustomerService {
     // Save transaction
     const savedTx = await this.txRepo.save(walletTransaction);
 
-    const customerPreferences = await this.customerPreferencesRepo.findOne({
-      where: {
-        customer: { id: customer.id },
-      },
+    // const customerPreferences = await this.customerPreferencesRepo.findOne({
+    //   where: {
+    //     customer: { id: customer.id },
+    //   },
+    // });
+
+    // if (customerPreferences?.push_notification) {
+    // There could be duplicate entries or multiple, so fetch the last one (most recently created)
+    const deviceTokens = await this.deviceTokenRepo.find({
+      where: { customer: { id: customer.id } },
+      order: { createdAt: 'DESC' },
     });
 
-    if (customerPreferences?.push_notification) {
-      // There could be duplicate entries or multiple, so fetch the last one (most recently created)
-      const deviceTokens = await this.deviceTokenRepo.find({
-        where: { customer: { id: customer.id } },
-        order: { createdAt: 'DESC' },
-      });
+    const templateId = process.env.EARNED_POINTS_TEMPLATE_ID;
 
-      const templateId = process.env.EARNED_POINTS_TEMPLATE_ID;
+    const tokensString = deviceTokens.map((t) => t.token).join(',');
 
-      const tokensString = deviceTokens.map((t) => t.token).join(',');
-
-      try {
-        // Prepare data payload
-        const payload = {
-          template_id: templateId,
-          language_code: 'en', // or 'ar'
-          business_name: 'PETROMINit',
-          to: [
-            {
-              user_device_token: tokensString,
-              customer_mobile: decrypt(customer.hashed_number),
-              dynamic_fields: {
-                rewardPoints: rewardPoints.toString(),
-                event: event,
-              },
+    try {
+      // Prepare data payload
+      const payload = {
+        template_id: templateId,
+        language_code: 'en', // or 'ar'
+        business_name: 'PETROMINit',
+        to: [
+          {
+            user_device_token: tokensString,
+            customer_mobile: decrypt(customer.hashed_number),
+            dynamic_fields: {
+              rewardPoints: rewardPoints.toString(),
+              event: event,
             },
-          ],
-        };
+          },
+        ],
+      };
 
-        const saveNotificationPayload = {
-          title: 'Points Earned',
-          body: `Earned ${rewardPoints} points against this event: ${event}`,
-          customer_id: customer.id,
-        };
+      const saveNotificationPayload = {
+        title: 'Points Earned',
+        body: `Earned ${rewardPoints} points against this event: ${event}`,
+        customer_id: customer.id,
+      };
 
-        // Send notification request
-        await this.notificationService.sendToUser(
-          payload,
-          saveNotificationPayload,
-        );
+      // Send notification request
+      await this.notificationService.sendToUser(
+        payload,
+        saveNotificationPayload,
+      );
 
-        console.log('Notification sent successfully');
-      } catch (err) {
-        console.error(
-          'Error while sending notification:',
-          err.response?.data || err.message,
-        );
-      }
+      console.log('Notification sent successfully');
+    } catch (err) {
+      console.error(
+        'Error while sending notification:',
+        err.response?.data || err.message,
+      );
     }
+    // }
 
     return {
       message: 'Points earned successfully',

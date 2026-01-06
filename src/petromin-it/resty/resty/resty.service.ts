@@ -3,9 +3,9 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { RestyInvoicesInfo } from '../entities/resty_invoices_info.entity';
 import { VehicleServiceJob } from '../entities/vehicle_service_job.entity';
-import { Cron, CronExpression } from '@nestjs/schedule';
+import { Cron } from '@nestjs/schedule';
 import { Customer } from 'src/customers/entities/customer.entity';
-import { encrypt } from 'src/helpers/encryption';
+import { decrypt, encrypt } from 'src/helpers/encryption';
 import { Wallet } from 'src/wallet/entities/wallet.entity';
 import { Rule } from 'src/rules/entities/rules.entity';
 import { TiersService } from 'src/tiers/tiers/tiers.service';
@@ -17,6 +17,7 @@ import {
 } from 'src/wallet/entities/wallet-transaction.entity';
 import { NotificationService } from 'src/petromin-it/notification/notification/notifications.service';
 import * as dayjs from 'dayjs';
+import { DeviceToken } from 'src/petromin-it/notification/entities/device-token.entity';
 
 @Injectable()
 export class RestyService {
@@ -33,6 +34,8 @@ export class RestyService {
     private readonly walletRepo: Repository<Wallet>,
     @InjectRepository(Rule)
     private readonly rulesRepo: Repository<Rule>,
+    @InjectRepository(DeviceToken)
+    private readonly deviceTokenRepo: Repository<DeviceToken>,
 
     private readonly notificationService: NotificationService,
     private readonly tierService: TiersService,
@@ -231,7 +234,7 @@ export class RestyService {
   // there could be multiple customers invoices with multiple items.Final array could be like that but you can
   // give me better optimise json if you want.
 
-  @Cron(CronExpression.EVERY_30_MINUTES)
+  // @Cron(CronExpression.EVERY_30_MINUTES)
   //   ┌──────── minute (0 - 59)
   // │ ┌────── hour (0 - 23)
   // │ │ ┌──── day of month
@@ -239,7 +242,7 @@ export class RestyService {
   // │ │ │ │ ┌─ day of week
   // │ │ │ │ │
   // 30  2   *   *   *
-  // @Cron('30 2 * * *', { timeZone: 'UTC' })
+  @Cron('30 2 * * *', { timeZone: 'UTC' })
   async processLatestInvoices() {
     console.log('processLatestInvoices :::');
 
@@ -454,14 +457,42 @@ export class RestyService {
           console.log('⚠️ Error adding wallet transaction:', err);
         }
 
-        await this.notificationService.addNotification({
-          customer_id: customer.id,
-          notification_type: 'earn_points',
-          notification_details: {
-            title: 'Earned Points',
-            body: `Congratulations! You've earned ${points} points for invoice ${singleInvoice.InvoiceNumber}`,
-          },
+        const deviceTokens = await this.deviceTokenRepo.find({
+          where: { customer: { id: customer.id } },
+          order: { createdAt: 'DESC' },
         });
+
+        const templateId = process.env.EARNED_POINTS_TEMPLATE_ID;
+
+        const tokensString = deviceTokens.map((t) => t.token).join(',');
+
+        const payload = {
+          template_id: templateId,
+          language_code: 'en', // or 'ar'
+          business_name: 'PETROMINit',
+          to: [
+            {
+              user_device_token: tokensString,
+              customer_mobile: decrypt(customer.hashed_number),
+              dynamic_fields: {
+                rewardPoints: rewardPoints.toString(),
+                event: `invoice ${singleInvoice.InvoiceNumber}`,
+              },
+            },
+          ],
+        };
+
+        const saveNotificationPayload = {
+          title: 'Points Earned',
+          body: `Earned ${rewardPoints} points against this event: invoice ${singleInvoice.InvoiceNumber}`,
+          customer_id: customer.id,
+        };
+
+        // Send notification request
+        await this.notificationService.sendToUser(
+          payload,
+          saveNotificationPayload,
+        );
       }
 
       // ✅ Collect invoice entity (do NOT save yet)

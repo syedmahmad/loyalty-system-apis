@@ -13,6 +13,7 @@ import { VehicleModule } from 'src/vehicles/vehicles.module';
 import { TiersModule } from 'src/tiers/tiers.module';
 import { WalletModule } from 'src/wallet/wallet.module';
 import { NotificationModule } from '../notification/notification.module';
+import { DeviceToken } from 'src/petromin-it/notification/entities/device-token.entity';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { NotificationModule } from '../notification/notification.module';
       Customer,
       Wallet,
       Rule,
+      DeviceToken,
     ]),
     VehicleModule,
     TiersModule,

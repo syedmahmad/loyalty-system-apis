@@ -126,6 +126,7 @@ export class NotificationService {
     //   throw new NotFoundException(`Customer not found`);
     // }
     // // Always save the notification to the database first
+    // TODO: will check either need to keep it or remove it.
     await this.notificationRepo.save({
       notification_details: {
         title: saveNotificationPayload.title,

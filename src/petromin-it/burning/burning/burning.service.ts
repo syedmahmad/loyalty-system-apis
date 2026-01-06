@@ -455,58 +455,58 @@ export class BurningService {
       await this.walletRepo.save(wallet);
       //#endregion
 
-      const customerPreferences = await this.customerPreferencesRepo.findOne({
-        where: {
-          customer: { id: customer.id },
-        },
+      // const customerPreferences = await this.customerPreferencesRepo.findOne({
+      //   where: {
+      //     customer: { id: customer.id },
+      //   },
+      // });
+
+      // if (customerPreferences && customerPreferences?.push_notification) {
+      const deviceTokens = await this.deviceTokenRepo.find({
+        where: { customer: { id: customer.id } },
+        order: { createdAt: 'DESC' },
       });
 
-      if (customerPreferences && customerPreferences?.push_notification) {
-        const deviceTokens = await this.deviceTokenRepo.find({
-          where: { customer: { id: customer.id } },
-          order: { createdAt: 'DESC' },
-        });
+      const templateId = process.env.BURNED_POINTS_TEMPLATE_ID;
 
-        const templateId = process.env.BURNED_POINTS_TEMPLATE_ID;
+      const tokensString = deviceTokens.map((t) => t.token).join(',');
 
-        const tokensString = deviceTokens.map((t) => t.token).join(',');
-
-        try {
-          // Prepare data payload
-          const payload = {
-            template_id: templateId,
-            language_code: 'en', // or 'ar'
-            business_name: 'PETROMINit',
-            to: [
-              {
-                user_device_token: tokensString,
-                customer_mobile: decrypt(customer.hashed_number),
-                dynamic_fields: {
-                  appliedBurnPoints: appliedBurnPoints.toString(),
-                  discountAmount: discountAmount.toString(),
-                },
+      try {
+        // Prepare data payload
+        const payload = {
+          template_id: templateId,
+          language_code: 'en', // or 'ar'
+          business_name: 'PETROMINit',
+          to: [
+            {
+              user_device_token: tokensString,
+              customer_mobile: decrypt(customer.hashed_number),
+              dynamic_fields: {
+                appliedBurnPoints: appliedBurnPoints.toString(),
+                discountAmount: discountAmount.toString(),
               },
-            ],
-          };
+            },
+          ],
+        };
 
-          const saveNotificationPayload = {
-            title: 'Points Burned',
-            body: `You've Burned ${appliedBurnPoints} points and got a discount of ${discountAmount} SAR`,
-            customer_id: customer.id,
-          };
+        const saveNotificationPayload = {
+          title: 'Points Burned',
+          body: `You've Burned ${appliedBurnPoints} points and got a discount of ${discountAmount} SAR`,
+          customer_id: customer.id,
+        };
 
-          // Send notification request
-          await this.notificationService.sendToUser(
-            payload,
-            saveNotificationPayload,
-          );
-        } catch (err) {
-          console.error(
-            'Error while sending notification:',
-            err.response?.data || err.message,
-          );
-        }
+        // Send notification request
+        await this.notificationService.sendToUser(
+          payload,
+          saveNotificationPayload,
+        );
+      } catch (err) {
+        console.error(
+          'Error while sending notification:',
+          err.response?.data || err.message,
+        );
       }
+      // }
 
       //#region Step 6: Build and return response
       return {
