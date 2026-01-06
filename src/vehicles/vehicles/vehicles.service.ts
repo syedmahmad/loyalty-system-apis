@@ -1032,7 +1032,7 @@ export class VehiclesService {
   async customerLoginInResty() {
     try {
       // Prepare request data
-      const loginUrl = `${process.env.RESTY_BASE_URL.replace(/\/$/, '')}/api/login`;
+      const loginUrl = `${process.env.RESTY_BASE_URL.replace(/\/$/, '')}/login`;
       const loginPayload = {
         username: process.env.RESTY_USERNAME,
         password: process.env.RESTY_PASSWORD,
@@ -1054,7 +1054,7 @@ export class VehiclesService {
           password: `${process.env.RESTY_PASSWORD}`,
         }),
         responseBody: JSON.stringify(restyRespose),
-        url: `${process.env.RESTY_BASE_URL}/api/login`,
+        url: `${process.env.RESTY_BASE_URL}/login`,
         method: 'POST',
         statusCode: 200,
       } as Log);
@@ -1069,7 +1069,7 @@ export class VehiclesService {
           password: `${process.env.RESTY_PASSWORD}`,
         }),
         responseBody: JSON.stringify(error) || null,
-        url: `${process.env.RESTY_BASE_URL}/api/login`,
+        url: `${process.env.RESTY_BASE_URL}/login`,
         method: 'POST',
         statusCode: 500,
       } as Log);
@@ -1085,7 +1085,7 @@ export class VehiclesService {
     // const customerPhone = '+966555657588';
     try {
       const response = await axios.get(
-        `${process.env.RESTY_BASE_URL}/api/customer/search?param=${customerPhone}`,
+        `${process.env.RESTY_BASE_URL}/customer/search?param=${customerPhone}`,
         {
           headers: {
             Authorization: `Bearer ${loginInfo.access_token}`,
@@ -1098,7 +1098,7 @@ export class VehiclesService {
           param: customerPhone,
         }),
         responseBody: JSON.stringify(response.data),
-        url: `${process.env.RESTY_BASE_URL}/api/customer/search?param=${customerPhone}`,
+        url: `${process.env.RESTY_BASE_URL}/customer/search?param=${customerPhone}`,
         method: 'GET',
         statusCode: 200,
       } as Log);
@@ -1112,7 +1112,7 @@ export class VehiclesService {
           param: customerPhone,
         }),
         responseBody: JSON.stringify(error) || null,
-        url: `${process.env.RESTY_BASE_URL}/api/customer/search?param=${customerPhone}`,
+        url: `${process.env.RESTY_BASE_URL}/customer/search?param=${customerPhone}`,
         method: 'GET',
         statusCode: 500,
       } as Log);
@@ -1124,7 +1124,7 @@ export class VehiclesService {
   async getVehicleInfoFromResty({ customer_id, loginInfo }) {
     try {
       const response = await axios.get(
-        `${process.env.RESTY_BASE_URL}/api/customer/${customer_id}/vehicles`,
+        `${process.env.RESTY_BASE_URL}/customer/${customer_id}/vehicles`,
         {
           headers: {
             Authorization: `Bearer ${loginInfo.access_token}`,
@@ -1138,7 +1138,7 @@ export class VehiclesService {
           param: customer_id,
         }),
         responseBody: JSON.stringify(response.data),
-        url: `${process.env.RESTY_BASE_URL}/api/customer/${customer_id}/vehicles`,
+        url: `${process.env.RESTY_BASE_URL}/customer/${customer_id}/vehicles`,
         method: 'GET',
         statusCode: 200,
       } as Log);
@@ -1152,7 +1152,7 @@ export class VehiclesService {
           param: customer_id,
         }),
         responseBody: JSON.stringify(error) || null,
-        url: `${process.env.RESTY_BASE_URL}/api/customer/${customer_id}/vehicles`,
+        url: `${process.env.RESTY_BASE_URL}/customer/${customer_id}/vehicles`,
         method: 'GET',
         statusCode: 500,
       } as Log);
@@ -1164,7 +1164,7 @@ export class VehiclesService {
   async manageVehicleInResty({ vehiclePayload, loginInfo }) {
     try {
       const response = await axios.post(
-        `${process.env.RESTY_BASE_URL}/api/vehicle/manage`,
+        `${process.env.RESTY_BASE_URL}/vehicle/manage`,
         [vehiclePayload],
         {
           headers: {
@@ -1177,7 +1177,7 @@ export class VehiclesService {
       const logs = await this.logRepo.create({
         requestBody: JSON.stringify(vehiclePayload),
         responseBody: JSON.stringify(response),
-        url: `${process.env.RESTY_BASE_URL}/api/vehicle/manage`,
+        url: `${process.env.RESTY_BASE_URL}/vehicle/manage`,
         method: 'POST',
         statusCode: 200,
       } as Log);
@@ -1189,7 +1189,7 @@ export class VehiclesService {
       const logs = await this.logRepo.create({
         requestBody: JSON.stringify(vehiclePayload),
         responseBody: JSON.stringify(error) || null,
-        url: `${process.env.RESTY_BASE_URL}/api/vehicle/manage`,
+        url: `${process.env.RESTY_BASE_URL}/vehicle/manage`,
         method: 'POST',
         statusCode: 500,
       } as Log);
@@ -1201,7 +1201,7 @@ export class VehiclesService {
   async getVehicleServiceListFromResty({ customer_id, vehicle_id, loginInfo }) {
     try {
       const response = await axios.get(
-        `${process.env.RESTY_BASE_URL}/api/vehicle/${customer_id}/${vehicle_id}`,
+        `${process.env.RESTY_BASE_URL}/vehicle/${customer_id}/${vehicle_id}`,
         {
           headers: {
             Authorization: `Bearer ${loginInfo.access_token}`,
@@ -1216,7 +1216,7 @@ export class VehiclesService {
           vehicle_id: vehicle_id,
         }),
         responseBody: JSON.stringify(response.data),
-        url: `${process.env.RESTY_BASE_URL}/api/vehicle/${customer_id}/${vehicle_id}`,
+        url: `${process.env.RESTY_BASE_URL}/vehicle/${customer_id}/${vehicle_id}`,
         method: 'GET',
         statusCode: 200,
       } as Log);
@@ -1231,7 +1231,7 @@ export class VehiclesService {
           vehicle_id: vehicle_id,
         }),
         responseBody: JSON.stringify(error) || null,
-        url: `${process.env.RESTY_BASE_URL}/api/vehicle/${customer_id}/${vehicle_id}`,
+        url: `${process.env.RESTY_BASE_URL}/vehicle/${customer_id}/${vehicle_id}`,
         method: 'GET',
         statusCode: 500,
       } as Log);
@@ -1299,7 +1299,7 @@ export class VehiclesService {
   async postToResty(endpoint: string, payload: any, loginInfo: any) {
     try {
       const response = await axios.post(
-        `${process.env.RESTY_BASE_URL}/api${endpoint}`,
+        `${process.env.RESTY_BASE_URL}${endpoint}`,
         payload,
         {
           headers: {
