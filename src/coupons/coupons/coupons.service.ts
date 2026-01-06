@@ -2130,11 +2130,17 @@ export class CouponsService {
       order: { redeemed_at: 'DESC' },
     });
 
+    const customerTierInfo = await this.tiersService.getCurrentCustomerTier(
+      customer.id,
+      language_code,
+    );
+
     const available = [];
     const expired = [];
     const today = new Date();
     if (userCoupons.length) {
       for (let index = 0; index <= userCoupons.length - 1; index++) {
+        let iscustomerTierSatisfied = false;
         const eachUserCoupon = userCoupons[index];
         let singleCoupon: any = await this.couponsRepository.findOne({
           where: [
@@ -2158,13 +2164,13 @@ export class CouponsService {
 
         const services = [];
         const products = [];
-
         // if it is a simple coupon
         if (
           singleCoupon.coupon_type_id &&
           [
             CouponTypeName.SERVICE_BASED,
             CouponTypeName.PRODUCT_SPECIFIC,
+            CouponTypeName.TIER_BASED,
           ].includes(singleCoupon.coupon_type_id)
         ) {
           const conditionTypes = singleCoupon.conditions.map((c) => c.type);
@@ -2174,6 +2180,16 @@ export class CouponsService {
 
           if (singleCoupon.coupon_type_id == CouponTypeName.SERVICE_BASED) {
             services.push(...conditionTypes);
+          }
+
+          if (singleCoupon.coupon_type_id == CouponTypeName.TIER_BASED) {
+            const tiers = singleCoupon.conditions.map(
+              (singleTier: { tier: number }) => singleTier.tier,
+            );
+
+            if (!tiers.includes(customerTierInfo?.tier?.id)) {
+              continue;
+            }
           }
         }
 
@@ -2192,7 +2208,21 @@ export class CouponsService {
             if (c.coupon_type === CouponTypeName.PRODUCT_SPECIFIC) {
               products.push(...types);
             }
+
+            if (c.coupon_type == CouponTypeName.TIER_BASED) {
+              const tiers = c.dynamicRows.map(
+                (singleTier: { tier: number }) => singleTier.tier,
+              );
+
+              if (!tiers.includes(customerTierInfo?.tier?.id)) {
+                iscustomerTierSatisfied = true;
+              }
+            }
           });
+        }
+
+        if (iscustomerTierSatisfied) {
+          continue;
         }
 
         if (
@@ -2242,6 +2272,7 @@ export class CouponsService {
 
     if (couponsForAllUser.length) {
       for (let index = 0; index <= couponsForAllUser.length - 1; index++) {
+        let iscustomerTierSatisfied = false;
         let singleCoupon: any = couponsForAllUser[index];
 
         const filteredLocales = singleCoupon.locales?.filter(
@@ -2266,6 +2297,7 @@ export class CouponsService {
           [
             CouponTypeName.SERVICE_BASED,
             CouponTypeName.PRODUCT_SPECIFIC,
+            CouponTypeName.TIER_BASED,
           ].includes(singleCoupon.coupon_type_id)
         ) {
           const conditionTypes = singleCoupon?.conditions.map((c) => c.type);
@@ -2274,6 +2306,16 @@ export class CouponsService {
           }
           if (singleCoupon.coupon_type_id == CouponTypeName.SERVICE_BASED) {
             services.push(...conditionTypes);
+          }
+
+          if (singleCoupon.coupon_type_id == CouponTypeName.TIER_BASED) {
+            const tiers = singleCoupon.conditions.map(
+              (singleTier: { tier: number }) => singleTier.tier,
+            );
+
+            if (!tiers.includes(customerTierInfo?.tier?.id)) {
+              continue;
+            }
           }
         }
 
@@ -2292,7 +2334,20 @@ export class CouponsService {
             if (c.coupon_type === CouponTypeName.PRODUCT_SPECIFIC) {
               products.push(...types);
             }
+
+            if (c.coupon_type == CouponTypeName.TIER_BASED) {
+              const tiers = c.dynamicRows.map(
+                (singleTier: { tier: number }) => singleTier.tier,
+              );
+
+              if (!tiers.includes(customerTierInfo?.tier?.id)) {
+                iscustomerTierSatisfied = true;
+              }
+            }
           });
+        }
+        if (iscustomerTierSatisfied) {
+          continue;
         }
 
         if (
