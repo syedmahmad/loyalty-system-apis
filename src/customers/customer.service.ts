@@ -2570,15 +2570,18 @@ export class CustomerService {
       }
 
       // 9. Create wallet_transaction
-      const walletTransaction: Partial<WalletTransaction> = {
-        wallet: wallet, // pass the full Wallet entity instance
-        orders: walletOrderRes,
-        // wallet_order_id: walletOrderId,
-        business_unit: wallet.business_unit, // pass the full BusinessUnit entity instance
+      // Prepare CreateWalletTransactionDto for addTransaction
+      const walletTransactionPayload = {
+        wallet_id: wallet.id,
+        business_unit_id: wallet.business_unit.id,
+        // Pass wallet_order_id if available
+        wallet_order_id: walletOrderRes?.id,
+        // Map fields that are required for the transaction
         type: WalletTransactionType.EARN,
         source_type: rule?.locales[0]?.name,
         amount: Orderamount || 0,
         prev_available_points: wallet.available_balance,
+        points_balance: rewardPoints,
         status:
           pendingDays > 0
             ? WalletTransactionStatus.PENDING
@@ -2589,8 +2592,6 @@ export class CustomerService {
         // Otherwise, set unlock_date to null (no unlock needed).
         unlock_date:
           pendingDays > 0 ? dayjs().add(pendingDays, 'day').toDate() : null,
-
-        point_balance: rewardPoints,
 
         // Set the expiry_date for the wallet transaction.
         // If the rule has a validity_after_assignment value:
@@ -2606,10 +2607,20 @@ export class CustomerService {
           : null,
         created_at: dayjs().toDate(),
         transaction_reference: 'GVR',
+        invoice_id: metadata.invoice_no,
+        invoice_no: metadata.invoice_no,
+        // Optionally add more fields if necessary
       };
 
+      // Step 9: Create earn transaction in wallet
+      await this.walletService.addTransaction(
+        walletTransactionPayload,
+        customer?.id,
+        true,
+      );
+
       // Save transaction
-      await this.txRepo.save(walletTransaction);
+      // await this.txRepo.save(walletTransaction);
       totalRewardPoints += rewardPoints;
     }
 

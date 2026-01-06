@@ -450,8 +450,10 @@ export class BurningService {
 
       const updatedTx = await this.walletTxnRepo.save(transaction);
 
-      wallet.available_balance -= appliedBurnPoints;
-      wallet.total_burned_points += appliedBurnPoints;
+      // wallet.available_balance -= appliedBurnPoints;
+      // wallet.total_burned_points += appliedBurnPoints;
+      wallet.available_balance -= pointsToBurn;
+      wallet.total_burned_points += pointsToBurn;
       await this.walletRepo.save(wallet);
       //#endregion
 
