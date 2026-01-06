@@ -5,14 +5,14 @@ import {
   ManyToOne,
   UpdateDateColumn,
   JoinColumn,
-  BeforeInsert,
+  // BeforeInsert,
   Index,
 } from 'typeorm';
 import { Wallet } from './wallet.entity';
 import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
 import { WalletOrder } from './wallet-order.entity';
 import { Customer } from 'src/customers/entities/customer.entity';
-import { v4 as uuidv4 } from 'uuid';
+// import { v4 as uuidv4 } from 'uuid';
 
 export enum WalletTransactionType {
   EARN = 'earn',

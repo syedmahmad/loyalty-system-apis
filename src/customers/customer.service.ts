@@ -67,6 +67,7 @@ import { BUSINESS_UNITS_WITH_UUID } from './type/type';
 import axios from 'axios';
 import { DeviceToken } from 'src/petromin-it/notification/entities/device-token.entity';
 import { decrypt, encrypt } from 'src/helpers/encryption';
+import { CreateWalletTransactionDto } from 'src/wallet/dto/create-wallet-transaction.dto';
 
 @Injectable()
 export class CustomerService {
@@ -816,18 +817,18 @@ export class CustomerService {
       // Immediately add to available_balance and total_balance
       wallet.available_balance += rewardPoints;
       wallet.total_balance += rewardPoints;
-      await this.walletService.updateWalletBalances(wallet.id, {
-        available_balance: wallet.available_balance,
-        total_balance: wallet.total_balance,
-      });
+      // await this.walletService.updateWalletBalances(wallet.id, {
+      //   available_balance: wallet.available_balance,
+      //   total_balance: wallet.total_balance,
+      // });
     } else if (pendingMethod === 'fixed_days') {
       // Add to locked_balance and total_balance, available_balance unchanged
       wallet.locked_balance += rewardPoints;
       wallet.total_balance += rewardPoints;
-      await this.walletService.updateWalletBalances(wallet.id, {
-        locked_balance: wallet.locked_balance,
-        total_balance: wallet.total_balance,
-      });
+      // await this.walletService.updateWalletBalances(wallet.id, {
+      //   locked_balance: wallet.locked_balance,
+      //   total_balance: wallet.total_balance,
+      // });
       // Cron job will unlock after pending_days
     }
 
@@ -863,17 +864,14 @@ export class CustomerService {
     }
 
     // 9. Create wallet_transaction
-    const walletTransaction: Partial<WalletTransaction> = {
-      wallet: wallet, // pass the full Wallet entity instance
-      orders: walletOrderRes,
-      customer: customer,
-      uuid: uuidv4(),
+    const walletTransaction: CreateWalletTransactionDto = {
+      wallet_id: wallet?.id, // pass the full Wallet entity instance
+      wallet_order_id: walletOrderRes?.id || null,
       // wallet_order_id: walletOrderId,
-      business_unit: wallet.business_unit, // pass the full BusinessUnit entity instance
+      business_unit_id: wallet.business_unit.id, // pass the full BusinessUnit entity instance
       type: WalletTransactionType.EARN,
       source_type: rule?.event_triggerer,
       created_at: dayjs().toDate(),
-      updated_at: dayjs().toDate(),
       amount: Orderamount || 0,
       status:
         pendingDays > 0
@@ -883,12 +881,10 @@ export class CustomerService {
       // Set the unlock_date for the wallet transaction.
       // If there are pendingDays (i.e., points are locked for a period), set unlock_date to the date after pendingDays.
       // Otherwise, set unlock_date to null (no unlock needed).
-      unlock_date:
-        pendingDays > 0 ? dayjs().add(pendingDays, 'day').toDate() : null,
 
       prev_available_points: wallet.available_balance,
 
-      point_balance: rewardPoints, //wallet.available_balance,
+      points_balance: rewardPoints, //wallet.available_balance,
 
       // Set the expiry_date for the wallet transaction.
       // If the rule has a validity_after_assignment value:
@@ -905,8 +901,18 @@ export class CustomerService {
             .add(parseInt(walletSettings?.expiration_value), 'day')
             .toDate(),
     };
+
     // Save transaction
-    const savedTx = await this.txRepo.save(walletTransaction);
+    await this.walletService.addTransaction(
+      {
+        ...walletTransaction,
+        external_program_type: 'PetrominIT App',
+        transaction_reference: `Points Earned from PetrominIT App`,
+      },
+      customer?.id,
+      true,
+    );
+    // const savedTx = await this.txRepo.save(walletTransaction);
 
     // const customerPreferences = await this.customerPreferencesRepo.findOne({
     //   where: {
@@ -968,7 +974,7 @@ export class CustomerService {
       message: 'Points earned successfully',
       points: rewardPoints,
       status: walletTransaction.status,
-      transaction_id: savedTx.id,
+      // transaction_id: savedTx.id,
       available_balance: wallet.available_balance,
       locked_balance: wallet.locked_balance,
       total_balance: wallet.total_balance,
@@ -2523,18 +2529,18 @@ export class CustomerService {
         // Immediately add to available_balance and total_balance
         wallet.available_balance += rewardPoints;
         wallet.total_balance += rewardPoints;
-        await this.walletService.updateWalletBalances(wallet.id, {
-          available_balance: wallet.available_balance,
-          total_balance: wallet.total_balance,
-        });
+        // await this.walletService.updateWalletBalances(wallet.id, {
+        //   available_balance: wallet.available_balance,
+        //   total_balance: wallet.total_balance,
+        // });
       } else if (pendingMethod === 'fixed_days') {
         // Add to locked_balance and total_balance, available_balance unchanged
         wallet.locked_balance += rewardPoints;
         wallet.total_balance += rewardPoints;
-        await this.walletService.updateWalletBalances(wallet.id, {
-          locked_balance: wallet.locked_balance,
-          total_balance: wallet.total_balance,
-        });
+        // await this.walletService.updateWalletBalances(wallet.id, {
+        //   locked_balance: wallet.locked_balance,
+        //   total_balance: wallet.total_balance,
+        // });
         // Cron job will unlock after pending_days
       }
 
@@ -2606,9 +2612,10 @@ export class CustomerService {
             : dayjs().add(rule.validity_after_assignment, 'day').toDate()
           : null,
         created_at: dayjs().toDate(),
-        transaction_reference: 'GVR',
         invoice_id: metadata.invoice_no,
         invoice_no: metadata.invoice_no,
+        transaction_reference: 'GVR',
+        external_program_type: 'GVR Earn',
         // Optionally add more fields if necessary
       };
 
@@ -2665,6 +2672,7 @@ export class CustomerService {
     }
   }
 
+  // TODO: did not provided to GV R team, they should burn via request transaction... else this will break the flow.
   async gvrBurnWithEvent(bodyPayload: GvrEarnBurnWithEventsDto) {
     const { customer_id, metadata, tenantId, BUId } = bodyPayload;
 
@@ -2885,6 +2893,8 @@ export class CustomerService {
           source_type: rule.name,
           source_id: rule.id,
           description: `Burned ${pointsToBurn} points for discount of ${discountAmount} on amount ${total_amount}`,
+          transaction_reference: 'GVR',
+          external_program_type: 'GVR Burn',
         };
 
         // 8. Now, we need to generate wallet_order if any

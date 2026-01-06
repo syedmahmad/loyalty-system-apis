@@ -448,6 +448,7 @@ export class BurningService {
       transaction.external_program_type =
         transaction.external_program_type ?? null;
 
+      // already called addTransaction method in request transaction, we are confirm only that transaction here.
       const updatedTx = await this.walletTxnRepo.save(transaction);
 
       // wallet.available_balance -= appliedBurnPoints;
@@ -455,6 +456,7 @@ export class BurningService {
       wallet.available_balance -= pointsToBurn;
       wallet.total_burned_points += pointsToBurn;
       await this.walletRepo.save(wallet);
+
       //#endregion
 
       // const customerPreferences = await this.customerPreferencesRepo.findOne({

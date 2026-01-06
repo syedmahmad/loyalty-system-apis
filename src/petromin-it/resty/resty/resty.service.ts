@@ -449,6 +449,8 @@ export class RestyService {
               description: `Points earned for invoice ${singleInvoice.InvoiceNumber}`,
               created_by: 0,
               prev_available_points: wallet.available_balance,
+              external_program_type: 'Resty View Cron',
+              transaction_reference: `Points earned for transactions performed on service stations`,
             },
             0,
             true,

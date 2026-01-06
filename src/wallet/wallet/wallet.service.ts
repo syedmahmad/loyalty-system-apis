@@ -180,9 +180,11 @@ export class WalletService {
         case 'earn':
           wallet.total_balance += dto.points_balance;
           wallet.available_balance += dto.points_balance;
+          wallet.total_earned_points += dto.points_balance;
           break;
         case 'burn':
           wallet.available_balance -= dto.points_balance;
+          wallet.total_burned_points += dto.points_balance;
           break;
         case 'expire':
           wallet.available_balance -= dto.points_balance;

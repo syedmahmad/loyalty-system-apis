@@ -73,4 +73,10 @@ export class CreateWalletTransactionDto {
 
   @IsInt()
   wallet_order_id?: number;
+
+  @IsString()
+  external_program_type?: string;
+
+  @IsString()
+  transaction_reference?: string;
 }
