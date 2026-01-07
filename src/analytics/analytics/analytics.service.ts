@@ -140,51 +140,32 @@ export class LoyaltyAnalyticsService {
   }
 
   private async getPointSummary(startDate?: string, endDate?: string) {
-    const [earned, burnt, remaining] = await Promise.all([
-      this.walletTransactionRepository
-        .createQueryBuilder('tx')
-        .select('SUM(tx.amount)', 'total')
-        .where('tx.type IN (:...types)', { types: ['earn', 'adjustment'] })
-        .andWhere('tx.status = :status', { status: 'active' })
-        .andWhere(
-          startDate && endDate
-            ? 'tx.created_at BETWEEN :start AND :end'
-            : '1=1',
-          {
-            start: startDate,
-            end: endDate,
-          },
-        )
-        .getRawOne(),
+    // Get aggregated data directly from wallet table
+    const qb = this.walletRepository
+      .createQueryBuilder('wallet')
+      .select('SUM(wallet.total_earned_points)', 'totalEarned')
+      .addSelect('SUM(wallet.total_burned_points)', 'totalBurnt')
+      .addSelect('SUM(wallet.available_balance)', 'totalRemaining');
 
-      this.walletTransactionRepository
-        .createQueryBuilder('tx')
-        .select('SUM(tx.amount)', 'total')
-        .where('tx.type = :type', { type: 'burn' })
-        .andWhere('tx.status = :status', { status: 'active' })
-        .andWhere(
-          startDate && endDate
-            ? 'tx.created_at BETWEEN :start AND :end'
-            : '1=1',
-          {
-            start: startDate,
-            end: endDate,
-          },
-        )
-        .getRawOne(),
+    // Filter wallets created between startDate and endDate
+    if (startDate && endDate) {
+      qb.where('wallet.created_at BETWEEN :start AND :end', {
+        start: startDate,
+        end: endDate,
+      });
+    }
 
-      this.walletRepository
-        .createQueryBuilder('wallet')
-        .select('SUM(wallet.available_balance)', 'total')
-        .getRawOne(),
-    ]);
+    const summary = await qb.getRawOne();
+
+    const totalEarned = parseFloat(summary?.totalEarned || 0);
+    const totalBurnt = parseFloat(summary?.totalBurnt || 0);
+    const totalRemaining = parseFloat(summary?.totalRemaining || 0);
 
     return {
-      totalEarnedPoints: parseFloat(earned.total || 0),
-      totalBurntPoints: parseFloat(burnt.total || 0),
-      totalLoyaltyPoints:
-        parseFloat(earned.total || 0) - parseFloat(burnt.total || 0),
-      totalRemainingPoints: parseFloat(remaining.total || 0),
+      totalEarnedPoints: totalEarned,
+      totalBurntPoints: totalBurnt,
+      totalLoyaltyPoints: totalEarned - totalBurnt,
+      totalRemainingPoints: totalRemaining,
     };
   }
 
