@@ -1,3 +1,6 @@
+if (process.env.NODE_ENV === 'production') {
+  import('newrelic');
+}
 import * as v8 from 'v8';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
