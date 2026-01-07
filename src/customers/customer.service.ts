@@ -3476,7 +3476,6 @@ export class CustomerService {
   }
 
   async uploadVehicleImage(customerId, files) {
-    console.log('//////////////////inside uploadVehicleImage');
     const customer = await this.customerRepo.findOne({
       where: { uuid: customerId, status: 1 },
       relations: ['tenant', 'business_unit'],

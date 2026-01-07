@@ -3342,17 +3342,15 @@ export class CouponsService {
 
   async migrateCoupon(bodyPayload) {
     const { tenantId } = bodyPayload;
-    console.log('//////////migrate-coupon');
     const tenant = await this.tenantRepository.findOne({
       where: { uuid: tenantId },
       relations: ['languages', 'languages.language'],
     });
-    console.log('//////////migrate-coupon');
+
     if (!tenant) {
       throw new BadRequestException('Tenant not found');
     }
 
-    console.log('//////////migrate-coupon');
     const results = [];
     // const filePath = path.resolve(process.cwd(), 'uploads/loyalty_coupons.csv'); // File in local system
     const filePath = process.env.COUPON_CSV_PATH; // File in remote server
@@ -3471,8 +3469,6 @@ export class CouponsService {
         'Content-Type': 'text/csv',
       },
     });
-
-    console.log('Remote CSV Content-Type:', response.headers['content-type']);
 
     if (
       !response.headers['content-type']?.includes('csv') &&

@@ -152,7 +152,6 @@ export class CustomerSegmentsService {
       where: { id: segmentId },
       relations: ['members', 'members.customer'],
     });
-    console.log(`Segment ID: ${segmentId}`, segment);
 
     if (!segment) {
       throw new NotFoundException(`Segment with ID ${segmentId} not found`);

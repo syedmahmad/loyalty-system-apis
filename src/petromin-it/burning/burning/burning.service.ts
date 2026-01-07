@@ -154,7 +154,7 @@ export class BurningService {
     } = body;
 
     const hashedPhone = encrypt(customer_phone_number);
-    console.log('/////////customer_id//////////', customer_id);
+    console.log('/////////burnTransaction//////////', customer_id);
     //#endregion
 
     try {

@@ -25,8 +25,6 @@ export async function TriggerSMS(
     ],
   };
 
-  console.log('hello world', body);
-
   try {
     const res = await axios.post(endpoint, body, {
       headers: {

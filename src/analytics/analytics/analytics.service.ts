@@ -31,9 +31,6 @@ export class LoyaltyAnalyticsService {
   ) {}
 
   async pointsSplit(permission: any, startDate?: string, endDate?: string) {
-    console.log(
-      '/////////////////////Loading pointsSplit/////////////////////',
-    );
     if (!permission.canViewAnalytics) {
       throw new BadRequestException(
         "You don't have permission to access analytics",
@@ -41,7 +38,6 @@ export class LoyaltyAnalyticsService {
     }
     // Fetch each analytic serially to prevent Out Of Memory (OOM) errors.
     // Note: This mitigates memory spikes, but may increase response time since metrics are not loaded in parallel.
-    console.log('/////////////////////Loaded pointsSplit/////////////////////');
     const pointSplits = await this.getPointsSplit(startDate, endDate);
     return {
       pointSplits,
