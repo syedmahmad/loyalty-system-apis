@@ -100,7 +100,7 @@ export class LoyaltyAnalyticsService {
     const qb = this.walletTransactionRepository
       .createQueryBuilder('tx')
       .select('tx.source_type', 'sourceType')
-      .addSelect('SUM(tx.amount)', 'totalPoints')
+      .addSelect('SUM(tx.point_balance)', 'totalPoints')
       .where('tx.type IN (:...types)', { types: ['earn', 'adjustment'] })
       .andWhere('tx.status = :status', { status: 'active' });
 
@@ -258,13 +258,13 @@ export class LoyaltyAnalyticsService {
       .select('DATE(tx.created_at)', 'date')
       .addSelect(
         `
-    SUM(CASE WHEN tx.type IN ('earn', 'adjustment') THEN tx.amount ELSE 0 END)
+    SUM(CASE WHEN tx.type IN ('earn', 'adjustment') THEN tx.point_balance ELSE 0 END)
   `,
         'earned',
       )
       .addSelect(
         `
-    SUM(CASE WHEN tx.type = 'burn' THEN tx.amount ELSE 0 END)
+    SUM(CASE WHEN tx.type = 'burn' THEN tx.point_balance ELSE 0 END)
   `,
         'burnt',
       )
