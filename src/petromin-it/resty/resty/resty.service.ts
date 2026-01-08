@@ -394,6 +394,18 @@ export class RestyService {
 
         for (const singleInvoice of processedInvoices) {
           try {
+            // ✅ Check if invoice already exists in database
+            const existingInvoice = await this.restyIncoicesInfoRepo.findOne({
+              where: { invoice_no: singleInvoice.InvoiceNumber },
+            });
+
+            if (existingInvoice) {
+              console.log(
+                `⏭️ Invoice ${singleInvoice.InvoiceNumber} already exists in database, skipping...`,
+              );
+              continue;
+            }
+
             let customer = await this.customerRepo.findOne({
               where: {
                 hashed_number: encrypt(singleInvoice?.CustomerMobile || ''),
