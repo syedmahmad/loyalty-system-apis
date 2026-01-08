@@ -192,6 +192,7 @@ export class WalletService {
         case 'adjustment':
           wallet.total_balance += dto.points_balance;
           wallet.available_balance += dto.points_balance;
+          wallet.total_earned_points += dto.points_balance;
           break;
       }
       await this.walletRepo.save(wallet);
