@@ -19,6 +19,7 @@ import { Tenant } from 'src/tenants/entities/tenant.entity';
 @Index('idx_wallet_customer_id', ['customer'])
 // Composite indexes for optimized queries with ORDER BY created_at
 @Index('idx_wallet_tenant_created', ['tenant', 'created_at'])
+@Index('idx_wallet_customer_business_unit', ['customer', 'business_unit'])
 @Index('idx_wallet_tenant_bu_created', [
   'tenant',
   'business_unit',

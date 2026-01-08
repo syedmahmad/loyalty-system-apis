@@ -7,9 +7,12 @@ import {
   JoinColumn,
   CreateDateColumn,
   UpdateDateColumn,
+  Index,
 } from 'typeorm';
 
 @Entity('device_tokens')
+@Index('idx_device_tokens_customer', ['customer'])
+@Index('idx_device_tokens_token', ['token'])
 export class DeviceToken {
   @PrimaryGeneratedColumn()
   id: number;
