@@ -561,6 +561,12 @@ export class AuthService {
         relations: ['business_unit', 'tenant'],
       });
 
+      if (customer && customer.status === 2) {
+        // If customer is inactive, reactivate
+        customer.status = 1;
+        await this.customerRepo.save(customer);
+      }
+
       const isNewCustomer = !customer;
 
       if (!customer) {
