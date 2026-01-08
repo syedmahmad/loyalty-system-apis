@@ -2413,7 +2413,7 @@ export class CouponsService {
         });
         if (coupon) {
           successCoupons.push(eachCoupon);
-          const phoneNumber = eachCoupon.customer_phone;
+          const phoneNumber = eachCoupon.customer_phone_no;
           const customer = await this.findCustomerByFullPhone(phoneNumber);
           if (customer) {
             const couponUsageObj = {
