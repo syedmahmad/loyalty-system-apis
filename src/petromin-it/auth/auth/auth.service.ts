@@ -3,7 +3,11 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { GetOtpDto, VerifyOtpDto } from 'src/petromin-it/auth/dto/auth.dto';
+import {
+  GetOtpDto,
+  VerifyOtpDto,
+  RegisterFromSpareitDto,
+} from 'src/petromin-it/auth/dto/auth.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { Customer } from 'src/customers/entities/customer.entity';
@@ -23,6 +27,7 @@ import {
   RestyCustomerProfileSelection,
 } from 'src/customers/entities/resty_customer_profile_selection.entity';
 import { CustomerPreference } from 'src/petromin-it/preferences/entities/customer-preference.entity';
+import { DeviceToken } from 'src/petromin-it/notification/entities/device-token.entity';
 // import { Referral } from 'src/wallet/entities/referrals.entity';
 @Injectable()
 export class AuthService {
@@ -33,6 +38,8 @@ export class AuthService {
     private readonly restyCustomerProfileSelectionRepo: Repository<RestyCustomerProfileSelection>,
     @InjectRepository(CustomerPreference)
     private readonly customerPreferencesRepo: Repository<CustomerPreference>,
+    @InjectRepository(DeviceToken)
+    private readonly deviceTokenRepo: Repository<DeviceToken>,
     private readonly ociService: OciService,
     private readonly customerService: CustomerService,
     @InjectRepository(QrCode)
@@ -506,6 +513,178 @@ export class AuthService {
       return {
         success: false,
         message: error?.message || 'Failed to save/merge profile selection',
+        result: null,
+      };
+    }
+  }
+
+  /**
+   * Register customer from Petromin external system
+   * Only phone_no is mandatory, awards points for signup, phone, email, and gender if provided
+   */
+  async registerFromSpareit(body: RegisterFromSpareitDto): Promise<any> {
+    try {
+      const businessUnitId = process.env.NCMC_PETROMIN_BU;
+      const tenantId = process.env.NCMC_PETROMIN_TENANT;
+
+      if (!businessUnitId || !tenantId) {
+        throw new BadRequestException('Missing tenant or business unit');
+      }
+
+      const {
+        phone_no,
+        country_code,
+        first_name,
+        last_name,
+        email,
+        country,
+        firebase_token,
+        // source, // Not used currently but available for future tracking
+        device_info,
+        marketing_consent_status,
+        gender,
+      } = body;
+
+      // Construct full mobile number
+      const fullMobile = country_code
+        ? `${country_code}${phone_no}`
+        : `+966${phone_no}`;
+      const hashedPhone = encrypt(fullMobile);
+
+      // Check if customer already exists
+      let customer = await this.customerRepo.findOne({
+        where: {
+          hashed_number: hashedPhone,
+          business_unit: { id: +businessUnitId },
+          tenant: { id: +tenantId },
+        },
+        relations: ['business_unit', 'tenant'],
+      });
+
+      const isNewCustomer = !customer;
+
+      if (!customer) {
+        // Encrypt phone for storage
+        const encryptedPhone = await this.ociService.encryptData(fullMobile);
+
+        // Create new customer
+        const customerName = [first_name, last_name]
+          .filter(Boolean)
+          .join(' ')
+          .trim();
+
+        customer = this.customerRepo.create({
+          phone: encryptedPhone,
+          hashed_number: hashedPhone,
+          name: customerName || null,
+          first_name: first_name || null,
+          last_name: last_name || null,
+          email: email || null,
+          gender: gender || null,
+          country: country || null,
+          country_code: country_code || '+966',
+          business_unit: { id: +businessUnitId },
+          tenant: { id: +tenantId },
+          uuid: uuidv4(),
+          status: 1, // Active status
+          is_new_user: 1,
+          referral_code: nanoid(6).toUpperCase(),
+          source: 'SpareIt direct Registration',
+          // this login_count is 1 because we're already (in this function) awarding
+          // signup and mobile points here, if we set it to 0, then there will be a
+          // problem that user might get signup points 2 times because when user login
+          // through new app we're checking login_count === 1 and awarding points accordingly
+          login_count: 1,
+        });
+
+        customer = await this.customerRepo.save(customer);
+
+        // Create QR code
+        await this.customerService.createAndSaveCustomerQrCode(
+          customer.uuid,
+          customer.id,
+        );
+
+        // Create wallet
+        await this.walletService.createWallet({
+          customer_id: customer.id,
+          business_unit_id: +businessUnitId,
+          tenant_id: +tenantId,
+        });
+
+        // Create customer preferences
+        const newPreference = this.customerPreferencesRepo.create({
+          customer: { id: customer.id },
+          language_code: 'en',
+          marketing_consent: marketing_consent_status || false,
+          created_at: new Date(),
+          updated_at: new Date(),
+        } as any);
+        await this.customerPreferencesRepo.save(newPreference);
+      }
+
+      // Save firebase token and device info if provided
+      if (firebase_token) {
+        // Check if token already exists for this customer
+        const existingToken = await this.deviceTokenRepo.findOne({
+          where: {
+            customer: { id: customer.id },
+            token: firebase_token,
+          },
+        });
+
+        if (!existingToken) {
+          const deviceToken = this.deviceTokenRepo.create({
+            customer: { id: customer.id },
+            token: firebase_token,
+            platform: device_info?.platform || null,
+          });
+          await this.deviceTokenRepo.save(deviceToken);
+        }
+      }
+
+      // Award points only for new customers
+      if (isNewCustomer) {
+        // Give signup points
+        await this.rewardPoints(customer, 'Signup Points');
+
+        // Give phone points
+        await this.rewardPoints(customer, 'Additional Points for Phone');
+
+        // Give email points if email provided
+        if (email) {
+          await this.rewardPoints(customer, 'Additional Points for Email');
+        }
+
+        // Give gender points if gender provided
+        if (gender) {
+          await this.rewardPoints(customer, 'Additional Points for Gender');
+        }
+      }
+
+      // Fetch QR code
+      const qr = await this.qrCodeRepo.findOne({
+        where: { customer: { id: customer.id } },
+      });
+
+      return {
+        success: true,
+        message: isNewCustomer
+          ? 'Customer registered successfully'
+          : 'Customer already exists',
+        result: {
+          customer_id: customer.uuid,
+          tenant_id: customer.tenant?.uuid || customer.tenant.uuid,
+          business_unit_id:
+            customer.business_unit?.uuid || customer.business_unit.uuid,
+          qr_code_url: qr?.qr_code_url || null,
+          is_new_user: isNewCustomer ? 1 : 0,
+        },
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: error?.message || 'Registration failed',
         result: null,
       };
     }

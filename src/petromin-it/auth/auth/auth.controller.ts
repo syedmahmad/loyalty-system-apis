@@ -1,6 +1,10 @@
 import { Body, Controller, Post } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import { GetOtpDto, VerifyOtpDto } from 'src/petromin-it/auth/dto/auth.dto';
+import {
+  GetOtpDto,
+  VerifyOtpDto,
+  RegisterFromSpareitDto,
+} from 'src/petromin-it/auth/dto/auth.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -23,5 +27,12 @@ export class AuthController {
       mobileNumber,
       selected_customer,
     );
+  }
+
+  @Post('register-from-spareit')
+  async registerFromSpareit(
+    @Body() body: RegisterFromSpareitDto,
+  ): Promise<any> {
+    return await this.authService.registerFromSpareit(body);
   }
 }
