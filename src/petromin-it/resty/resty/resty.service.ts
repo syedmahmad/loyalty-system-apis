@@ -246,7 +246,8 @@ export class RestyService {
   // │ │ │ │ ┌─ day of week
   // │ │ │ │ │
   // 30  2   *   *   *
-  @Cron('30 2 * * *', { timeZone: 'UTC' })
+  // @Cron('30 2 * * *', { timeZone: 'UTC' })
+  @Cron('50 12 * * *', { timeZone: 'UTC' })
   async processLatestInvoices() {
     const hostName = os.hostname();
     const localUrl = 'http://localhost:3000';
