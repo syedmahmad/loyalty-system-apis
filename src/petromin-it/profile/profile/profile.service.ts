@@ -208,7 +208,7 @@ export class CustomerProfileService {
     if (dto?.email) {
       const earnEmailPhonePoints = {
         customer_id: customer.uuid,
-        event: 'Additional Points for Email', // this is important what if someone changes this event name form Frontend
+        event: 'email_addition', // this is important what if someone changes this event name form Frontend
         tenantId: String(customer.tenant.id),
         BUId: String(customer.business_unit.id),
       };
@@ -240,7 +240,7 @@ export class CustomerProfileService {
     if (dto?.gender) {
       const earnGenderPhonePoints = {
         customer_id: customer.uuid,
-        event: 'Additional Points for Gender Addition', // this is important what if someone changes this event name form Frontend
+        event: 'gender_addition', // this is important what if someone changes this event name form Frontend
         tenantId: String(customer.tenant.id),
         BUId: String(customer.business_unit.id),
       };
@@ -473,7 +473,7 @@ export class CustomerProfileService {
     // rewards points to referrer
     const earnReferrerPoints = {
       customer_id: referrer_user.uuid, // need to give points to referrer
-      event: 'Referrer Reward Points', // this is important what if someone changes this event name form Frontend
+      event: 'reference', // this is important what if someone changes this event name form Frontend
       tenantId: String(referrer_user.tenant.id),
       BUId: String(referrer_user.business_unit.id),
     };
@@ -513,7 +513,7 @@ export class CustomerProfileService {
     // rewards points to referrer
     const earnRefereePoints = {
       customer_id: customer.uuid, // need to give points to referrer
-      event: 'Referee Reward Points', // this is important what if someone changes this event name form Frontend
+      event: 'referral', // this is important what if someone changes this event name form Frontend
       tenantId: String(customer.tenant.id),
       BUId: String(customer.business_unit.id),
     };

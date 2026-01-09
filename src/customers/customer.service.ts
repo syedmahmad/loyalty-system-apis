@@ -643,7 +643,7 @@ export class CustomerService {
         .leftJoinAndSelect('locale.language', 'language')
         .where('rules.status = :status', { status: 1 })
         .andWhere('rules.rule_type != :ruleType', { ruleType: 'burn' })
-        .andWhere('locale.name = :event', { event });
+        .andWhere('event_triggerer = :event', { event });
 
       if (langCode) {
         query.andWhere('language.code = :langCode', { langCode });
