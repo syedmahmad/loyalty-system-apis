@@ -163,7 +163,8 @@ export class NotificationService {
     //     message: `Notification saved, but failed to send to device(s)!`,
     //   };
     // }
-
+    const token = process.env.NCMC_COMMUNICATION_TOKEN;
+    console.log('/////////token////////', token);
     try {
       // Send notification request
       await axios.post(
@@ -171,7 +172,7 @@ export class NotificationService {
         payload,
         {
           headers: {
-            Authorization: `Bearer ${process.env.NCMC_COMMUNICATION_TOKEN}`,
+            Authorization: `Bearer ${token.trim()}`,
             'Content-Type': 'application/json',
           },
         },
