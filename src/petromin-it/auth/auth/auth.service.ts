@@ -561,8 +561,37 @@ export class AuthService {
         relations: ['business_unit', 'tenant'],
       });
 
+      // In case customer exists and active, return existing details
+      if (customer && customer.status === 1) {
+        // Fetch QR code
+        const qr = await this.qrCodeRepo.findOne({
+          where: { customer: { id: customer.id } },
+        });
+
+        return {
+          success: true,
+          message: 'Customer already exists',
+          result: {
+            customer_id: customer.uuid,
+            tenant_id: customer.tenant?.uuid || customer.tenant.uuid,
+            business_unit_id:
+              customer.business_unit?.uuid || customer.business_unit.uuid,
+            qr_code_url: qr?.qr_code_url || null,
+            is_new_user: 0,
+          },
+        };
+      }
+
+      // If customer exists but inactive, reactivate
+      if (customer && customer.status === 2) {
+        // If customer is inactive, reactivate
+        customer.status = 1;
+        await this.customerRepo.save(customer);
+      }
+
       const isNewCustomer = !customer;
 
+      // Create new customer if not exists
       if (!customer) {
         // Encrypt phone for storage
         const encryptedPhone = await this.ociService.encryptData(fullMobile);
@@ -598,30 +627,30 @@ export class AuthService {
         });
 
         customer = await this.customerRepo.save(customer);
-
-        // Create QR code
-        await this.customerService.createAndSaveCustomerQrCode(
-          customer.uuid,
-          customer.id,
-        );
-
-        // Create wallet
-        await this.walletService.createWallet({
-          customer_id: customer.id,
-          business_unit_id: +businessUnitId,
-          tenant_id: +tenantId,
-        });
-
-        // Create customer preferences
-        const newPreference = this.customerPreferencesRepo.create({
-          customer: { id: customer.id },
-          language_code: 'en',
-          marketing_consent: marketing_consent_status || false,
-          created_at: new Date(),
-          updated_at: new Date(),
-        } as any);
-        await this.customerPreferencesRepo.save(newPreference);
       }
+
+      // Create QR code
+      await this.customerService.createAndSaveCustomerQrCode(
+        customer.uuid,
+        customer.id,
+      );
+
+      // Create wallet
+      await this.walletService.createWallet({
+        customer_id: customer.id,
+        business_unit_id: +businessUnitId,
+        tenant_id: +tenantId,
+      });
+
+      // Create customer preferences
+      const newPreference = this.customerPreferencesRepo.create({
+        customer: { id: customer.id },
+        language_code: 'en',
+        marketing_consent: marketing_consent_status || false,
+        created_at: new Date(),
+        updated_at: new Date(),
+      } as any);
+      await this.customerPreferencesRepo.save(newPreference);
 
       // Save firebase token and device info if provided
       if (firebase_token) {
@@ -643,23 +672,20 @@ export class AuthService {
         }
       }
 
-      // Award points only for new customers
-      if (isNewCustomer) {
-        // Give signup points
-        await this.rewardPoints(customer, 'Signup Points');
+      // Give signup points
+      await this.rewardPoints(customer, 'Signup Points');
 
-        // Give phone points
-        await this.rewardPoints(customer, 'Additional Points for Phone');
+      // Give phone points
+      await this.rewardPoints(customer, 'Additional Points for Phone');
 
-        // Give email points if email provided
-        if (email) {
-          await this.rewardPoints(customer, 'Additional Points for Email');
-        }
+      // Give email points if email provided
+      if (email) {
+        await this.rewardPoints(customer, 'Additional Points for Email');
+      }
 
-        // Give gender points if gender provided
-        if (gender) {
-          await this.rewardPoints(customer, 'Additional Points for Gender');
-        }
+      // Give gender points if gender provided
+      if (gender) {
+        await this.rewardPoints(customer, 'Additional Points for Gender');
       }
 
       // Fetch QR code
