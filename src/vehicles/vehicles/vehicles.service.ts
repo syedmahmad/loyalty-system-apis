@@ -202,7 +202,10 @@ export class VehiclesService {
         }
 
         // give rewards points when someone adds new car
-        await this.authService.rewardPoints(customer, 'Add New Car Points');
+        await this.authService.rewardPoints(
+          customer,
+          'Additional Points for Car Addition',
+        );
       }
 
       vehicle = await this.vehiclesRepository.save(vehicle);

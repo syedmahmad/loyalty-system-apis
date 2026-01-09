@@ -257,7 +257,10 @@ export class AuthService {
       // Give signup & phone points if first login
       if (customer.login_count === 1) {
         await this.rewardPoints(customer, 'Signup Points');
-        await this.rewardPoints(customer, 'Additional Points for Phone');
+        await this.rewardPoints(
+          customer,
+          'Additional Points for Phone Number Addition',
+        );
       }
 
       // Fetch QR code
@@ -676,7 +679,10 @@ export class AuthService {
       await this.rewardPoints(customer, 'Signup Points');
 
       // Give phone points
-      await this.rewardPoints(customer, 'Additional Points for Phone');
+      await this.rewardPoints(
+        customer,
+        'Additional Points for Phone Number Addition',
+      );
 
       // Give email points if email provided
       if (email) {
@@ -685,7 +691,10 @@ export class AuthService {
 
       // Give gender points if gender provided
       if (gender) {
-        await this.rewardPoints(customer, 'Additional Points for Gender');
+        await this.rewardPoints(
+          customer,
+          'Additional Points for Gender Addition',
+        );
       }
 
       // Fetch QR code

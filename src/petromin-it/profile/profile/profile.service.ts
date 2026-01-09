@@ -240,7 +240,7 @@ export class CustomerProfileService {
     if (dto?.gender) {
       const earnGenderPhonePoints = {
         customer_id: customer.uuid,
-        event: 'Additional Points for Gender', // this is important what if someone changes this event name form Frontend
+        event: 'Additional Points for Gender Addition', // this is important what if someone changes this event name form Frontend
         tenantId: String(customer.tenant.id),
         BUId: String(customer.business_unit.id),
       };
