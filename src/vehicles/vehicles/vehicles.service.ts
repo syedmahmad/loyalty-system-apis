@@ -878,12 +878,13 @@ export class VehiclesService {
               // Fetch make, model, and variant info in parallel
               const [makeInfo, modelInfo] = await Promise.all([
                 this.makeRepository.findOne({
-                  where: { name: eachVehicle.make },
+                  where: { name: eachVehicle?.make?.trim() },
                 }),
                 this.modelRepository.findOne({
                   where: {
-                    name: eachVehicle.model,
-                    year: eachVehicle.model_year,
+                    name: eachVehicle?.model?.trim(),
+                    // year: eachVehicle.model_year,
+                    year: Number(eachVehicle.model_year),
                   },
                 }),
               ]);
@@ -912,8 +913,8 @@ export class VehiclesService {
                   : -1,
                 vin_number: eachVehicle?.vin ?? null,
                 plate_no: eachVehicle?.plate_no ?? null,
-                year: eachVehicle?.model_year
-                  ? eachVehicle?.model_year
+                year: modelInfo?.year
+                  ? modelInfo?.year
                   : eachVehicle.model_year,
                 fuel_type: variantInfo?.fuelTypeId?.toString() ?? null,
                 fuel_type_name_en: variantInfo?.fuelType?.toString() ?? null,
@@ -982,6 +983,10 @@ export class VehiclesService {
 
         if (!variantId || !year) {
           continue; // Cannot fetch valuation without these
+        }
+
+        if (Number(variantId) === -1) {
+          continue;
         }
 
         // CASE 1: No car_value → fetch valuation
