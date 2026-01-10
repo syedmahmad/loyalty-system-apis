@@ -164,10 +164,9 @@ export class NotificationService {
     //   };
     // }
     const token = process.env.NCMC_COMMUNICATION_TOKEN;
-    console.log('/////////token////////', token);
     try {
       // Send notification request
-      await axios.post(
+      axios.post(
         process.env.NCMC_COMMUNICATION_NOTIFICATION_ENDPOINT,
         payload,
         {
@@ -177,8 +176,6 @@ export class NotificationService {
           },
         },
       );
-
-      console.log('Notification sent successfully');
     } catch (err) {
       console.error(
         'Error while sending notification:',
