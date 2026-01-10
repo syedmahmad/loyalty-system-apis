@@ -8,9 +8,18 @@ import {
   Generated,
   ManyToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 
 @Entity('resty_invoices_info')
+@Index('idx_resty_invoices_invoice_date', ['invoice_date'])
+@Index('idx_resty_invoices_invoice_no', ['invoice_no'])
+@Index('idx_resty_invoices_phone', ['phone'])
+@Index('idx_resty_invoices_claimed_status', [
+  'is_claimed',
+  'should_assign_points_after_migration',
+  'already_processed_invoice',
+])
 export class RestyInvoicesInfo {
   @PrimaryGeneratedColumn()
   id: number;
@@ -48,6 +57,18 @@ export class RestyInvoicesInfo {
 
   @Column({ type: 'boolean', nullable: true, default: false })
   is_claimed: boolean | null;
+
+  @Column({ type: 'boolean', default: false })
+  should_assign_points_after_migration: boolean;
+
+  @Column({ type: 'boolean', default: false })
+  already_processed_invoice: boolean;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  customer_name: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  customer_email: string;
 
   @Column('int', { nullable: true })
   claimed_points: number | null;
