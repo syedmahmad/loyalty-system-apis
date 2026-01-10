@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { RestyInvoicesInfo } from '../resty/entities/resty_invoices_info.entity';
+import { RestyInvoiceCleanData } from './entities/resty_invoice_clean.entity';
 import { RestyController } from 'src/petromin-it/resty/resty/resty.controller';
 import { RestyService } from 'src/petromin-it/resty/resty/resty.service';
 import { TransactionSyncLog } from './entities/transaction-sync-logs.entity';
@@ -15,11 +16,13 @@ import { TiersModule } from 'src/tiers/tiers.module';
 import { WalletModule } from 'src/wallet/wallet.module';
 import { NotificationModule } from '../notification/notification.module';
 import { DeviceToken } from 'src/petromin-it/notification/entities/device-token.entity';
+import { WalletTransaction } from 'src/wallet/entities/wallet-transaction.entity';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([
       RestyInvoicesInfo,
+      RestyInvoiceCleanData,
       TransactionSyncLog,
       VehicleServiceJob,
       RestyCronLog,
@@ -27,6 +30,7 @@ import { DeviceToken } from 'src/petromin-it/notification/entities/device-token.
       Wallet,
       Rule,
       DeviceToken,
+      WalletTransaction,
     ]),
     VehicleModule,
     TiersModule,

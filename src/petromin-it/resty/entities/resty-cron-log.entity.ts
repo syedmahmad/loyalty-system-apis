@@ -38,6 +38,9 @@ export class RestyCronLog {
   failed_invoices: number;
 
   @Column({ type: 'int', default: 0 })
+  skipped_invoices: number;
+
+  @Column({ type: 'int', default: 0 })
   new_customers_created: number;
 
   @Column({ type: 'int', default: 0 })
