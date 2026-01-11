@@ -525,7 +525,7 @@ export class RestyService {
    * Schedule: Runs every 5 minutes to process unclaimed invoices
    */
   // @Cron('*/5 * * * *', { timeZone: 'UTC' })
-  @Cron(CronExpression.EVERY_HOUR)
+  @Cron(CronExpression.EVERY_30_MINUTES)
   async processUnclaimedInvoicesAndAssignPoints() {
     const hostName = os.hostname();
     const localUrl = 'http://localhost:3000';
