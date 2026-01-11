@@ -529,154 +529,151 @@ export class RestyService {
   async processUnclaimedInvoicesAndAssignPoints() {
     const hostName = os.hostname();
     const localUrl = 'http://localhost:3000';
-    if (
-      process.env.PROD_SERVER_HOST_NAME === hostName ||
-      process.env.DEV_SERVER_HOST_NAME === hostName ||
-      process.env.UAT_SERVER_HOST_NAME === hostName ||
-      process.env.LOCAL_SERVER_HOST_NAME === localUrl
-    ) {
-      const startTime = new Date();
-      console.log(
-        '🚀 processUnclaimedInvoicesAndAssignPoints STARTED at:',
-        startTime.toISOString(),
-      );
 
-      // Create initial log entry
-      const pointsLog = this.pointsLogRepo.create({
+    if (
+      process.env.PROD_SERVER_HOST_NAME !== hostName &&
+      process.env.DEV_SERVER_HOST_NAME !== hostName &&
+      process.env.UAT_SERVER_HOST_NAME !== hostName &&
+      process.env.LOCAL_SERVER_HOST_NAME !== localUrl
+    ) {
+      return;
+    }
+
+    /** 🔒 CRON LOCK */
+    const runningCron = await this.pointsLogRepo.findOne({
+      where: { status: PointsAssignmentStatus.STARTED },
+    });
+
+    if (runningCron) {
+      console.log('⏭️ Points assignment already running, skipping this run.');
+      return;
+    }
+
+    const startTime = new Date();
+    console.log(
+      '🚀 processUnclaimedInvoicesAndAssignPoints STARTED at:',
+      startTime.toISOString(),
+    );
+
+    const savedLog = await this.pointsLogRepo.save(
+      this.pointsLogRepo.create({
         status: PointsAssignmentStatus.STARTED,
         started_at: startTime,
+      }),
+    );
+
+    /** 📊 SAFE STATS */
+    const stats = {
+      newCustomers: 0,
+      existingCustomers: 0,
+      transactionsCreated: 0,
+      notificationsSent: 0,
+      notificationsFailed: 0,
+      skippedInvoices: 0,
+      failedInvoices: [] as string[],
+    };
+
+    try {
+      console.log('🔎 Fetching unclaimed invoices...');
+
+      const unclaimedInvoices = await this.restyIncoicesInfoRepo.find({
+        where: {
+          is_claimed: false,
+          should_assign_points_after_migration: true,
+          already_processed_invoice: false,
+        },
+        take: 1200,
+        order: { created_at: 'ASC' }, // Process oldest first (FIFO)
       });
-      const savedLog = await this.pointsLogRepo.save(pointsLog);
 
-      try {
-        console.log(
-          '\n🔄 Starting points assignment for unclaimed invoices...',
-        );
+      if (!unclaimedInvoices.length) {
+        console.log('✅ No unclaimed invoices found.');
 
-        // Initialize statistics for tracking progress
-        const stats = {
-          newCustomers: 0,
-          existingCustomers: 0,
-          transactionsCreated: 0,
-          notificationsSent: 0,
-          notificationsFailed: 0,
-          failedInvoices: [] as string[],
-          skippedInvoices: 0,
-        };
+        savedLog.status = PointsAssignmentStatus.SUCCESS;
+        savedLog.completed_at = new Date();
+        savedLog.duration_seconds = 0;
+        savedLog.total_unclaimed_invoices = 0;
+        await this.pointsLogRepo.save(savedLog);
+        return;
+      }
 
-        // 🔹 Step 1: Fetch unclaimed invoices that need points assignment
-        console.log('🔎 Fetching unclaimed invoices...');
-        const unclaimedInvoices = await this.restyIncoicesInfoRepo.find({
-          where: {
-            is_claimed: false,
-            should_assign_points_after_migration: true,
-            already_processed_invoice: false,
-          },
-          take: 1200, // Process in batches of 1200
-          order: { created_at: 'ASC' }, // Process oldest first (FIFO)
-        });
+      savedLog.total_unclaimed_invoices = unclaimedInvoices.length;
+      await this.pointsLogRepo.save(savedLog);
 
-        if (!unclaimedInvoices || unclaimedInvoices.length === 0) {
-          console.log('✅ No unclaimed invoices found to process.');
+      console.log(
+        `📦 Processing ${unclaimedInvoices.length} invoices sequentially...`,
+      );
 
-          // Update log with success status
-          savedLog.status = PointsAssignmentStatus.SUCCESS;
-          savedLog.completed_at = new Date();
-          savedLog.duration_seconds = Math.floor(
-            (savedLog.completed_at.getTime() - startTime.getTime()) / 1000,
-          );
-          savedLog.total_unclaimed_invoices = 0;
-          await this.pointsLogRepo.save(savedLog);
+      /** ✅ SEQUENTIAL SAFE LOOP */
+      let processedCount = 0;
 
-          return;
+      for (const invoice of unclaimedInvoices) {
+        try {
+          await this.processInvoiceForPoints(invoice, stats);
+        } catch (err) {
+          console.log(`❌ Invoice ${invoice.invoice_no} failed:`, err.message);
+          stats.failedInvoices.push(invoice.invoice_no);
         }
 
-        console.log(
-          `🧾 Found ${unclaimedInvoices.length} unclaimed invoices to process.`,
-        );
+        processedCount++;
 
-        // Update log with total unclaimed invoices count
-        savedLog.total_unclaimed_invoices = unclaimedInvoices.length;
-        await this.pointsLogRepo.save(savedLog);
-
-        // 🔹 Step 2: Process all invoices in parallel
-        console.log(
-          `📦 Processing all ${unclaimedInvoices.length} invoices...`,
-        );
-
-        // Process all invoices in parallel
-        const results = await Promise.allSettled(
-          unclaimedInvoices.map((invoice) =>
-            this.processInvoiceForPoints(invoice, stats),
-          ),
-        );
-
-        // Log completion stats
-        const successCount = results.filter(
-          (r) => r.status === 'fulfilled',
-        ).length;
-        const failureCount = results.filter(
-          (r) => r.status === 'rejected',
-        ).length;
-        console.log(
-          `✅ Processing completed: ${successCount} success, ${failureCount} failed`,
-        );
-
-        // 🔹 Step 3: Update log with final stats and mark as complete
-        const finalEndTime = new Date();
-        savedLog.status = PointsAssignmentStatus.SUCCESS;
-        savedLog.completed_at = finalEndTime;
-        savedLog.duration_seconds = Math.floor(
-          (finalEndTime.getTime() - startTime.getTime()) / 1000,
-        );
-        savedLog.processed_invoices =
-          unclaimedInvoices.length -
-          stats.failedInvoices.length -
-          stats.skippedInvoices;
-        savedLog.failed_invoices = failureCount;
-        savedLog.skipped_invoices = stats.skippedInvoices;
-        savedLog.new_customers_created = stats.newCustomers;
-        savedLog.existing_customers = stats.existingCustomers;
-        savedLog.transactions_created = stats.transactionsCreated;
-        savedLog.notifications_sent = stats.notificationsSent;
-        savedLog.notifications_failed = stats.notificationsFailed;
-        savedLog.failed_invoice_ids =
-          stats.failedInvoices.length > 0 ? stats.failedInvoices : null;
-
-        await this.pointsLogRepo.save(savedLog);
-
-        console.log('\n✅ POINTS ASSIGNMENT COMPLETED SUCCESSFULLY');
-        console.log('📊 Points Assignment Stats:', {
-          totalUnclaimedInvoices: unclaimedInvoices.length,
-          processedInvoices: savedLog.processed_invoices,
-          failedInvoices: stats.failedInvoices.length,
-          skippedInvoices: stats.skippedInvoices,
-          newCustomers: stats.newCustomers,
-          existingCustomers: stats.existingCustomers,
-          transactionsCreated: stats.transactionsCreated,
-          notificationsSent: stats.notificationsSent,
-          notificationsFailed: stats.notificationsFailed,
-          duration: `${savedLog.duration_seconds}s`,
-        });
-      } catch (error) {
-        console.error('❌ POINTS ASSIGNMENT FAILED:', error);
-
-        // Update log with error details
-        savedLog.status = PointsAssignmentStatus.FAILED;
-        savedLog.error_message = error.message || 'Points assignment error';
-        savedLog.error_details = {
-          name: error.name,
-          stack: error.stack,
-        };
-        savedLog.completed_at = new Date();
-        savedLog.duration_seconds = Math.floor(
-          (savedLog.completed_at.getTime() - startTime.getTime()) / 1000,
-        );
-
-        await this.pointsLogRepo.save(savedLog);
-
-        throw error; // Re-throw to let NestJS scheduler handle it
+        /** ❤️ HEARTBEAT LOG */
+        if (processedCount % 50 === 0) {
+          console.log(
+            `⏳ Progress: ${processedCount}/${unclaimedInvoices.length}`,
+          );
+        }
       }
+
+      /** ✅ FINALIZE LOG */
+      const endTime = new Date();
+      savedLog.status = PointsAssignmentStatus.SUCCESS;
+      savedLog.completed_at = endTime;
+      savedLog.duration_seconds = Math.floor(
+        (endTime.getTime() - startTime.getTime()) / 1000,
+      );
+
+      savedLog.processed_invoices =
+        unclaimedInvoices.length -
+        stats.failedInvoices.length -
+        stats.skippedInvoices;
+
+      savedLog.failed_invoices = stats.failedInvoices.length;
+      savedLog.skipped_invoices = stats.skippedInvoices;
+      savedLog.new_customers_created = stats.newCustomers;
+      savedLog.existing_customers = stats.existingCustomers;
+      savedLog.transactions_created = stats.transactionsCreated;
+      savedLog.notifications_sent = stats.notificationsSent;
+      savedLog.notifications_failed = stats.notificationsFailed;
+      savedLog.failed_invoice_ids = stats.failedInvoices.length
+        ? stats.failedInvoices
+        : null;
+
+      await this.pointsLogRepo.save(savedLog);
+
+      console.log('✅ POINTS ASSIGNMENT COMPLETED SUCCESSFULLY');
+      console.log('📊 Final Stats:', {
+        totalInvoices: unclaimedInvoices.length,
+        processed: savedLog.processed_invoices,
+        failed: stats.failedInvoices.length,
+        skipped: stats.skippedInvoices,
+        duration: `${savedLog.duration_seconds}s`,
+      });
+    } catch (error) {
+      console.error('❌ POINTS ASSIGNMENT CRON FAILED:', error);
+
+      savedLog.status = PointsAssignmentStatus.FAILED;
+      savedLog.error_message = error.message;
+      savedLog.error_details = {
+        name: error.name,
+        stack: error.stack,
+      };
+      savedLog.completed_at = new Date();
+      savedLog.duration_seconds = Math.floor(
+        (savedLog.completed_at.getTime() - startTime.getTime()) / 1000,
+      );
+
+      await this.pointsLogRepo.save(savedLog);
     }
   }
 
