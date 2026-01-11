@@ -252,7 +252,7 @@ export class RestyService {
   // │ │ │ │ ┌─ day of week
   // │ │ │ │ │
   // 30  2   *   *   *
-  @Cron('00 2 * * *', { timeZone: 'UTC' })
+  @Cron('47 12 * * *', { timeZone: 'UTC' })
   async processLatestInvoices() {
     const hostName = os.hostname();
     const localUrl = 'http://localhost:3000';
@@ -475,28 +475,34 @@ export class RestyService {
           );
         }
 
-        // Update log with success status
-        const endTime = new Date();
-        savedLog.status = CronStatus.SUCCESS;
-        savedLog.completed_at = endTime;
-        savedLog.duration_seconds = Math.floor(
-          (endTime.getTime() - startTime.getTime()) / 1000,
-        );
+        // Update log with invoice sync completion (but DON'T mark as complete yet)
         savedLog.total_unique_invoices = processedInvoices.length;
         savedLog.processed_invoices = restyInvoiceCleanDataEntities.length;
-
         await this.cronLogRepo.save(savedLog);
 
-        console.log('✅ CRON COMPLETED SUCCESSFULLY');
-        console.log('📊 Final Stats:', {
+        console.log('✅ INVOICE SYNC COMPLETED');
+        console.log('📊 Invoice Sync Stats:', {
           totalRecords: savedLog.total_raw_records,
           uniqueInvoices: savedLog.total_unique_invoices,
           processedInvoices: savedLog.processed_invoices,
-          duration: `${savedLog.duration_seconds}s`,
         });
 
         // 🔹 Step 5: After syncing invoices, process unclaimed invoices for points assignment
         await this.processUnclaimedInvoicesForPoints(savedLog);
+
+        // 🔹 Step 6: Mark as complete AFTER both invoice sync AND points assignment
+        const finalEndTime = new Date();
+        savedLog.status = CronStatus.SUCCESS;
+        savedLog.completed_at = finalEndTime;
+        savedLog.duration_seconds = Math.floor(
+          (finalEndTime.getTime() - startTime.getTime()) / 1000,
+        );
+        await this.cronLogRepo.save(savedLog);
+
+        console.log('\n✅ FULL CRON COMPLETED SUCCESSFULLY');
+        console.log('📊 Total Duration:', {
+          duration: `${savedLog.duration_seconds}s`,
+        });
       } catch (error) {
         console.error('❌ CRON FAILED WITH ERROR:', error);
 
@@ -556,84 +562,43 @@ export class RestyService {
         `🧾 Found ${unclaimedInvoices.length} unclaimed invoices to process.`,
       );
 
-      // 🔹 Step 2: Process invoices in parallel batches
-      const BATCH_SIZE = 200;
-      const batches: RestyInvoicesInfo[][] = [];
+      // 🔹 Step 2: Process all invoices in parallel
+      console.log(`📦 Processing all ${unclaimedInvoices.length} invoices...`);
 
-      for (let i = 0; i < unclaimedInvoices.length; i += BATCH_SIZE) {
-        batches.push(unclaimedInvoices.slice(i, i + BATCH_SIZE));
-      }
-
-      console.log(
-        `📦 Processing ${batches.length} batches of ${BATCH_SIZE} invoices each...`,
+      // Process all invoices in parallel
+      const results = await Promise.allSettled(
+        unclaimedInvoices.map((invoice) =>
+          this.processInvoiceForPoints(invoice, stats),
+        ),
       );
 
-      // Process each batch sequentially (but invoices within batch are parallel)
-      for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
-        const batch = batches[batchIndex];
-        console.log(
-          `\n🔄 Processing batch ${batchIndex + 1}/${batches.length}...`,
-        );
+      // Log completion stats
+      const successCount = results.filter(
+        (r) => r.status === 'fulfilled',
+      ).length;
+      const failureCount = results.filter(
+        (r) => r.status === 'rejected',
+      ).length;
+      console.log(
+        `✅ Processing completed: ${successCount} success, ${failureCount} failed`,
+      );
 
-        // Process all invoices in this batch in parallel
-        const batchResults = await Promise.allSettled(
-          batch.map((invoice) => this.processInvoiceForPoints(invoice, stats)),
-        );
-
-        // Log batch completion
-        const successCount = batchResults.filter(
-          (r) => r.status === 'fulfilled',
-        ).length;
-        const failureCount = batchResults.filter(
-          (r) => r.status === 'rejected',
-        ).length;
-        console.log(
-          `✅ Batch ${batchIndex + 1} completed: ${successCount} success, ${failureCount} failed`,
-        );
-
-        // Update log with current progress after each batch
-        savedLog.new_customers_created = stats.newCustomers;
-        savedLog.existing_customers = stats.existingCustomers;
-        savedLog.transactions_created = stats.transactionsCreated;
-        savedLog.notifications_sent = stats.notificationsSent;
-        savedLog.notifications_failed = stats.notificationsFailed;
-        savedLog.skipped_invoices = stats.skippedInvoices;
-        savedLog.failed_invoice_ids =
-          stats.failedInvoices.length > 0 ? stats.failedInvoices : null;
-        await this.cronLogRepo.save(savedLog);
-
-        console.log(
-          `📊 Progress: ${stats.newCustomers} new customers, ${stats.transactionsCreated} transactions, ${stats.skippedInvoices} skipped, ${stats.failedInvoices.length} failed`,
-        );
-
-        // Sleep for 2 seconds between batches (except after the last batch)
-        if (batchIndex < batches.length - 1) {
-          console.log('⏸️  Sleeping for 2 seconds before next batch...');
-          await new Promise((resolve) => setTimeout(resolve, 2000));
-        }
-      }
-
-      // 🔹 Step 3: Update log with points assignment statistics
+      // 🔹 Step 3: Final stats update (completion will be set in main cron function)
       savedLog.new_customers_created = stats.newCustomers;
       savedLog.existing_customers = stats.existingCustomers;
       savedLog.transactions_created = stats.transactionsCreated;
       savedLog.notifications_sent = stats.notificationsSent;
       savedLog.notifications_failed = stats.notificationsFailed;
       savedLog.skipped_invoices = stats.skippedInvoices;
+      savedLog.failed_invoices = failureCount;
       savedLog.failed_invoice_ids =
         stats.failedInvoices.length > 0 ? stats.failedInvoices : null;
 
-      // Update final duration including points assignment
-      const endTime = new Date();
-      savedLog.completed_at = endTime;
-      savedLog.duration_seconds = Math.floor(
-        (endTime.getTime() - savedLog.started_at.getTime()) / 1000,
-      );
-
+      // Save final stats (completed_at and duration will be set by main function)
       await this.cronLogRepo.save(savedLog);
 
       const pointsDuration = Math.floor(
-        (endTime.getTime() - pointsStartTime.getTime()) / 1000,
+        (new Date().getTime() - pointsStartTime.getTime()) / 1000,
       );
 
       console.log('\n✅ POINTS ASSIGNMENT COMPLETED');
@@ -675,29 +640,6 @@ export class RestyService {
       await this.cronLogRepo.save(savedLog);
     }
   }
-
-  /**
-   * 🔥 DEPRECATED: This cron is now integrated into processLatestInvoices
-   * The points assignment now happens as part of the invoice sync process
-   * Commented out to prevent duplicate processing
-   */
-  // @Cron(CronExpression.EVERY_5_MINUTES)
-  // @Cron(CronExpression.EVERY_5_MINUTES)
-  //   ┌──────── minute (0 - 59)
-  // │ ┌────── hour (0 - 23)
-  // │ │ ┌──── day of month
-  // │ │ │ ┌── month
-  // │ │ │ │ ┌─ day of week
-  // │ │ │ │ │
-  // 30  2   *   *   *
-  // @Cron('00 2 * * *', { timeZone: 'UTC' })
-  // async processUnclaimedInvoicesAndAssignPoints() {
-  //   // This method is deprecated - points assignment now happens in processLatestInvoices
-  //   console.log(
-  //     '⚠️ This cron is deprecated. Points assignment now happens in processLatestInvoices()',
-  //   );
-  //   return;
-  // }
 
   /**
    * 🔧 Helper method: Process a single invoice and assign points
