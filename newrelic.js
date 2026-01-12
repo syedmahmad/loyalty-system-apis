@@ -8,6 +8,7 @@ exports.config = {
    * Your New Relic license key.
    */
   license_key: process.env.NEW_RELIC_LICENSE_KEY,
+  distributed_tracing: { enabled: true },
   logging: {
     level: 'info',
   },
