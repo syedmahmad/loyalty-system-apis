@@ -726,6 +726,7 @@ export class RestyService {
 
         // Mark as claimed to avoid reprocessing
         if (!invoice.is_claimed) {
+          invoice.is_claimed = true;
           invoice.claimed_points = existingTransaction.point_balance || 0;
           invoice.already_processed_invoice = true;
           await this.restyIncoicesInfoRepo.save(invoice);
