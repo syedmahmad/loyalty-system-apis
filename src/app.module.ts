@@ -69,6 +69,14 @@ import { MasterModule } from './master/master.module';
           database,
           autoLoadEntities: true,
           synchronize: true,
+
+          // 🔥 POOL CONFIG
+          extra: {
+            connectionLimit: 20, // 👈 pool size
+            waitForConnections: true,
+            queueLimit: 0, // unlimited queue
+          },
+
           // subscribers: [GlobalAuditSubscriber, TransactionSyncLogsSubscriber],
           subscribers: [GlobalAuditSubscriber],
         };
