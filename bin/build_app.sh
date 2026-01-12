@@ -24,8 +24,8 @@ pm2 delete "$APP_NAME" || true
 #   --node-args="--max-old-space-size=${NODE_HEAP_MB}"
 
 NODE_OPTIONS="--max-old-space-size=${NODE_HEAP_MB}" \
-# dotenv -e .env -- pm2 start npm --name "$APP_NAME" -- run start:prod
-dotenv -e .env -- pm2 start dist/main.js --name "$APP_NAME"  -i 3  --max-memory-restart 2G  --node-args="-r newrelic --max-old-space-size=2048"
+dotenv -e .env -- pm2 start npm --name "$APP_NAME" -- run start:prod
+# dotenv -e .env -- pm2 start dist/main.js --name "$APP_NAME"  -i 3  --max-memory-restart 2G  --node-args="-r newrelic --max-old-space-size=2048"
 
 
 # # Optionally save PM2 process list so it autostarts on reboot

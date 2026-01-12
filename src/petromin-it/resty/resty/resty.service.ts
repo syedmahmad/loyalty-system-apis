@@ -582,7 +582,7 @@ export class RestyService {
           should_assign_points_after_migration: true,
           already_processed_invoice: false,
         },
-        take: 1000,
+        take: 800,
         order: { created_at: 'ASC' }, // Process oldest first (FIFO)
       });
 
