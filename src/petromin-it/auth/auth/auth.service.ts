@@ -156,7 +156,7 @@ export class AuthService {
       if (!testUsers.includes(plainMobile)) {
         Promise.all([
           TriggerSMS(plainMobile, otp, body.language_code, this.logRepo),
-          TriggerWhatsapp(plainMobile, otp, body.language_code, this.logRepo),
+          TriggerWhatsapp(plainMobile, otp, 'en', this.logRepo),
         ]).catch(() => {
           // Optionally log or handle errors, but don't block the main flow
         });

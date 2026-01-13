@@ -18,6 +18,7 @@ import { WalletModule } from 'src/wallet/wallet.module';
 import { NotificationModule } from '../notification/notification.module';
 import { DeviceToken } from 'src/petromin-it/notification/entities/device-token.entity';
 import { WalletTransaction } from 'src/wallet/entities/wallet-transaction.entity';
+import { WalletSettings } from 'src/wallet/entities/wallet-settings.entity';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { WalletTransaction } from 'src/wallet/entities/wallet-transaction.entity
       Rule,
       DeviceToken,
       WalletTransaction,
+      WalletSettings,
     ]),
     VehicleModule,
     TiersModule,
