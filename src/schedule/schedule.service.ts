@@ -250,6 +250,8 @@ export class ScheduleService {
                 source_id: tx.id, // Link to the original transaction
                 prev_available_points: wallet.available_balance,
                 points_balance: unusedPoints,
+                external_program_type: 'Loyalty Points Expiry Cron',
+                expiry_date: null,
               },
               null, // system user ID or dedicated service account
               true, // callingFromGateway = true to skip permission checks

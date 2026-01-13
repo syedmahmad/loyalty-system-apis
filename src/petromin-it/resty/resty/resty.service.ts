@@ -7,6 +7,7 @@ import { VehicleServiceJob } from '../entities/vehicle_service_job.entity';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { Customer } from 'src/customers/entities/customer.entity';
 import { Wallet } from 'src/wallet/entities/wallet.entity';
+import { WalletSettings } from 'src/wallet/entities/wallet-settings.entity';
 import { Rule } from 'src/rules/entities/rules.entity';
 import { TiersService } from 'src/tiers/tiers/tiers.service';
 import { WalletService } from 'src/wallet/wallet/wallet.service';
@@ -42,6 +43,8 @@ export class RestyService {
     private readonly customerRepo: Repository<Customer>,
     @InjectRepository(Wallet)
     private readonly walletRepo: Repository<Wallet>,
+    @InjectRepository(WalletSettings)
+    private settingsRepo: Repository<WalletSettings>,
     @InjectRepository(Rule)
     private readonly rulesRepo: Repository<Rule>,
     @InjectRepository(DeviceToken)
@@ -791,6 +794,10 @@ export class RestyService {
         return;
       }
 
+      const settings = await this.settingsRepo.findOne({
+        where: { business_unit: { id: wallet.business_unit.id } },
+      });
+
       // 🔹 Step 3: Calculate points based on earning rules
       const businessUnitId = customer.business_unit.id;
       const earningRule = await this.rulesRepo.findOne({
@@ -856,6 +863,9 @@ export class RestyService {
             prev_available_points: wallet.available_balance,
             external_program_type: 'Resty View Cron',
             transaction_reference: `Points earned for transactions performed on service stations`,
+            expiry_date: dayjs(invoice.invoice_date)
+              .add(Number(settings.expiration_value), 'day')
+              .toDate(),
           },
           0,
           true,
