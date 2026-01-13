@@ -784,6 +784,7 @@ export class RestyService {
       // 🔹 Step 2: Get customer's wallet
       const wallet = await this.walletRepo.findOne({
         where: { customer: { id: customer.id } },
+        relations: ['business_unit'],
       });
 
       if (!wallet) {
@@ -795,7 +796,7 @@ export class RestyService {
       }
 
       const settings = await this.settingsRepo.findOne({
-        where: { business_unit: { id: wallet.business_unit.id } },
+        where: { business_unit: { id: wallet?.business_unit?.id } },
       });
 
       // 🔹 Step 3: Calculate points based on earning rules
@@ -864,7 +865,7 @@ export class RestyService {
             external_program_type: 'Resty View Cron',
             transaction_reference: `Points earned for transactions performed on service stations`,
             expiry_date: dayjs(invoice.invoice_date)
-              .add(Number(settings.expiration_value), 'day')
+              .add(Number(settings?.expiration_value ?? 365), 'day')
               .toDate(),
           },
           0,
