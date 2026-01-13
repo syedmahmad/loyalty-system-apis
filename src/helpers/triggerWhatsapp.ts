@@ -14,6 +14,49 @@ export async function TriggerWhatsapp(
     throw new Error('Missing communication service config');
   }
 
+  const bodyAr = {
+    template_id: process.env.NCMC_COMMUNICATION_WHATSAPP_TEMPLATE_AR,
+    language_code: language_code,
+    to: [
+      {
+        number: encryptedPhone,
+      },
+    ],
+    components: [
+      {
+        type: 'body',
+        parameters: [
+          {
+            type: 'text',
+            text: otp,
+          },
+        ],
+      },
+      {
+        type: 'button',
+        sub_type: 'url',
+        index: '0',
+        parameters: [
+          {
+            type: 'text',
+            text: otp,
+          },
+        ],
+      },
+      {
+        type: 'button',
+        sub_type: 'quick_reply',
+        index: '1',
+        parameters: [
+          {
+            type: 'text',
+            text: otp,
+          },
+        ],
+      },
+    ],
+  };
+
   const body = {
     template_id: process.env.NCMC_COMMUNICATION_WHATSAPP_TEMPLATE,
     language_code: language_code,
@@ -46,13 +89,17 @@ export async function TriggerWhatsapp(
     ],
   };
   try {
-    const res = await axios.post(endpoint, body, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
+    const res = await axios.post(
+      endpoint,
+      language_code === 'ar' ? bodyAr : body,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        timeout: 10000,
       },
-      timeout: 10000,
-    });
+    );
     // log the external call
     const logs = await logRepo.create({
       requestBody: JSON.stringify(body),
