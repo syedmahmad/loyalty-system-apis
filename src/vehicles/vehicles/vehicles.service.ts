@@ -55,6 +55,9 @@ export class VehiclesService {
    * Add or update a vehicle for a customer.
    * If a vehicle with the same plate_no exists for any customer, transfer ownership to the new customer and update details.
    * If not, create a new vehicle for the customer.
+   *
+   * Fix: If car valuation (carCondition, minPrice, maxPrice) is already present, DO NOT flush them on updates.
+   *      Only update if actually requested, and NEVER set to null/undefined by default.
    */
   async manageCustomerVehicle(tenantId, businessUnitId, body) {
     try {
@@ -93,7 +96,7 @@ export class VehiclesService {
         this.variantRepository.findOne({ where: { variantId: variant_id } }),
       ]);
 
-      // plate_no should not be updated if vehicle already exists (on update)
+      // Prepare data but DO NOT overwrite car valuation fields (carCondition, minPrice, maxPrice) by default
       const prePareData: any = {
         make: makeInfo?.name ?? null,
         make_ar: makeInfo?.nameAr ?? null,
@@ -106,7 +109,9 @@ export class VehiclesService {
         model_id: model_id ? model_id : -1,
         variant: variantInfo?.name ? variantInfo?.name : null,
         variant_ar: variantInfo?.nameAr ?? null,
-        variant_id: variant_id ? variant_id : -1,
+        variant_id: variantInfo?.variantId
+          ? variantInfo?.variantId
+          : variant_id,
         vin_number: vin ?? null,
         // Do NOT include plate_no here by default, it will be conditionally set below
         year: modelInfo?.year ? modelInfo?.year : year,
@@ -125,14 +130,12 @@ export class VehiclesService {
         registeration_no: restBody?.registeration_no ?? null,
         sequence_no: restBody?.sequence_no ?? null,
         national_id: restBody?.national_id ?? null,
-        // new car value fields.
-        carCondition: restBody?.carCondition ?? null,
-        minPrice: restBody?.minPrice ?? null,
-        maxPrice: restBody?.maxPrice ?? null,
+        // Suggestion: Do NOT set car valuation fields here! Only set if explicitly in body and non-null.
+        // model_year_id is not related, safe to set
         model_year_id: restBody?.model_year_id ?? null,
       };
 
-      // Step 2: Find vehicle by plate_no (regardless of customer)
+      // Step 2: Find the (active) vehicle for this customer+plate
       let vehicle: any = await this.vehiclesRepository.findOne({
         where: {
           customer: { id: customer.id },
@@ -146,10 +149,18 @@ export class VehiclesService {
         // Don't update plate_no if vehicle already exists
         Object.assign(vehicle, prePareData);
 
-        // UPDATE last_valuation_date ONLY if user update these values...
-        if (body.minPrice && body.maxPrice && body.carCondition) {
+        // Only update car valuation fields if ALL 3 are present AND not null/undefined
+        if (
+          body.minPrice !== undefined &&
+          body.maxPrice !== undefined &&
+          body.carCondition !== undefined &&
+          body.minPrice !== null &&
+          body.maxPrice !== null &&
+          body.carCondition
+        ) {
+          // User wants to update car valuation
           vehicle.last_valuation_date = new Date();
-          // Update the specific condition inside car_value with new min and max
+          // Update car_value for the given condition
           vehicle.car_value = {
             ...vehicle.car_value,
             [body.carCondition]: {
@@ -157,22 +168,38 @@ export class VehiclesService {
               max: body.maxPrice,
             },
           };
-          // vehicle = await this.vehiclesRepository.save(vehicle);
+          vehicle.carCondition = body.carCondition;
+          vehicle.minPrice = body.minPrice;
+          vehicle.maxPrice = body.maxPrice;
+        } else {
+          // Do NOT touch carCondition, minPrice, maxPrice if already exist
+          // If client is trying to clear/flush them (sends null/undefined), ignore and keep previous values
+          // Optionally, in future, check for explicit delete operation if needed
         }
       } else {
-        // Include plate_no only in creation
-        // create car.
+        // Create car, including car valuation if provided, or fetch via API if possible
+        const carValueToSet =
+          restBody.minPrice !== undefined &&
+          restBody.maxPrice !== undefined &&
+          restBody.carCondition
+            ? {
+                carCondition: restBody.carCondition,
+                minPrice: restBody.minPrice,
+                maxPrice: restBody.maxPrice,
+              }
+            : {};
+
         vehicle = this.vehiclesRepository.create({
           customer: { id: customer.id },
           ...prePareData,
+          ...carValueToSet,
           plate_no: plate_no ?? null,
         });
 
-        // get car valuation.
-        // 🔹 Step X: Fetch car valuation from Gogomotor API
-        try {
-          // if (variantInfo?.variantId && year && restBody?.last_mileage) {
-          if (!vehicle.car_value && variantInfo?.variantId && year) {
+        // if (!vehicle.car_value && variantInfo?.variantId && year) {
+        // If not client-provided, fetch car valuation ONLY IF not already set
+        if (!('minPrice' in carValueToSet) && variantInfo?.variantId && year) {
+          try {
             const valuation = await this.getCarValuation({
               km: restBody?.last_mileage || 0,
               trimId: variantInfo?.variantId || variant_id, // cannot pass modelId as bluebook does not work with it.
@@ -191,14 +218,13 @@ export class VehiclesService {
               vehicle.carCondition = 'good';
               vehicle.minPrice = good.min;
               vehicle.maxPrice = good.max;
-              // vehicle = await this.vehiclesRepository.save(vehicle);
             }
+          } catch (err) {
+            console.error(
+              'Car valuation integration failed:',
+              err?.message || err,
+            );
           }
-        } catch (err) {
-          console.error(
-            'Car valuation integration failed:',
-            err?.message || err,
-          );
         }
 
         // give rewards points when someone adds new car

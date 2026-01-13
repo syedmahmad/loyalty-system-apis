@@ -7,7 +7,8 @@
   "license": "UNLICENSED",
   "scripts": {
     "build": "nest build",
-    "build:app": "sh bin/build_app.sh",
+    "build:single:core:app": "sh bin/build_single_core_app.sh",
+    "build:multi:core:app": "sh bin/build_multi_core_app.sh",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
     "start:dev": "NEST_DEBUG=true nest start --debug --watch",
