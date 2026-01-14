@@ -661,11 +661,18 @@ export class RestyService {
       const uniquePhones = [
         ...new Set(unclaimedInvoices.map((inv) => inv.phone).filter(Boolean)),
       ];
+
+      savedLog.unique_phone_numbers_count = uniquePhones.length;
+      await this.pointsLogRepo.save(savedLog);
+
       const hashedPhones = uniquePhones.map((phone) => encrypt(phone));
 
       // Fetch all customers with these hashed phone numbers, there are chances that some customer not exist
       const existingCustomers = await this.customerRepo.find({
-        where: { hashed_number: In(hashedPhones) },
+        where: {
+          hashed_number: In(hashedPhones),
+          status: In([1, 2]),
+        },
         relations: ['tenant', 'business_unit', 'wallet'],
       });
 
@@ -722,6 +729,7 @@ export class RestyService {
         }
 
         stats.newCustomers += savedCustomers.length;
+        stats.existingCustomers += customerMap.size;
         savedLog.new_customers_created = stats.newCustomers;
         savedLog.existing_customers = customerMap.size;
         await this.pointsLogRepo.save(savedLog);
