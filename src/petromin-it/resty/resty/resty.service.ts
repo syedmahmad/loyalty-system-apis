@@ -933,7 +933,7 @@ export class RestyService {
           invoice_id: invoice.invoice_id,
           invoice_no: invoice.invoice_no,
           created_at: dayjs().toDate(),
-          points_balance: finalPoints,
+          point_balance: finalPoints,
           source_type: 'transaction',
           description: `Points earned for invoice ${invoice.invoice_no}`,
           created_by: 0,
