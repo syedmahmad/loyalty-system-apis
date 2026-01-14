@@ -663,23 +663,24 @@ export class RestyService {
       ];
       const hashedPhones = uniquePhones.map((phone) => encrypt(phone));
 
+      // Fetch all customers with these hashed phone numbers, there are chances that some customer not exist
       const existingCustomers = await this.customerRepo.find({
         where: { hashed_number: In(hashedPhones) },
         relations: ['tenant', 'business_unit', 'wallet'],
       });
 
-      // Create lookup map: hashed_number -> customer
+      // creating customer based on the hashed phone number map for quick lookup
+      // maintaining a list of customer based on there phone number hashes
       const customerMap = new Map<string, Customer>();
       existingCustomers.forEach((c) => customerMap.set(c.hashed_number, c));
       console.log(`✅ Found ${existingCustomers.length} existing customers`);
 
-      // 🔹 Identify and bulk create new customers
+      // 🔹 Identify and bulk create new customers, new customers will contain array of plain phone numbers
       const newCustomerPhones = new Set<string>();
       for (const invoice of unclaimedInvoices) {
         if (!invoice.phone) continue;
         const hashedPhone = encrypt(invoice.phone);
         if (!customerMap.has(hashedPhone)) {
-          // TODO: need to update
           newCustomerPhones.add(invoice.phone);
         }
       }
@@ -707,6 +708,7 @@ export class RestyService {
           },
         );
 
+        // bulk insertion of new customers
         const savedCustomers =
           await this.customerRepo.save(newCustomersToCreate);
 
@@ -721,6 +723,7 @@ export class RestyService {
 
         stats.newCustomers += savedCustomers.length;
         savedLog.new_customers_created = stats.newCustomers;
+        savedLog.existing_customers = customerMap.size;
         await this.pointsLogRepo.save(savedLog);
         console.log(`✅ Created ${savedCustomers.length} new customers`);
       }
@@ -744,10 +747,12 @@ export class RestyService {
             settings,
             earningRule,
             reloadedCustomers,
+            savedLog,
           );
         } catch (err) {
           console.log(`❌ Invoice ${invoice.invoice_no} failed:`, err.message);
-          stats.failedInvoices.push(invoice.invoice_no);
+          // we've already logged inside processInvoiceForPoints, that's why we don't do it again here
+          // stats.failedInvoices.push(invoice.invoice_no);
         }
 
         processedCount++;
@@ -821,12 +826,14 @@ export class RestyService {
    * 3. Add wallet transaction
    * 4. Send notification
    * 5. Update invoice as claimed
+   * 6. Update points assignment log with transaction details
    *
    * @param invoice - The invoice entity to process
    * @param stats - Statistics object to track overall progress
    * @param settings - Wallet settings for expiration calculation
    * @param earningRule - Earning rule for points calculation
    * @param customerMap - Pre-fetched customer lookup map
+   * @param savedLog - Points assignment log entry to update
    */
   private async processInvoiceForPoints(
     invoice: RestyInvoicesInfo,
@@ -842,6 +849,7 @@ export class RestyService {
     settings: WalletSettings | null,
     earningRule: Rule,
     customerMap: Customer[],
+    savedLog: RestyPointsAssignmentLog,
   ): Promise<void> {
     try {
       // Validate invoice has required data
@@ -850,6 +858,8 @@ export class RestyService {
           `⚠️ Invoice ${invoice.id} missing phone or invoice_no, skipping...`,
         );
         stats.skippedInvoices++;
+        savedLog.skipped_invoices = stats.skippedInvoices;
+        await this.pointsLogRepo.save(savedLog);
         return;
       }
 
@@ -864,6 +874,8 @@ export class RestyService {
         //   `⏭️ Invoice ${invoice.invoice_no} already processed in wallet_transaction, skipping...`,
         // );
         stats.skippedInvoices++;
+        savedLog.skipped_invoices = stats.skippedInvoices;
+        await this.pointsLogRepo.save(savedLog);
 
         // Mark as claimed to avoid reprocessing
         if (!invoice.is_claimed) {
@@ -879,22 +891,6 @@ export class RestyService {
       // 🔹 Step 1: Get customer from pre-fetched map
       const hashedPhone = encrypt(invoice.phone);
       const customer = customerMap.find((c) => c.hashed_number === hashedPhone);
-
-      if (!customer) {
-        console.log(`⚠️ Customer not found for invoice ${invoice.invoice_no}`);
-        stats.skippedInvoices++;
-        return;
-      }
-
-      if (!customer.wallet) {
-        console.log(
-          `⚠️ Wallet not found for customer ${customer.id}, invoice ${invoice.invoice_no}`,
-        );
-        stats.skippedInvoices++;
-        return;
-      }
-
-      stats.existingCustomers++;
 
       // Calculate base points
       const minAmountSpent =
@@ -958,6 +954,13 @@ export class RestyService {
         await this.walletRepo.save(customer.wallet);
 
         stats.transactionsCreated++;
+
+        // Update log with transaction details
+        savedLog.transactions_created = stats.transactionsCreated;
+        savedLog.processed_invoices =
+          stats.transactionsCreated - stats.failedInvoices.length;
+        await this.pointsLogRepo.save(savedLog);
+
         console.log(
           `💰 Transaction created: ${finalPoints} points for invoice ${invoice.invoice_no}`,
         );
@@ -967,6 +970,9 @@ export class RestyService {
           err.message,
         );
         stats.failedInvoices.push(invoice.invoice_no);
+        savedLog.failed_invoices = stats.failedInvoices.length;
+        savedLog.failed_invoice_ids = stats.failedInvoices;
+        await this.pointsLogRepo.save(savedLog);
         return;
       }
 
@@ -1003,16 +1009,22 @@ export class RestyService {
         };
 
         // Send notification asynchronously (non-blocking, fire and forget)
-        this.notificationService
-          .sendToUser(payload, saveNotificationPayload)
-          .catch((notifErr) => {
-            stats.notificationsFailed++;
-            console.log(
-              `⚠️ Notification failed for invoice ${invoice.invoice_no}:`,
-              notifErr.message,
-            );
-          });
+        try {
+          this.notificationService.sendToUser(payload, saveNotificationPayload);
+        } catch (notifErr) {
+          stats.notificationsFailed++;
+          savedLog.notifications_failed = stats.notificationsFailed;
+          savedLog.error_message = `Notification failed for invoice ${invoice.invoice_no}: ${notifErr.message}`;
+          await this.pointsLogRepo.save(savedLog);
+          console.log(
+            `⚠️ Notification failed for invoice ${invoice.invoice_no}:`,
+            notifErr.message,
+          );
+        }
+
         stats.notificationsSent++;
+        savedLog.notifications_sent = stats.notificationsSent;
+        await this.pointsLogRepo.save(savedLog);
       }
 
       // 🔹 Step 6: Update invoice as claimed
@@ -1029,6 +1041,9 @@ export class RestyService {
         error.message,
       );
       stats.failedInvoices.push(invoice.invoice_no);
+      savedLog.failed_invoices = stats.failedInvoices.length;
+      savedLog.failed_invoice_ids = stats.failedInvoices;
+      await this.pointsLogRepo.save(savedLog);
       throw error; // Re-throw to mark as failed in Promise.allSettled
     }
   }
