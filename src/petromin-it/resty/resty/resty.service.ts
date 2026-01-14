@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, In } from 'typeorm';
 import { RestyInvoicesInfo } from '../entities/resty_invoices_info.entity';
 import { RestyInvoiceCleanData } from '../entities/resty_invoice_clean.entity';
 import { VehicleServiceJob } from '../entities/vehicle_service_job.entity';
@@ -261,7 +261,7 @@ export class RestyService {
   // │ │ │ │ ┌─ day of week
   // │ │ │ │ │
   // 30  2   *   *   *
-  @Cron('0 2 * * *', { timeZone: 'UTC' })
+  @Cron('22 8 * * *', { timeZone: 'UTC' })
   async processLatestInvoices() {
     const hostName = os.hostname();
     const localUrl = 'http://localhost:3000';
@@ -547,9 +547,20 @@ export class RestyService {
       where: { status: PointsAssignmentStatus.STARTED },
     });
 
+    // Previous points assignment run was interrupted, mark it as partial success
     if (runningCron) {
-      console.log('⏭️ Points assignment already running, skipping this run.');
-      return;
+      runningCron.status = PointsAssignmentStatus.PARTIAL_SUCCESS;
+      runningCron.error_message =
+        'Previous points assignment run was interrupted.';
+      runningCron.completed_at = new Date();
+      runningCron.duration_seconds = Math.floor(
+        (runningCron.completed_at.getTime() -
+          runningCron.started_at.getTime()) /
+          1000,
+      );
+
+      // Update stats before saving
+      await this.pointsLogRepo.save(runningCron);
     }
 
     const startTime = new Date();
@@ -607,12 +618,133 @@ export class RestyService {
         `📦 Processing ${unclaimedInvoices.length} invoices sequentially...`,
       );
 
+      const settings = await this.settingsRepo.findOne({
+        where: { business_unit: { id: Number(process.env.NCMC_PETROMIN_BU) } },
+      });
+
+      // 🔹 Step 3: Calculate points based on earning rules
+      const businessUnitId = Number(process.env.NCMC_PETROMIN_BU);
+      const earningRule = await this.rulesRepo.findOne({
+        where: {
+          business_unit: { id: businessUnitId },
+          rule_type: 'spend and earn',
+          reward_condition: 'perAmount',
+        },
+        relations: ['tiers'],
+      });
+
+      if (!earningRule) {
+        console.log(
+          `ℹ️ No earning rule found for business unit ${businessUnitId}`,
+        );
+        savedLog.skipped_invoices += unclaimedInvoices.length;
+        savedLog.status = PointsAssignmentStatus.FAILED;
+        savedLog.error_message = `No earning rule found for business unit ${businessUnitId}`;
+        savedLog.completed_at = new Date();
+        savedLog.duration_seconds = Math.floor(
+          (savedLog.completed_at.getTime() - startTime.getTime()) / 1000,
+        );
+        savedLog.skipped_invoices = stats.skippedInvoices;
+        await this.pointsLogRepo.save(savedLog);
+
+        return;
+      }
+
+      // 🔹 OPTIMIZATION: Fetch all customers in one query
+      console.log('🔍 Pre-fetching all customers with wallets...');
+
+      // Extract unique phone numbers from all invoices:
+      // 1. Map all invoices to get phone numbers
+      // 2. Filter out null/undefined/empty values
+      // 3. Use Set to eliminate duplicates
+      // 4. Spread Set back into array
+      const uniquePhones = [
+        ...new Set(unclaimedInvoices.map((inv) => inv.phone).filter(Boolean)),
+      ];
+      const hashedPhones = uniquePhones.map((phone) => encrypt(phone));
+
+      const existingCustomers = await this.customerRepo.find({
+        where: { hashed_number: In(hashedPhones) },
+        relations: ['tenant', 'business_unit', 'wallet'],
+      });
+
+      // Create lookup map: hashed_number -> customer
+      const customerMap = new Map<string, Customer>();
+      existingCustomers.forEach((c) => customerMap.set(c.hashed_number, c));
+      console.log(`✅ Found ${existingCustomers.length} existing customers`);
+
+      // 🔹 Identify and bulk create new customers
+      const newCustomerPhones = new Set<string>();
+      for (const invoice of unclaimedInvoices) {
+        if (!invoice.phone) continue;
+        const hashedPhone = encrypt(invoice.phone);
+        if (!customerMap.has(hashedPhone)) {
+          // TODO: need to update
+          newCustomerPhones.add(invoice.phone);
+        }
+      }
+
+      if (newCustomerPhones.size > 0) {
+        console.log(`👥 Creating ${newCustomerPhones.size} new customers...`);
+        const tenantId = parseInt(process.env.NCMC_PETROMIN_TENANT!, 10);
+
+        const newCustomersToCreate = Array.from(newCustomerPhones).map(
+          (phone) => {
+            const invoice = unclaimedInvoices.find(
+              (inv) => inv.phone === phone,
+            );
+            return this.customerRepo.create({
+              tenant: { id: tenantId },
+              business_unit: { id: businessUnitId },
+              hashed_number: encrypt(phone),
+              name: invoice?.customer_name || 'Customer',
+              email: invoice?.customer_email || null,
+              country_code: '+966',
+              phone: phone.replace(/^\+?966/, ''),
+              uuid: uuidv4(),
+              status: 2,
+            });
+          },
+        );
+
+        const savedCustomers =
+          await this.customerRepo.save(newCustomersToCreate);
+
+        // Create wallets for new customers
+        for (const customer of savedCustomers) {
+          await this.walletService.createWallet({
+            customer_id: customer.id,
+            business_unit_id: businessUnitId,
+            tenant_id: tenantId,
+          });
+        }
+
+        stats.newCustomers += savedCustomers.length;
+        savedLog.new_customers_created = stats.newCustomers;
+        await this.pointsLogRepo.save(savedLog);
+        console.log(`✅ Created ${savedCustomers.length} new customers`);
+      }
+
+      // Reload customers with wallet relations
+      const reloadedCustomers = await this.customerRepo.find({
+        where: {
+          hashed_number: In(hashedPhones),
+        },
+        relations: ['tenant', 'business_unit', 'wallet'],
+      });
+
       /** ✅ SEQUENTIAL SAFE LOOP */
       let processedCount = 0;
 
       for (const invoice of unclaimedInvoices) {
         try {
-          await this.processInvoiceForPoints(invoice, stats);
+          await this.processInvoiceForPoints(
+            invoice,
+            stats,
+            settings,
+            earningRule,
+            reloadedCustomers,
+          );
         } catch (err) {
           console.log(`❌ Invoice ${invoice.invoice_no} failed:`, err.message);
           stats.failedInvoices.push(invoice.invoice_no);
@@ -684,7 +816,7 @@ export class RestyService {
    * 🔧 Helper method: Process a single invoice and assign points
    *
    * This method handles the complete lifecycle of points assignment for one invoice:
-   * 1. Find or create customer
+   * 1. Get customer from pre-fetched map
    * 2. Calculate points based on earning rules and tier multipliers
    * 3. Add wallet transaction
    * 4. Send notification
@@ -692,6 +824,9 @@ export class RestyService {
    *
    * @param invoice - The invoice entity to process
    * @param stats - Statistics object to track overall progress
+   * @param settings - Wallet settings for expiration calculation
+   * @param earningRule - Earning rule for points calculation
+   * @param customerMap - Pre-fetched customer lookup map
    */
   private async processInvoiceForPoints(
     invoice: RestyInvoicesInfo,
@@ -704,6 +839,9 @@ export class RestyService {
       failedInvoices: string[];
       skippedInvoices: number;
     },
+    settings: WalletSettings | null,
+    earningRule: Rule,
+    customerMap: Customer[],
   ): Promise<void> {
     try {
       // Validate invoice has required data
@@ -722,9 +860,9 @@ export class RestyService {
 
       // these already present...
       if (existingTransaction) {
-        console.log(
-          `⏭️ Invoice ${invoice.invoice_no} already processed in wallet_transaction, skipping...`,
-        );
+        // console.log(
+        //   `⏭️ Invoice ${invoice.invoice_no} already processed in wallet_transaction, skipping...`,
+        // );
         stats.skippedInvoices++;
 
         // Mark as claimed to avoid reprocessing
@@ -738,86 +876,25 @@ export class RestyService {
         return;
       }
 
-      // 🔹 Step 1: Find or create customer
-      let customer = await this.customerRepo.findOne({
-        where: {
-          hashed_number: encrypt(invoice.phone),
-        },
-        relations: ['tenant', 'business_unit'],
-      });
+      // 🔹 Step 1: Get customer from pre-fetched map
+      const hashedPhone = encrypt(invoice.phone);
+      const customer = customerMap.find((c) => c.hashed_number === hashedPhone);
 
-      // Create new customer if not found
       if (!customer) {
-        console.log(`👤 Creating new customer for phone: ${invoice.phone}`);
-
-        const businessUnitId = parseInt(process.env.NCMC_PETROMIN_BU!, 10);
-        const tenantId = parseInt(process.env.NCMC_PETROMIN_TENANT!, 10);
-
-        const newCustomer = this.customerRepo.create({
-          tenant: { id: tenantId },
-          business_unit: { id: businessUnitId },
-          hashed_number: encrypt(invoice.phone),
-          name: invoice.customer_name || 'Customer', // Use customer name from invoice or default
-          email: invoice.customer_email || null, // Use customer email from invoice
-          country_code: '+966',
-          phone: invoice.phone.replace(/^\+?966/, ''),
-          uuid: uuidv4(),
-          status: 2,
-        });
-
-        const savedCustomer = await this.customerRepo.save(newCustomer);
-
-        // Create wallet for new customer
-        await this.walletService.createWallet({
-          customer_id: savedCustomer.id,
-          business_unit_id: businessUnitId,
-          tenant_id: tenantId,
-        });
-
-        customer = savedCustomer;
-        stats.newCustomers++;
-        console.log(`✅ New customer created with ID: ${customer.id}`);
-      } else {
-        stats.existingCustomers++;
-      }
-
-      // 🔹 Step 2: Get customer's wallet
-      const wallet = await this.walletRepo.findOne({
-        where: { customer: { id: customer.id } },
-        relations: ['business_unit'],
-      });
-
-      if (!wallet) {
-        console.log(
-          `⚠️ Wallet not found for customer: ${customer.id} - Invoice: ${invoice.invoice_no}`,
-        );
-        stats.failedInvoices.push(invoice.invoice_no);
+        console.log(`⚠️ Customer not found for invoice ${invoice.invoice_no}`);
+        stats.skippedInvoices++;
         return;
       }
 
-      const settings = await this.settingsRepo.findOne({
-        where: { business_unit: { id: wallet?.business_unit?.id } },
-      });
-
-      // 🔹 Step 3: Calculate points based on earning rules
-      const businessUnitId = customer.business_unit.id;
-      const earningRule = await this.rulesRepo.findOne({
-        where: {
-          business_unit: { id: businessUnitId },
-          rule_type: 'spend and earn',
-          reward_condition: 'perAmount',
-        },
-        relations: ['tiers'],
-      });
-
-      if (!earningRule) {
+      if (!customer.wallet) {
         console.log(
-          `ℹ️ No earning rule found for business unit ${businessUnitId} - Invoice: ${invoice.invoice_no}`,
+          `⚠️ Wallet not found for customer ${customer.id}, invoice ${invoice.invoice_no}`,
         );
         stats.skippedInvoices++;
-
         return;
       }
+
+      stats.existingCustomers++;
 
       // Calculate base points
       const minAmountSpent =
@@ -847,30 +924,39 @@ export class RestyService {
 
       // 🔹 Step 4: Add wallet transaction
       try {
-        await this.walletService.addTransaction(
-          {
-            wallet_id: wallet.id,
-            business_unit_id: businessUnitId,
-            type: WalletTransactionType.EARN,
-            status: WalletTransactionStatus.ACTIVE,
-            amount: invoice.invoice_amount,
-            invoice_id: invoice.invoice_id,
-            invoice_no: invoice.invoice_no,
-            created_at: dayjs().toDate(),
-            points_balance: finalPoints,
-            source_type: 'transaction',
-            description: `Points earned for invoice ${invoice.invoice_no}`,
-            created_by: 0,
-            prev_available_points: wallet.available_balance,
-            external_program_type: 'Resty View Cron',
-            transaction_reference: `Points earned for transactions performed on service stations`,
-            expiry_date: dayjs(invoice.invoice_date)
-              .add(Number(settings?.expiration_value ?? 365), 'day')
-              .toDate(),
-          },
-          0,
-          true,
-        );
+        const transactionPayload = {
+          wallet: { id: customer?.wallet?.id },
+          business_unit: { id: Number(process.env.NCMC_PETROMIN_BU) },
+          type: WalletTransactionType.EARN,
+          status: WalletTransactionStatus.ACTIVE,
+          amount: invoice.invoice_amount,
+          invoice_id: invoice.invoice_id,
+          invoice_no: invoice.invoice_no,
+          created_at: dayjs().toDate(),
+          points_balance: finalPoints,
+          source_type: 'transaction',
+          description: `Points earned for invoice ${invoice.invoice_no}`,
+          created_by: 0,
+          prev_available_points: customer?.wallet.available_balance,
+          external_program_type: 'Resty View Cron',
+          transaction_reference: `Points earned for transactions performed on service stations`,
+          expiry_date: dayjs(invoice.invoice_date)
+            .add(Number(settings?.expiration_value ?? 365), 'day')
+            .toDate(),
+          customer: { id: customer.id },
+          uuid: uuidv4(),
+        };
+
+        const transaction =
+          this.walletTransactionRepo.create(transactionPayload);
+        await this.walletTransactionRepo.save(transaction);
+
+        // Update wallet balances
+        customer.wallet.total_balance += finalPoints;
+        customer.wallet.available_balance += finalPoints;
+        customer.wallet.total_earned_points += finalPoints;
+        await this.walletRepo.save(customer.wallet);
+
         stats.transactionsCreated++;
         console.log(
           `💰 Transaction created: ${finalPoints} points for invoice ${invoice.invoice_no}`,
