@@ -673,6 +673,9 @@ export class RestyService {
           hashed_number: In(hashedPhones),
           status: In([1, 2]),
         },
+        order: {
+          id: 'DESC', // or created_at: 'DESC'
+        },
         relations: ['tenant', 'business_unit', 'wallet'],
       });
 
@@ -740,6 +743,10 @@ export class RestyService {
       const reloadedCustomers = await this.customerRepo.find({
         where: {
           hashed_number: In(hashedPhones),
+          status: In([1, 2]),
+        },
+        order: {
+          id: 'DESC', // or created_at: 'DESC'
         },
         relations: ['tenant', 'business_unit', 'wallet'],
       });
