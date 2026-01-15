@@ -36,6 +36,7 @@ export enum WalletTransactionStatus {
 @Index('idx_wallet_transactions_orders', ['orders'])
 @Index('idx_wallet_transactions_status', ['status'])
 @Index('idx_wallet_transactions_customer', ['customer'])
+@Index('idx_wallet_transactions_invoice_no', ['invoice_no'])
 export class WalletTransaction {
   @PrimaryGeneratedColumn()
   id: number;
