@@ -35,8 +35,27 @@ export enum WalletTransactionStatus {
 @Index('idx_wallet_transactions_wallet', ['wallet'])
 @Index('idx_wallet_transactions_orders', ['orders'])
 @Index('idx_wallet_transactions_status', ['status'])
+@Index('idx_wallet_transactions_created_at', ['created_at'])
+@Index('idx_wallet_transactions_type', ['type'])
+@Index('idx_wallet_transactions_expiry_date', ['expiry_date'])
+@Index('idx_wallet_transactions_expires_at', ['expires_at'])
 @Index('idx_wallet_transactions_customer', ['customer'])
 @Index('idx_wallet_transactions_invoice_no', ['invoice_no'])
+@Index('idx_wallet_transactions_type_wallet_type_created_at', [
+  'wallet',
+  'type',
+  'created_at',
+])
+@Index('idx_wallet_transactions_type_status_expiry_date', [
+  'type',
+  'status',
+  'expiry_date',
+])
+@Index('idx_wallet_transactions_type_status_expires_at', [
+  'type',
+  'status',
+  'expires_at',
+])
 export class WalletTransaction {
   @PrimaryGeneratedColumn()
   id: number;

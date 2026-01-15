@@ -12,14 +12,7 @@ import {
   WalletTransactionType,
 } from 'src/wallet/entities/wallet-transaction.entity';
 import { WalletService } from 'src/wallet/wallet/wallet.service';
-import {
-  Between,
-  In,
-  LessThan,
-  LessThanOrEqual,
-  Not,
-  Repository,
-} from 'typeorm';
+import { In, LessThan, LessThanOrEqual, Repository } from 'typeorm';
 
 @Injectable()
 export class ScheduleService {
@@ -176,7 +169,7 @@ export class ScheduleService {
     }
   }
 
-  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
+  @Cron(CronExpression.EVERY_10_MINUTES)
   async deleteExpiredWalletPoints() {
     const hostName = os.hostname();
     const localUrl = 'http://localhost:3000';
@@ -188,12 +181,12 @@ export class ScheduleService {
     ) {
       console.log('Running wallet points expiry check...');
 
-      const today = new Date(); // or however you get your date
+      const today = new Date();
       today.setHours(0, 0, 0, 0);
 
-      // getting all transactions that are active and have expiry_date equal to today
-      // and type is 'earn'
-      const expiringTransactions = await this.txRepo.find({
+      // all transactions that are expiring today or earlier
+      // Make two separate calls: one for expiry_date (new records) and one for expires_at (migration records)
+      const expiringByExpiryDate = await this.txRepo.find({
         where: {
           expiry_date: LessThanOrEqual(today),
           status: WalletTransactionStatus.ACTIVE,
@@ -202,114 +195,164 @@ export class ScheduleService {
             WalletTransactionType.ADJUSTMENT,
           ]),
         },
-        relations: ['wallet'],
+        relations: ['wallet', 'wallet.business_unit'],
       });
+
+      const expiringByExpiresAt = await this.txRepo.find({
+        where: {
+          expires_at: LessThanOrEqual(today),
+          status: WalletTransactionStatus.ACTIVE,
+          type: In([
+            WalletTransactionType.EARN,
+            WalletTransactionType.ADJUSTMENT,
+          ]),
+        },
+        relations: ['wallet', 'wallet.business_unit'],
+      });
+
+      // Combine and deduplicate based on transaction ID
+      const combinedMap = new Map<number, WalletTransaction>();
+      [...expiringByExpiryDate, ...expiringByExpiresAt].forEach((tx) => {
+        combinedMap.set(tx.id, tx);
+      });
+
+      // Convert back to array and sort by created_at for FIFO processing
+      const expiringTransactions = Array.from(combinedMap.values()).sort(
+        (a, b) => a.created_at.getTime() - b.created_at.getTime(),
+      );
 
       for (const tx of expiringTransactions) {
         const wallet = tx.wallet;
         if (!wallet) continue;
 
-        // 1️⃣ Get all earned + adjustment points in the transaction's lifetime
-        const earnedTxs = await this.txRepo.find({
+        // Get all earned points created before or at the same time as this transaction
+        // GEt all earniing till this transaction created_at, this will give us all transactions that were available before this tx
+        const earnedBeforeOrAt = await this.txRepo.find({
           where: {
-            id: Not(tx.id), // Exclude the current transaction
             wallet: { id: wallet.id },
             type: In([
               WalletTransactionType.EARN,
               WalletTransactionType.ADJUSTMENT,
             ]),
-            created_at: Between(tx.created_at, tx.expiry_date),
-            status: WalletTransactionStatus.ACTIVE,
+            created_at: LessThanOrEqual(tx.created_at),
+            // status: WalletTransactionStatus.ACTIVE,
           },
+          order: { created_at: 'ASC' },
         });
 
-        const totalEarned = earnedTxs.reduce(
-          (sum, e) => sum + Number(e.amount),
+        // Calculate how many points were available before this transaction
+        const pointsBeforeThisTx = earnedBeforeOrAt
+          .filter((e) => e.id !== tx.id)
+          .reduce((sum, e) => sum + Number(e.point_balance || 0), 0);
+
+        // 🔢 Calculate how many points from THIS transaction were consumed using FIFO logic
+        //
+        // FIFO Rule: When customers spend points, oldest points are consumed first.
+        //
+        // Example scenario:
+        // - Customer earned 100 points on Jan 1 (older)
+        // - Customer earned 50 points on Jan 15 (this transaction, expiring now)
+        // - Customer has burned 120 points total
+        //
+        // Logic breakdown:
+        // 1. total_burned_points (120) - pointsBeforeThisTx (100) = 20 points consumed from this tx
+        // 2. Math.min ensures we don't exceed the transaction's point_balance (50)
+        // 3. Math.max ensures we never get negative values (if all burns came from older transactions)
+        //
+        // Result: 20 points from this transaction were consumed, 30 points remain unused and will expire
+        const consumedFromThisTx = Math.max(
           0,
+          Math.min(
+            Number(tx.point_balance),
+            wallet.total_burned_points - pointsBeforeThisTx,
+          ),
         );
-        const availableBalance = Number(wallet.available_balance);
-        const remainingPastBalance = availableBalance - totalEarned;
-        const hasSpentSomething = remainingPastBalance > tx.point_balance;
 
-        if (hasSpentSomething) {
-          // 2️⃣ Calculate unused portion of THIS expiring transaction
-          let unusedPoints = remainingPastBalance - Number(tx.point_balance);
-          if (unusedPoints < 0) unusedPoints = 0;
+        // Calculate unused points that should expire
+        // If 20 points were consumed from a 50-point transaction, 30 points are unused
+        const unusedPoints = Number(tx.point_balance) - consumedFromThisTx;
 
-          // 3️⃣ Deduct unused portion via addTransaction
-          if (unusedPoints > 0) {
-            await this.walletService.addTransaction(
-              {
-                wallet_id: wallet.id,
-                business_unit_id: wallet.business_unit.id,
-                type: WalletTransactionType.EXPIRE,
-                amount: 0,
-                status: WalletTransactionStatus.ACTIVE,
-                description: `Expired ${unusedPoints} unused points from transaction ${tx.id}`,
-                source_type: 'system',
-                source_id: tx.id, // Link to the original transaction
-                prev_available_points: wallet.available_balance,
-                points_balance: unusedPoints,
-                external_program_type: 'Loyalty Points Expiry Cron',
-                expiry_date: null,
-              },
-              null, // system user ID or dedicated service account
-              true, // callingFromGateway = true to skip permission checks
-            );
-          }
-          console.log(`Expired ${unusedPoints} points for wallet ${wallet.id}`);
+        if (unusedPoints > 0) {
+          // Create EXPIRE transaction
+          await this.walletService.addTransaction(
+            {
+              wallet_id: wallet.id,
+              business_unit_id: wallet.business_unit.id,
+              type: WalletTransactionType.EXPIRE,
+              amount: 0,
+              status: WalletTransactionStatus.ACTIVE,
+              description: `Expired ${unusedPoints} unused points from transaction ${tx.id}`,
+              source_type: 'system',
+              source_id: tx.id,
+              prev_available_points: wallet.available_balance,
+              points_balance: unusedPoints,
+              external_program_type: 'Loyalty Points Expiry Cron',
+              expiry_date: null,
+            },
+            null,
+            true,
+          );
+
+          console.log(
+            `Wallet ${wallet.id}: Expired ${unusedPoints}/${tx.point_balance} points from transaction ${tx.id}`,
+          );
         }
-      }
-    }
-  }
 
-  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
-  async walletPointsExpiryCron() {
-    const hostName = os.hostname();
-    const localUrl = 'http://localhost:3000';
-    if (
-      process.env.PROD_SERVER_HOST_NAME === hostName ||
-      process.env.DEV_SERVER_HOST_NAME === hostName ||
-      process.env.UAT_SERVER_HOST_NAME === hostName ||
-      process.env.LOCAL_SERVER_HOST_NAME === localUrl
-    ) {
-      console.log('Wallet expire points cron started');
-
-      // Get start of today (midnight) to compare expiry dates
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
-      // 1. Find all active EARN transactions whose points should expire today or earlier
-      const transactionsToExpire = await this.txRepo.find({
-        where: {
-          expiry_date: LessThanOrEqual(today),
-          status: WalletTransactionStatus.ACTIVE,
-          type: WalletTransactionType.EARN,
-        },
-        relations: ['wallet'],
-      });
-
-      // console.log('transactionsToExpire :::', transactionsToExpire);
-
-      // 2. Process each transaction
-      for (const tx of transactionsToExpire) {
-        const wallet = tx.wallet;
-        if (!wallet) continue; // Skip if wallet relation is missing
-
-        const point_balance = Number(tx.point_balance);
-
-        // Move expired points from available to locked balance
-        wallet.available_balance =
-          Number(wallet.available_balance) - point_balance;
-        wallet.locked_balance = Number(wallet.locked_balance) + point_balance;
-
-        // Mark transaction as expired
+        // Finally, mark the original transaction as EXPIRED
         tx.status = WalletTransactionStatus.EXPIRED;
-
-        // Save changes
-        await this.walletService.updateWalletBalances(wallet.id, { ...wallet });
         await this.txRepo.save(tx);
       }
     }
   }
+
+  // // TODO: I think we don't need this cron as we are handling expiry in the above cron
+  // @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
+  // async walletPointsExpiryCron() {
+  //   const hostName = os.hostname();
+  //   const localUrl = 'http://localhost:3000';
+  //   if (
+  //     process.env.PROD_SERVER_HOST_NAME === hostName ||
+  //     process.env.DEV_SERVER_HOST_NAME === hostName ||
+  //     process.env.UAT_SERVER_HOST_NAME === hostName ||
+  //     process.env.LOCAL_SERVER_HOST_NAME === localUrl
+  //   ) {
+  //     console.log('Wallet expire points cron started');
+
+  //     // Get start of today (midnight) to compare expiry dates
+  //     const today = new Date();
+  //     today.setHours(0, 0, 0, 0);
+
+  //     // 1. Find all active EARN transactions whose points should expire today or earlier
+  //     const transactionsToExpire = await this.txRepo.find({
+  //       where: {
+  //         expiry_date: LessThanOrEqual(today),
+  //         status: WalletTransactionStatus.ACTIVE,
+  //         type: WalletTransactionType.EARN,
+  //       },
+  //       relations: ['wallet'],
+  //     });
+
+  //     // console.log('transactionsToExpire :::', transactionsToExpire);
+
+  //     // 2. Process each transaction
+  //     for (const tx of transactionsToExpire) {
+  //       const wallet = tx.wallet;
+  //       if (!wallet) continue; // Skip if wallet relation is missing
+
+  //       const point_balance = Number(tx.point_balance);
+
+  //       // Move expired points from available to locked balance
+  //       wallet.available_balance =
+  //         Number(wallet.available_balance) - point_balance;
+  //       wallet.locked_balance = Number(wallet.locked_balance) + point_balance;
+
+  //       // Mark transaction as expired
+  //       tx.status = WalletTransactionStatus.EXPIRED;
+
+  //       // Save changes
+  //       await this.walletService.updateWalletBalances(wallet.id, { ...wallet });
+  //       await this.txRepo.save(tx);
+  //     }
+  //   }
+  // }
 }
