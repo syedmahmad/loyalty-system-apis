@@ -528,7 +528,7 @@ export class RestyService {
    * Schedule: Runs every 5 minutes to process unclaimed invoices
    */
   // @Cron('*/5 * * * *', { timeZone: 'UTC' })
-  @Cron(CronExpression.EVERY_30_MINUTES)
+  @Cron(CronExpression.EVERY_10_MINUTES)
   async processUnclaimedInvoicesAndAssignPoints() {
     const hostName = os.hostname();
     const localUrl = 'http://localhost:3000';
@@ -612,7 +612,7 @@ export class RestyService {
           should_assign_points_after_migration: true,
           already_processed_invoice: false,
         },
-        take: 800,
+        take: 5000,
         order: { created_at: 'ASC' }, // Process oldest first (FIFO)
       });
       const unclaimedInvoicesEnd = Date.now();
