@@ -543,9 +543,14 @@ export class RestyService {
     }
 
     /** 🔒 CRON LOCK */
+    const cronLockStart = Date.now();
     const runningCron = await this.pointsLogRepo.findOne({
       where: { status: PointsAssignmentStatus.STARTED },
     });
+    const cronLockEnd = Date.now();
+    console.log(
+      `[QUERY TIMER] pointsLogRepo.findOne (CRON LOCK) took ${(cronLockEnd - cronLockStart) / 1000}s`,
+    );
 
     // Previous points assignment run was interrupted, mark it as partial success
     if (runningCron) {
@@ -560,7 +565,12 @@ export class RestyService {
       );
 
       // Update stats before saving
+      const cronLockSaveStart = Date.now();
       await this.pointsLogRepo.save(runningCron);
+      const cronLockSaveEnd = Date.now();
+      console.log(
+        `[QUERY TIMER] pointsLogRepo.save (update interrupted run) took ${(cronLockSaveEnd - cronLockSaveStart) / 1000}s`,
+      );
     }
 
     const startTime = new Date();
@@ -569,11 +579,16 @@ export class RestyService {
       startTime.toISOString(),
     );
 
+    const pointsLogCreateStart = Date.now();
     const savedLog = await this.pointsLogRepo.save(
       this.pointsLogRepo.create({
         status: PointsAssignmentStatus.STARTED,
         started_at: startTime,
       }),
+    );
+    const pointsLogCreateEnd = Date.now();
+    console.log(
+      `[QUERY TIMER] pointsLogRepo.save (start log) took ${(pointsLogCreateEnd - pointsLogCreateStart) / 1000}s`,
     );
 
     /** 📊 SAFE STATS */
@@ -590,6 +605,7 @@ export class RestyService {
     try {
       console.log('🔎 Fetching unclaimed invoices...');
 
+      const unclaimedInvoicesStart = Date.now();
       const unclaimedInvoices = await this.restyIncoicesInfoRepo.find({
         where: {
           is_claimed: false,
@@ -599,31 +615,51 @@ export class RestyService {
         take: 800,
         order: { created_at: 'ASC' }, // Process oldest first (FIFO)
       });
+      const unclaimedInvoicesEnd = Date.now();
+      console.log(
+        `[QUERY TIMER] restyIncoicesInfoRepo.find (unclaimedInvoices) took ${(unclaimedInvoicesEnd - unclaimedInvoicesStart) / 1000}s`,
+      );
 
       if (!unclaimedInvoices.length) {
         console.log('✅ No unclaimed invoices found.');
 
+        const logSaveStart = Date.now();
         savedLog.status = PointsAssignmentStatus.SUCCESS;
         savedLog.completed_at = new Date();
         savedLog.duration_seconds = 0;
         savedLog.total_unclaimed_invoices = 0;
         await this.pointsLogRepo.save(savedLog);
+        const logSaveEnd = Date.now();
+        console.log(
+          `[QUERY TIMER] pointsLogRepo.save (no unclaimed invoices) took ${(logSaveEnd - logSaveStart) / 1000}s`,
+        );
         return;
       }
 
       savedLog.total_unclaimed_invoices = unclaimedInvoices.length;
+      const updateLogUnclaimedStart = Date.now();
       await this.pointsLogRepo.save(savedLog);
+      const updateLogUnclaimedEnd = Date.now();
+      console.log(
+        `[QUERY TIMER] pointsLogRepo.save (unclaimed count) took ${(updateLogUnclaimedEnd - updateLogUnclaimedStart) / 1000}s`,
+      );
 
       console.log(
         `📦 Processing ${unclaimedInvoices.length} invoices sequentially...`,
       );
 
+      const settingsFindStart = Date.now();
       const settings = await this.settingsRepo.findOne({
         where: { business_unit: { id: Number(process.env.NCMC_PETROMIN_BU) } },
       });
+      const settingsFindEnd = Date.now();
+      console.log(
+        `[QUERY TIMER] settingsRepo.findOne took ${(settingsFindEnd - settingsFindStart) / 1000}s`,
+      );
 
       // 🔹 Step 3: Calculate points based on earning rules
       const businessUnitId = Number(process.env.NCMC_PETROMIN_BU);
+      const earningRuleFindStart = Date.now();
       const earningRule = await this.rulesRepo.findOne({
         where: {
           business_unit: { id: businessUnitId },
@@ -632,6 +668,10 @@ export class RestyService {
         },
         relations: ['tiers'],
       });
+      const earningRuleFindEnd = Date.now();
+      console.log(
+        `[QUERY TIMER] rulesRepo.findOne (earningRule) took ${(earningRuleFindEnd - earningRuleFindStart) / 1000}s`,
+      );
 
       if (!earningRule) {
         console.log(
@@ -645,7 +685,12 @@ export class RestyService {
           (savedLog.completed_at.getTime() - startTime.getTime()) / 1000,
         );
         savedLog.skipped_invoices = stats.skippedInvoices;
+        const noRuleSaveStart = Date.now();
         await this.pointsLogRepo.save(savedLog);
+        const noRuleSaveEnd = Date.now();
+        console.log(
+          `[QUERY TIMER] pointsLogRepo.save (no earning rule) took ${(noRuleSaveEnd - noRuleSaveStart) / 1000}s`,
+        );
 
         return;
       }
@@ -663,11 +708,17 @@ export class RestyService {
       ];
 
       savedLog.unique_phone_numbers_count = uniquePhones.length;
+      const uniquePhonesLogSaveStart = Date.now();
       await this.pointsLogRepo.save(savedLog);
+      const uniquePhonesLogSaveEnd = Date.now();
+      console.log(
+        `[QUERY TIMER] pointsLogRepo.save (unique phones count) took ${(uniquePhonesLogSaveEnd - uniquePhonesLogSaveStart) / 1000}s`,
+      );
 
       const hashedPhones = uniquePhones.map((phone) => encrypt(phone));
 
       // Fetch all customers with these hashed phone numbers, there are chances that some customer not exist
+      const customersFindStart = Date.now();
       const existingCustomers = await this.customerRepo.find({
         where: {
           hashed_number: In(hashedPhones),
@@ -678,6 +729,10 @@ export class RestyService {
         },
         relations: ['tenant', 'business_unit', 'wallet'],
       });
+      const customersFindEnd = Date.now();
+      console.log(
+        `[QUERY TIMER] customerRepo.find (existing customers) took ${(customersFindEnd - customersFindStart) / 1000}s`,
+      );
 
       // creating customer based on the hashed phone number map for quick lookup
       // maintaining a list of customer based on there phone number hashes
@@ -719,27 +774,43 @@ export class RestyService {
         );
 
         // bulk insertion of new customers
+        const saveCustomersStart = Date.now();
         const savedCustomers =
           await this.customerRepo.save(newCustomersToCreate);
+        const saveCustomersEnd = Date.now();
+        console.log(
+          `[QUERY TIMER] customerRepo.save (bulk new customers) took ${(saveCustomersEnd - saveCustomersStart) / 1000}s`,
+        );
 
         // Create wallets for new customers
         for (const customer of savedCustomers) {
+          const walletStart = Date.now();
           await this.walletService.createWallet({
             customer_id: customer.id,
             business_unit_id: businessUnitId,
             tenant_id: tenantId,
           });
+          const walletEnd = Date.now();
+          console.log(
+            `[QUERY TIMER] walletService.createWallet for customerId ${customer.id} took ${(walletEnd - walletStart) / 1000}s`,
+          );
         }
 
         stats.newCustomers += savedCustomers.length;
         stats.existingCustomers += customerMap.size;
         savedLog.new_customers_created = stats.newCustomers;
         savedLog.existing_customers = customerMap.size;
+        const newCustomerLogSaveStart = Date.now();
         await this.pointsLogRepo.save(savedLog);
+        const newCustomerLogSaveEnd = Date.now();
+        console.log(
+          `[QUERY TIMER] pointsLogRepo.save (new customers created) took ${(newCustomerLogSaveEnd - newCustomerLogSaveStart) / 1000}s`,
+        );
         console.log(`✅ Created ${savedCustomers.length} new customers`);
       }
 
       // Reload customers with wallet relations
+      const reloadCustomersStart = Date.now();
       const reloadedCustomers = await this.customerRepo.find({
         where: {
           hashed_number: In(hashedPhones),
@@ -750,12 +821,17 @@ export class RestyService {
         },
         relations: ['tenant', 'business_unit', 'wallet'],
       });
+      const reloadCustomersEnd = Date.now();
+      console.log(
+        `[QUERY TIMER] customerRepo.find (reload customers) took ${(reloadCustomersEnd - reloadCustomersStart) / 1000}s`,
+      );
 
       /** ✅ SEQUENTIAL SAFE LOOP */
       let processedCount = 0;
 
       for (const invoice of unclaimedInvoices) {
         try {
+          const processStart = Date.now();
           await this.processInvoiceForPoints(
             invoice,
             stats,
@@ -763,6 +839,10 @@ export class RestyService {
             earningRule,
             reloadedCustomers,
             savedLog,
+          );
+          const processEnd = Date.now();
+          console.log(
+            `[TIMER] processInvoiceForPoints for invoice_no ${invoice.invoice_no} took ${(processEnd - processStart) / 1000}s`,
           );
         } catch (err) {
           console.log(`❌ Invoice ${invoice.invoice_no} failed:`, err.message);
@@ -804,7 +884,12 @@ export class RestyService {
         ? stats.failedInvoices
         : null;
 
+      const finalSaveStart = Date.now();
       await this.pointsLogRepo.save(savedLog);
+      const finalSaveEnd = Date.now();
+      console.log(
+        `[QUERY TIMER] pointsLogRepo.save (final log) took ${(finalSaveEnd - finalSaveStart) / 1000}s`,
+      );
 
       console.log('✅ POINTS ASSIGNMENT COMPLETED SUCCESSFULLY');
       console.log('📊 Final Stats:', {
@@ -828,7 +913,12 @@ export class RestyService {
         (savedLog.completed_at.getTime() - startTime.getTime()) / 1000,
       );
 
+      const failureSaveStart = Date.now();
       await this.pointsLogRepo.save(savedLog);
+      const failureSaveEnd = Date.now();
+      console.log(
+        `[QUERY TIMER] pointsLogRepo.save (error log) took ${(failureSaveEnd - failureSaveStart) / 1000}s`,
+      );
     }
   }
 
@@ -873,15 +963,24 @@ export class RestyService {
           `⚠️ Invoice ${invoice.id} missing phone or invoice_no, skipping...`,
         );
         stats.skippedInvoices++;
-        savedLog.skipped_invoices = stats.skippedInvoices;
+        const pointsLogSaveStart = Date.now();
         await this.pointsLogRepo.save(savedLog);
+        const pointsLogSaveEnd = Date.now();
+        console.log(
+          `[QUERY TIMER] pointsLogRepo.save (missing data) took ${(pointsLogSaveEnd - pointsLogSaveStart) / 1000}s`,
+        );
         return;
       }
 
       // 🔹 Check if invoice already processed in wallet_transaction table
+      const walletTransactionFindStart = Date.now();
       const existingTransaction = await this.walletTransactionRepo.findOne({
         where: { invoice_no: invoice.invoice_no },
       });
+      const walletTransactionFindEnd = Date.now();
+      console.log(
+        `[QUERY TIMER] walletTransactionRepo.findOne (check transaction) took ${(walletTransactionFindEnd - walletTransactionFindStart) / 1000}s`,
+      );
 
       // these already present...
       if (existingTransaction) {
@@ -890,14 +989,24 @@ export class RestyService {
         // );
         stats.skippedInvoices++;
         savedLog.skipped_invoices = stats.skippedInvoices;
+        const pointsLogSaveStart = Date.now();
         await this.pointsLogRepo.save(savedLog);
+        const pointsLogSaveEnd = Date.now();
+        console.log(
+          `[QUERY TIMER] pointsLogRepo.save (already processed skipped) took ${(pointsLogSaveEnd - pointsLogSaveStart) / 1000}s`,
+        );
 
         // Mark as claimed to avoid reprocessing
         if (!invoice.is_claimed) {
           invoice.is_claimed = true;
           invoice.claimed_points = existingTransaction.point_balance || 0;
           invoice.already_processed_invoice = true;
+          const restyIncoicesInfoRepoSaveStart = Date.now();
           await this.restyIncoicesInfoRepo.save(invoice);
+          const restyIncoicesInfoRepoSaveEnd = Date.now();
+          console.log(
+            `[QUERY TIMER] restyIncoicesInfoRepo.save (mark as claimed) took ${(restyIncoicesInfoRepoSaveEnd - restyIncoicesInfoRepoSaveStart) / 1000}s`,
+          );
         }
 
         return;
@@ -916,8 +1025,13 @@ export class RestyService {
       let rewardPoints = multiplier * earningRule.reward_points;
 
       // Apply tier multiplier if applicable
+      const getTierStart = Date.now();
       const currentCustomerTier = await this.tierService.getCurrentCustomerTier(
         customer.id,
+      );
+      const getTierEnd = Date.now();
+      console.log(
+        `[QUERY TIMER] tierService.getCurrentCustomerTier took ${(getTierEnd - getTierStart) / 1000}s`,
       );
       if (currentCustomerTier?.tier) {
         const matchingRuleTier = earningRule.tiers.find(
@@ -960,13 +1074,24 @@ export class RestyService {
 
         const transaction =
           this.walletTransactionRepo.create(transactionPayload);
+
+        const transactionSaveStart = Date.now();
         await this.walletTransactionRepo.save(transaction);
+        const transactionSaveEnd = Date.now();
+        console.log(
+          `[QUERY TIMER] walletTransactionRepo.save (add transaction) took ${(transactionSaveEnd - transactionSaveStart) / 1000}s`,
+        );
 
         // Update wallet balances
         customer.wallet.total_balance += finalPoints;
         customer.wallet.available_balance += finalPoints;
         customer.wallet.total_earned_points += finalPoints;
+        const walletRepoSaveStart = Date.now();
         await this.walletRepo.save(customer.wallet);
+        const walletRepoSaveEnd = Date.now();
+        console.log(
+          `[QUERY TIMER] walletRepo.save (update wallet balances) took ${(walletRepoSaveEnd - walletRepoSaveStart) / 1000}s`,
+        );
 
         stats.transactionsCreated++;
 
@@ -974,7 +1099,12 @@ export class RestyService {
         savedLog.transactions_created = stats.transactionsCreated;
         savedLog.processed_invoices =
           stats.transactionsCreated - stats.failedInvoices.length;
+        const pointsLogSaveStart = Date.now();
         await this.pointsLogRepo.save(savedLog);
+        const pointsLogSaveEnd = Date.now();
+        console.log(
+          `[QUERY TIMER] pointsLogRepo.save (after transaction) took ${(pointsLogSaveEnd - pointsLogSaveStart) / 1000}s`,
+        );
 
         console.log(
           `💰 Transaction created: ${finalPoints} points for invoice ${invoice.invoice_no}`,
@@ -987,15 +1117,25 @@ export class RestyService {
         stats.failedInvoices.push(invoice.invoice_no);
         savedLog.failed_invoices = stats.failedInvoices.length;
         savedLog.failed_invoice_ids = stats.failedInvoices;
+        const pointsLogSaveStart = Date.now();
         await this.pointsLogRepo.save(savedLog);
+        const pointsLogSaveEnd = Date.now();
+        console.log(
+          `[QUERY TIMER] pointsLogRepo.save (transaction error) took ${(pointsLogSaveEnd - pointsLogSaveStart) / 1000}s`,
+        );
         return;
       }
 
       // 🔹 Step 5: Send notification synchronously
+      const deviceTokenFindStart = Date.now();
       const deviceTokens = await this.deviceTokenRepo.find({
         where: { customer: { id: customer.id } },
         order: { createdAt: 'DESC' },
       });
+      const deviceTokenFindEnd = Date.now();
+      console.log(
+        `[QUERY TIMER] deviceTokenRepo.find (notification tokens) took ${(deviceTokenFindEnd - deviceTokenFindStart) / 1000}s`,
+      );
 
       const templateId = process.env.EARNED_POINTS_TEMPLATE_ID;
       const tokensString = deviceTokens.map((t) => t.token).join(',');
@@ -1025,12 +1165,22 @@ export class RestyService {
 
         // Send notification asynchronously (non-blocking, fire and forget)
         try {
+          const notifSendStart = Date.now();
           this.notificationService.sendToUser(payload, saveNotificationPayload);
+          const notifSendEnd = Date.now();
+          console.log(
+            `[QUERY TIMER] notificationService.sendToUser took ${(notifSendEnd - notifSendStart) / 1000}s`,
+          );
         } catch (notifErr) {
           stats.notificationsFailed++;
           savedLog.notifications_failed = stats.notificationsFailed;
           savedLog.error_message = `Notification failed for invoice ${invoice.invoice_no}: ${notifErr.message}`;
+          const pointsLogSaveStart = Date.now();
           await this.pointsLogRepo.save(savedLog);
+          const pointsLogSaveEnd = Date.now();
+          console.log(
+            `[QUERY TIMER] pointsLogRepo.save (notification error) took ${(pointsLogSaveEnd - pointsLogSaveStart) / 1000}s`,
+          );
           console.log(
             `⚠️ Notification failed for invoice ${invoice.invoice_no}:`,
             notifErr.message,
@@ -1039,7 +1189,12 @@ export class RestyService {
 
         stats.notificationsSent++;
         savedLog.notifications_sent = stats.notificationsSent;
+        const pointsLogSaveStart = Date.now();
         await this.pointsLogRepo.save(savedLog);
+        const pointsLogSaveEnd = Date.now();
+        console.log(
+          `[QUERY TIMER] pointsLogRepo.save (after notification) took ${(pointsLogSaveEnd - pointsLogSaveStart) / 1000}s`,
+        );
       }
 
       // 🔹 Step 6: Update invoice as claimed
@@ -1047,7 +1202,12 @@ export class RestyService {
       invoice.claimed_points = finalPoints;
       invoice.claim_id = uuidv4();
       invoice.claim_date = new Date().toISOString();
+      const restyIncoicesInfoRepoSaveStart = Date.now();
       await this.restyIncoicesInfoRepo.save(invoice);
+      const restyIncoicesInfoRepoSaveEnd = Date.now();
+      console.log(
+        `[QUERY TIMER] restyIncoicesInfoRepo.save (update as claimed) took ${(restyIncoicesInfoRepoSaveEnd - restyIncoicesInfoRepoSaveStart) / 1000}s`,
+      );
 
       console.log(`✅ Invoice ${invoice.invoice_no} processed successfully.`);
     } catch (error) {
@@ -1058,7 +1218,12 @@ export class RestyService {
       stats.failedInvoices.push(invoice.invoice_no);
       savedLog.failed_invoices = stats.failedInvoices.length;
       savedLog.failed_invoice_ids = stats.failedInvoices;
+      const pointsLogSaveStart = Date.now();
       await this.pointsLogRepo.save(savedLog);
+      const pointsLogSaveEnd = Date.now();
+      console.log(
+        `[QUERY TIMER] pointsLogRepo.save (main catch error) took ${(pointsLogSaveEnd - pointsLogSaveStart) / 1000}s`,
+      );
       throw error; // Re-throw to mark as failed in Promise.allSettled
     }
   }
