@@ -16,6 +16,14 @@ import { Customer } from 'src/customers/entities/customer.entity';
 @Index('idx_vehicles_self_listed_id', ['self_listed_id'])
 @Index('idx_vehicles_customer', ['customer'])
 @Index('idx_vehicles_status', ['status'])
+@Index('idx_vehicles_invoice_workstation', [
+  'last_invoice_no',
+  'workstation_code',
+  'workstation_name',
+])
+@Index('idx_vehicles_customer_plate_status', ['customer', 'plate_no', 'status'])
+@Index('idx_vehicles_customer_status', ['customer', 'status'])
+@Index('idx_vehicles_plate_status', ['plate_no', 'status'])
 export class Vehicle {
   @PrimaryGeneratedColumn()
   id: number;
@@ -179,4 +187,13 @@ export class Vehicle {
   // need to save this field so can communicate with GoGoMotor via webhook
   @Column({ type: 'int', nullable: true })
   self_listed_id: number;
+
+  @Column({ type: 'varchar', length: 128, nullable: true })
+  last_invoice_no: string;
+
+  @Column({ type: 'varchar', length: 128, nullable: true })
+  workstation_code: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  workstation_name: string;
 }

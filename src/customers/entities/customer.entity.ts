@@ -24,6 +24,12 @@ import { Wallet } from 'src/wallet/entities/wallet.entity';
 @Index('idx_customer_tenant', ['tenant'])
 @Index('idx_customer_bu', ['business_unit'])
 @Index('idx_customer_hashed_number', ['hashed_number'])
+@Index('idx_customer_uuid_status_bu_tenant', [
+  'uuid',
+  'status',
+  'business_unit',
+  'tenant',
+])
 export class Customer {
   @PrimaryGeneratedColumn()
   id: number;

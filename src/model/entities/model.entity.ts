@@ -1,6 +1,7 @@
 import {
   Column,
   Entity,
+  Index,
   JoinColumn,
   ManyToOne,
   OneToMany,
@@ -14,6 +15,11 @@ import { VariantEntity } from 'src/variant/entities/variant.entity';
     name: 'ASC',
   },
 })
+@Index('idx_models_name', ['name'])
+@Index('idx_models_nameAr', ['nameAr'])
+@Index('idx_models_year', ['year'])
+@Index('idx_models_modelId', ['modelId'])
+@Index('idx_models_name_year', ['name', 'year'])
 export class ModelEntity {
   @PrimaryGeneratedColumn()
   id: number;

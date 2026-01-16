@@ -1,11 +1,20 @@
 import { ModelEntity } from 'src/model/entities/model.entity';
-import { Column, Entity, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Column,
+  Entity,
+  Index,
+  OneToMany,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
 
 @Entity('makes', {
   orderBy: {
     name: 'ASC',
   },
 })
+@Index('idx_makes_name', ['name'])
+@Index('idx_makes_nameAr', ['nameAr'])
+@Index('idx_makes_makeId', ['makeId'])
 export class MakeEntity {
   @PrimaryGeneratedColumn()
   id: number;

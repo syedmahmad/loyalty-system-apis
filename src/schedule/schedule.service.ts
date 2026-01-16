@@ -287,6 +287,7 @@ export class ScheduleService {
               prev_available_points: wallet.available_balance,
               points_balance: unusedPoints,
               external_program_type: 'Loyalty Points Expiry Cron',
+              created_at: new Date(),
               expiry_date: null,
             },
             null,
