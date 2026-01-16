@@ -489,6 +489,7 @@ export class VehiclesService {
       }
 
       // Fetch feedbacks for all services, if any vehicleServices exist
+      // get all feedbacks provided by this customer.
       let feedbacks: any[] = [];
       if (vehicleServices.length) {
         try {

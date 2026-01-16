@@ -80,6 +80,7 @@ export class VehiclesController {
     );
   }
 
+  // get specific vehicle service list based on plat no and cusotmer id.
   @Post('/service-list')
   async getServiceList(
     @Headers() headers: Record<string, string>,
