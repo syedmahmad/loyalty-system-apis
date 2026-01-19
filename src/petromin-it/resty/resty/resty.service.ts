@@ -906,7 +906,7 @@ export class RestyService {
 
       // 🔹 Step 1: Get customer from pre-fetched map
       const hashedPhone = encrypt(invoice.phone);
-      const customer = customerMap.find((c) => c.hashed_number === hashedPhone);
+      let customer = customerMap.find((c) => c.hashed_number === hashedPhone);
 
       const businessUnitId = Number(process.env.NCMC_PETROMIN_BU);
       const tenantId = parseInt(process.env.NCMC_PETROMIN_TENANT!, 10);
@@ -916,6 +916,14 @@ export class RestyService {
           customer_id: customer.id,
           business_unit_id: businessUnitId,
           tenant_id: tenantId,
+        });
+
+        customer = await this.customerRepo.findOne({
+          where: {
+            hashed_number: customer.hashed_number,
+            status: In([1, 2]),
+          },
+          relations: ['tenant', 'business_unit', 'wallet'],
         });
       }
 
