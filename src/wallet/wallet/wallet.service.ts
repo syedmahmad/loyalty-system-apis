@@ -234,7 +234,14 @@ export class WalletService {
             WalletTransactionStatus.EXPIRED,
           ]),
         },
-        { wallet: { id: walletId }, source_type: IsNull() },
+        {
+          wallet: { id: walletId },
+          source_type: IsNull(),
+          status: In([
+            WalletTransactionStatus.ACTIVE,
+            WalletTransactionStatus.EXPIRED,
+          ]),
+        },
       ];
     } else if (transactionType === 'coupon') {
       whereClause = { wallet: { id: walletId }, source_type: 'coupon' };
