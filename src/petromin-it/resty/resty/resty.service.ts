@@ -911,7 +911,7 @@ export class RestyService {
       const businessUnitId = Number(process.env.NCMC_PETROMIN_BU);
       const tenantId = parseInt(process.env.NCMC_PETROMIN_TENANT!, 10);
 
-      if (!customer.wallet) {
+      if (!customer?.wallet || !customer?.wallet?.id) {
         await this.walletService.createWallet({
           customer_id: customer.id,
           business_unit_id: businessUnitId,
