@@ -3412,7 +3412,10 @@ export class CustomerService {
         ],
         where: {
           type: In([WalletTransactionType.BURN, WalletTransactionType.EARN]),
-          status: WalletTransactionStatus.ACTIVE,
+          status: In([
+            WalletTransactionStatus.ACTIVE,
+            WalletTransactionStatus.EXPIRED,
+          ]),
           wallet: { id: wallet.id },
           business_unit: { id: wallet?.business_unit?.id },
         },

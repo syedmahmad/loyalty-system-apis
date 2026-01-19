@@ -2,7 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as dayjs from 'dayjs';
 import { User } from 'src/users/entities/user.entity';
-import { ILike, IsNull, Not, Repository } from 'typeorm';
+import { ILike, IsNull, Not, Repository, In } from 'typeorm';
 import { CreateWalletOrderDto } from '../dto/create-wallet-order.dto';
 import { CreateWalletSettingsDto } from '../dto/create-wallet-settings.dto';
 import { CreateWalletTransactionDto } from '../dto/create-wallet-transaction.dto';
@@ -16,6 +16,7 @@ import {
 import {
   WalletTransaction,
   WalletTransactionType,
+  WalletTransactionStatus,
 } from '../entities/wallet-transaction.entity';
 import { Wallet } from '../entities/wallet.entity';
 import { v4 as uuidv4 } from 'uuid';
@@ -225,7 +226,14 @@ export class WalletService {
     if (transactionType === 'points') {
       // points = source_type != 'coupon' OR source_type IS NULL
       whereClause = [
-        { wallet: { id: walletId }, source_type: Not('coupon') },
+        {
+          wallet: { id: walletId },
+          source_type: Not('coupon'),
+          status: In([
+            WalletTransactionStatus.ACTIVE,
+            WalletTransactionStatus.EXPIRED,
+          ]),
+        },
         { wallet: { id: walletId }, source_type: IsNull() },
       ];
     } else if (transactionType === 'coupon') {
