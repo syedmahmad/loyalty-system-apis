@@ -908,6 +908,17 @@ export class RestyService {
       const hashedPhone = encrypt(invoice.phone);
       const customer = customerMap.find((c) => c.hashed_number === hashedPhone);
 
+      const businessUnitId = Number(process.env.NCMC_PETROMIN_BU);
+      const tenantId = parseInt(process.env.NCMC_PETROMIN_TENANT!, 10);
+
+      if (!customer.wallet) {
+        await this.walletService.createWallet({
+          customer_id: customer.id,
+          business_unit_id: businessUnitId,
+          tenant_id: tenantId,
+        });
+      }
+
       // Calculate base points
       const minAmountSpent =
         parseInt(earningRule.min_amount_spent as any) === 0
