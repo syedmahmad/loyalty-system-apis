@@ -3411,7 +3411,11 @@ export class CustomerService {
           'created_at',
         ],
         where: {
-          type: In([WalletTransactionType.BURN, WalletTransactionType.EARN]),
+          type: In([
+            WalletTransactionType.BURN,
+            WalletTransactionType.EARN,
+            WalletTransactionType.EXPIRE,
+          ]),
           status: In([
             WalletTransactionStatus.ACTIVE,
             WalletTransactionStatus.EXPIRED,
