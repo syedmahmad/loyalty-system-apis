@@ -571,13 +571,6 @@ export class RestyService {
       startTime.toISOString(),
     );
 
-    const savedLog = await this.pointsLogRepo.save(
-      this.pointsLogRepo.create({
-        status: PointsAssignmentStatus.STARTED,
-        started_at: startTime,
-      }),
-    );
-
     /** 📊 SAFE STATS */
     const stats = {
       newCustomers: 0,
@@ -588,6 +581,8 @@ export class RestyService {
       skippedInvoices: 0,
       failedInvoices: [] as string[],
     };
+
+    let savedLog: RestyPointsAssignmentLog;
 
     try {
       console.log('🔎 Fetching unclaimed invoices...');
@@ -604,14 +599,15 @@ export class RestyService {
 
       if (!unclaimedInvoices.length) {
         console.log('✅ No unclaimed invoices found.');
-
-        savedLog.status = PointsAssignmentStatus.SUCCESS;
-        savedLog.completed_at = new Date();
-        savedLog.duration_seconds = 0;
-        savedLog.total_unclaimed_invoices = 0;
-        await this.pointsLogRepo.save(savedLog);
         return;
       }
+
+      const savedLog = await this.pointsLogRepo.save(
+        this.pointsLogRepo.create({
+          status: PointsAssignmentStatus.STARTED,
+          started_at: startTime,
+        }),
+      );
 
       savedLog.total_unclaimed_invoices = unclaimedInvoices.length;
       await this.pointsLogRepo.save(savedLog);

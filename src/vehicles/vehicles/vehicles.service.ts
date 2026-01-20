@@ -214,10 +214,14 @@ export class VehiclesService {
             if (valuation?.data) {
               vehicle.last_valuation_date = new Date();
               const { good } = valuation.data;
+              const condition = good || Object.values(valuation.data)[0];
+              const conditionKey = good
+                ? 'good'
+                : Object.keys(valuation.data)[0];
               vehicle.car_value = valuation.data; // store only "data" object
-              vehicle.carCondition = 'good';
-              vehicle.minPrice = good.min;
-              vehicle.maxPrice = good.max;
+              vehicle.carCondition = conditionKey;
+              vehicle.minPrice = condition.min;
+              vehicle.maxPrice = condition.max;
             }
           } catch (err) {
             console.error(
@@ -1286,12 +1290,14 @@ export class VehiclesService {
 
           if (valuation?.data) {
             const { good } = valuation.data;
+            const condition = good || Object.values(valuation.data)[0];
+            const conditionKey = good ? 'good' : Object.keys(valuation.data)[0];
 
             vehicle.last_valuation_date = new Date();
             vehicle.car_value = valuation.data;
-            vehicle.carCondition = 'good';
-            vehicle.minPrice = good.min;
-            vehicle.maxPrice = good.max;
+            vehicle.carCondition = conditionKey;
+            vehicle.minPrice = condition.min;
+            vehicle.maxPrice = condition.max;
 
             await this.vehiclesRepository.save(vehicle);
           }
@@ -1931,13 +1937,15 @@ export class VehiclesService {
 
           if (valuation?.data) {
             const { good } = valuation.data;
+            const condition = good || Object.values(valuation.data)[0];
+            const conditionKey = good ? 'good' : Object.keys(valuation.data)[0];
 
             // Update vehicle with valuation data
             vehicle.last_valuation_date = new Date();
             vehicle.car_value = valuation.data;
-            vehicle.carCondition = 'good';
-            vehicle.minPrice = good.min;
-            vehicle.maxPrice = good.max;
+            vehicle.carCondition = conditionKey;
+            vehicle.minPrice = condition.min;
+            vehicle.maxPrice = condition.max;
 
             await this.vehiclesRepository.save(vehicle);
           }

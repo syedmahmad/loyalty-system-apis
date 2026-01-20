@@ -300,7 +300,7 @@ export class CustomerService {
       .select('customer.id', 'id')
       .addSelect('customer.name', 'name')
       .addSelect('customer.email', 'email')
-      .addSelect('customer.phone', 'phone')
+      .addSelect('customer.hashed_number', 'hashed_number')
       .addSelect('customer.status', 'status')
       .addSelect('customer.created_at', 'created_at')
       .addSelect('customer.city', 'city')
