@@ -15,6 +15,7 @@ import { UserOffer } from './entities/user-offer.entity';
 import { OfferLocalEntity } from './entities/offer-locale.entity';
 import { LanguageEntity } from 'src/master/language/entities/language.entity';
 import { OfferCouponAssignment } from './entities/offers-coupon-assignment.entity';
+import { OpenaiModule } from 'src/openai/openai.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { OfferCouponAssignment } from './entities/offers-coupon-assignment.entit
       OfferLocalEntity,
       LanguageEntity,
     ]),
+    OpenaiModule,
   ],
   controllers: [OffersController],
   providers: [OffersService, OciService],

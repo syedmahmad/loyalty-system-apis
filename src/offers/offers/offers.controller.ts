@@ -20,7 +20,11 @@ import * as jwt from 'jsonwebtoken';
 import { User } from 'src/users/entities/user.entity';
 import { AuthTokenGuard } from 'src/users/guards/authTokenGuard';
 import { Repository } from 'typeorm';
-import { CreateOfferDto, UpdateOfferDto } from '../dto/offers.dto';
+import {
+  CreateBusinessOfferDto,
+  CreateOfferDto,
+  UpdateOfferDto,
+} from '../dto/offers.dto';
 import { OffersService } from './offers.service';
 import { OfferAccessGuard } from './offers-access.guard';
 import { OFFERSAccess } from './offers-access.decorator';
@@ -235,6 +239,31 @@ export class OffersController {
       customer_id: customerId,
       langCode: langCode,
     });
+    return result;
+  }
+
+  @Get('/business-active-and-expired-offers/:tenant_id')
+  async getBusinessActiveAndExpiredOffers(
+    @Param('tenant_id') tenant_id: number,
+    @Query('langCode') langCode: string,
+  ) {
+    return await this.service.getBusinessActiveAndExpiredOffers(
+      tenant_id,
+      langCode,
+    );
+  }
+
+  @Post('/business/create/:tenantId/:businessUnitId')
+  async createBusinessOffer(
+    @Body() dto: CreateBusinessOfferDto,
+    @Param('tenantId') tenantId: number,
+    @Param('businessUnitId') businessUnitId: number,
+  ) {
+    const result = await this.service.createBusinessOffer(
+      dto,
+      tenantId,
+      businessUnitId,
+    );
     return result;
   }
 }

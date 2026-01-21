@@ -13,13 +13,18 @@ import { OciService } from 'src/oci/oci.service';
 import { Tenant } from 'src/tenants/entities/tenant.entity';
 import { User } from 'src/users/entities/user.entity';
 import { DataSource, In, Not, Repository } from 'typeorm';
-import { CreateOfferDto, UpdateOfferDto } from '../dto/offers.dto';
+import {
+  CreateBusinessOfferDto,
+  CreateOfferDto,
+  UpdateOfferDto,
+} from '../dto/offers.dto';
 import { OfferCustomerSegment } from '../entities/offer-customer-segments.entity';
 import { OffersEntity } from '../entities/offers.entity';
 import { UserOffer } from '../entities/user-offer.entity';
 import { ActiveStatus, OfferStatus } from '../type/types';
 import { OfferCouponAssignment } from '../entities/offers-coupon-assignment.entity';
 import { v4 as uuidv4 } from 'uuid';
+import { OpenAIService } from 'src/openai/openai/openai.service';
 
 @Injectable()
 export class OffersService {
@@ -61,6 +66,7 @@ export class OffersService {
     private readonly dataSource: DataSource,
 
     private readonly ociService: OciService,
+    private readonly openAIService: OpenAIService,
   ) {}
 
   async create(dto: CreateOfferDto, user: string, permission: any) {
@@ -977,5 +983,187 @@ export class OffersService {
       .join('')
       .slice(0, 6)
       .toUpperCase();
+  }
+
+  async getBusinessActiveAndExpiredOffers(
+    tenant_id: number,
+    langCode: string = 'en',
+  ) {
+    const language = await this.languageRepo.findOne({
+      where: { code: langCode },
+    });
+
+    if (!language) {
+      throw new BadRequestException('Invalid language code');
+    }
+
+    const allOffers = await this.offerRepository.find({
+      where: {
+        all_users: 1,
+        status: ActiveStatus.ACTIVE,
+        tenant_id,
+        show_in_app: 1,
+      },
+      order: { created_at: 'DESC' },
+    });
+
+    const removeExtraFields = [
+      'id',
+      'tenant_id',
+      'business_unit_id',
+      'external_system_id',
+      'all_users',
+      'created_by',
+      'created_at',
+      'updated_by',
+      'updated_at',
+      'business_unit',
+      'language',
+      'createdAt',
+      'updatedAt',
+      'createdBy',
+      'updatedBy',
+      'deletedAt',
+    ];
+
+    const today = new Date();
+    const available = [];
+    const expired = [];
+
+    for (const eachOffer of allOffers) {
+      const locale: any = eachOffer.locales.find(
+        (loc) =>
+          loc.language?.code === langCode || loc.language?.id === language?.id,
+      );
+
+      const filtered =
+        locale?.benefits &&
+        locale?.benefits?.map((b) => ({
+          [`name_${langCode}`]: b[`name_${langCode}`],
+          icon: b.icon,
+        }));
+
+      // ⚡ Run AI calls in parallel
+      const [additional_info, terms_and_conditions] = await Promise.all([
+        this.openAIService.summarize(locale.description, 120),
+        this.openAIService.formatToBullets(locale.term_and_condition, 1024),
+      ]);
+
+      // We want uuid of the offer (eachOffer.uuid), not locale uuid
+      const normalized = {
+        main_heading: locale.title,
+        summary: locale.subtitle,
+        additional_info,
+        terms_and_conditions,
+        uuid: eachOffer.uuid,
+        status: eachOffer.status,
+        date_from: eachOffer.date_from,
+        date_to: eachOffer.date_to,
+        station_type: eachOffer.station_type,
+        benefits: filtered || [],
+        coupon_enabled: eachOffer.enable_coupons,
+      };
+
+      // Sort into available or expired
+      if (eachOffer.date_to && new Date(eachOffer.date_to) < today) {
+        expired.push(this.omitExtraFields(normalized, removeExtraFields));
+      } else {
+        available.push(this.omitExtraFields(normalized, removeExtraFields));
+      }
+    }
+
+    return {
+      success: true,
+      message: 'Successfully fetched the data!',
+      result: { available, expired },
+      errors: [],
+    };
+  }
+
+  async createBusinessOffer(
+    dto: CreateBusinessOfferDto,
+    tenantId: number,
+    businessUnitId: number,
+  ) {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+    try {
+      const languages = await queryRunner.manager.find(LanguageEntity, {
+        where: { code: In(['en', 'ar']) },
+      });
+
+      // ⚡ Run AI calls in parallel
+      const [
+        additional_info_en,
+        terms_and_conditions_en,
+        additional_info_ar,
+        terms_and_conditions_ar,
+      ] = await Promise.all([
+        dto.additional_info_en
+          ? this.openAIService.summarize(dto.additional_info_en, 120)
+          : null,
+        dto.terms_and_conditions_en
+          ? this.openAIService.formatToBullets(
+              dto.terms_and_conditions_en,
+              1024,
+            )
+          : null,
+        dto.additional_info_ar
+          ? this.openAIService.summarize(dto.additional_info_ar, 120)
+          : null,
+        dto.terms_and_conditions_ar
+          ? this.openAIService.formatToBullets(
+              dto.terms_and_conditions_ar,
+              1024,
+            )
+          : null,
+      ]);
+
+      // Correct locale mapping
+      const locales = languages.map((language) => {
+        const isEnglish = language.code === 'en';
+
+        return {
+          language: { id: language.id },
+          title: isEnglish ? dto.main_heading_en : dto.main_heading_ar,
+          subtitle: isEnglish ? dto.summary_en : dto.summary_ar,
+          description: isEnglish ? additional_info_en : additional_info_ar,
+          term_and_condition: isEnglish
+            ? terms_and_conditions_en
+            : terms_and_conditions_ar,
+          desktop_image: dto.image_url,
+          mobile_image: dto.image_url,
+        };
+      });
+
+      const offer = this.offerRepository.create({
+        date_from: dto.date_from,
+        date_to: dto.date_to,
+        tenant_id: tenantId,
+        business_unit_id: businessUnitId,
+        station_type: dto.business_name,
+        created_by: 1,
+        updated_by: 1,
+        show_in_app: 1,
+        locales,
+      });
+
+      const savedOffer = await this.offerRepository.save(offer);
+      await queryRunner.commitTransaction();
+      const cleanOffer = this.omitExtraFields(savedOffer, [
+        'id',
+        'created_by',
+        'updated_by',
+        'created_at',
+        'updated_at',
+      ]);
+      return cleanOffer;
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
   }
 }
