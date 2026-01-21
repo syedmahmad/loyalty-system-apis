@@ -199,35 +199,45 @@ export class VehiclesService {
         // if (!vehicle.car_value && variantInfo?.variantId && year) {
         // If not client-provided, fetch car valuation ONLY IF not already set
         if (!('minPrice' in carValueToSet) && variantInfo?.variantId && year) {
-          try {
-            const valuation = await this.getCarValuation({
-              km: restBody?.last_mileage || 0,
-              trimId: variantInfo?.variantId || variant_id, // cannot pass modelId as bluebook does not work with it.
-              year,
-            });
-            // {
-            //   fair: { min: 61138.22472, max: 74724.49687999999 },
-            //   good: { min: 65514.6, max: 80073.4 },
-            //   vGood: { min: 68429.9997, max: 83636.6663 },
-            //   excellent: { min: 70991.62056, max: 86767.53624 }
-            // }
-            if (valuation?.data) {
-              vehicle.last_valuation_date = new Date();
-              const { good } = valuation.data;
-              const condition = good || Object.values(valuation.data)[0];
-              const conditionKey = good
-                ? 'good'
-                : Object.keys(valuation.data)[0];
-              vehicle.car_value = valuation.data; // store only "data" object
-              vehicle.carCondition = conditionKey;
-              vehicle.minPrice = condition.min;
-              vehicle.maxPrice = condition.max;
-            }
-          } catch (err) {
-            console.error(
-              'Car valuation integration failed:',
-              err?.message || err,
+          // Skip valuation for cars older than 20 years
+          const currentYear = new Date().getFullYear();
+          const carAge = currentYear - Number(year);
+
+          if (carAge > 20) {
+            console.log(
+              `Skipping valuation for car older than 20 years (${carAge} years old)`,
             );
+          } else {
+            try {
+              const valuation = await this.getCarValuation({
+                km: restBody?.last_mileage || 0,
+                trimId: variantInfo?.variantId || variant_id, // cannot pass modelId as bluebook does not work with it.
+                year,
+              });
+              // {
+              //   fair: { min: 61138.22472, max: 74724.49687999999 },
+              //   good: { min: 65514.6, max: 80073.4 },
+              //   vGood: { min: 68429.9997, max: 83636.6663 },
+              //   excellent: { min: 70991.62056, max: 86767.53624 }
+              // }
+              if (valuation?.data) {
+                vehicle.last_valuation_date = new Date();
+                const { good } = valuation.data;
+                const condition = good || Object.values(valuation.data)[0];
+                const conditionKey = good
+                  ? 'good'
+                  : Object.keys(valuation.data)[0];
+                vehicle.car_value = valuation.data; // store only "data" object
+                vehicle.carCondition = conditionKey;
+                vehicle.minPrice = condition.min;
+                vehicle.maxPrice = condition.max;
+              }
+            } catch (err) {
+              console.error(
+                'Car valuation integration failed:',
+                err?.message || err,
+              );
+            }
           }
         }
 
@@ -957,9 +967,9 @@ export class VehiclesService {
                 customer: { id: customer.id },
                 last_mileage: eachVehicle.last_mileage || null,
                 last_service_date: eachVehicle.last_service_date || null,
-                last_invoice_no: eachVehicle?.invoice_number || null,
-                workstation_code: eachVehicle?.branch_code || null,
-                workstation_name: eachVehicle?.branch_name || null,
+                last_invoice_no: eachVehicle?.last_invoice_no || null,
+                workstation_code: eachVehicle?.last_branch_code || null,
+                workstation_name: eachVehicle?.last_branch_name || null,
               });
             } else {
               // Attempt to find an existing vehicle with the same plate_no and customer
@@ -1276,6 +1286,16 @@ export class VehiclesService {
         }
 
         if (Number(variantId) === -1) {
+          continue;
+        }
+
+        // Skip valuation for cars older than 20 years
+        const currentYear = new Date().getFullYear();
+        const carAge = currentYear - Number(year);
+        if (carAge > 20) {
+          console.log(
+            `Skipping valuation for car older than 20 years (${carAge} years old)`,
+          );
           continue;
         }
 
@@ -1919,6 +1939,16 @@ export class VehiclesService {
 
         // Skip if variant_id is -1
         if (Number(variantId) === -1) {
+          continue;
+        }
+
+        // Skip valuation for cars older than 20 years
+        const currentYear = new Date().getFullYear();
+        const carAge = currentYear - Number(year);
+        if (carAge > 20) {
+          console.log(
+            `Skipping valuation for car older than 20 years (${carAge} years old)`,
+          );
           continue;
         }
 
