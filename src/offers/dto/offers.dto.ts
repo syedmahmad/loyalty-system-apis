@@ -163,3 +163,59 @@ export class CreateOfferDto {
 export class UpdateOfferDto extends PartialType(CreateOfferDto) {
   updated_by?: number;
 }
+
+export class CreateBusinessOfferDto {
+  // Dates
+  @IsDateString()
+  @IsNotEmpty()
+  date_from: string;
+
+  @IsDateString()
+  @IsNotEmpty()
+  date_to: string;
+
+  // Main Heading
+  @IsString()
+  @IsOptional()
+  main_heading_en?: string;
+
+  @IsString()
+  @IsOptional()
+  main_heading_ar?: string;
+
+  // Summary
+  @IsString()
+  @IsOptional()
+  summary_en?: string;
+
+  @IsString()
+  @IsOptional()
+  summary_ar?: string;
+
+  // Additional Info
+  @IsString()
+  @IsOptional()
+  additional_info_en?: string;
+
+  @IsString()
+  @IsOptional()
+  additional_info_ar?: string;
+
+  // Terms & Conditions
+  @IsString()
+  @IsOptional()
+  terms_and_conditions_en?: string;
+
+  @IsString()
+  @IsOptional()
+  terms_and_conditions_ar?: string;
+
+  // Business Name
+  @IsString()
+  @IsOptional()
+  business_name?: string;
+
+  @IsString()
+  @IsOptional()
+  image_url: string;
+}
