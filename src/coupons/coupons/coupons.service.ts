@@ -2131,7 +2131,7 @@ export class CouponsService {
     });
 
     const customerTierInfo = await this.tiersService.getCurrentCustomerTier(
-      customer.id,
+      customer?.id,
       language_code,
     );
 
