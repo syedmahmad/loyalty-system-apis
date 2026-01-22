@@ -63,7 +63,7 @@ import { CustomerDto } from './dto/customer.dto';
 import { NotificationService } from 'src/petromin-it/notification/notification/notifications.service';
 // import { CustomerPreference } from 'src/petromin-it/preferences/entities/customer-preference.entity';
 import { OpenAIService } from 'src/openai/openai/openai.service';
-import { BUSINESS_UNITS_WITH_UUID } from './type/type';
+// import { BUSINESS_UNITS_WITH_UUID } from './type/type';
 import axios from 'axios';
 import { DeviceToken } from 'src/petromin-it/notification/entities/device-token.entity';
 import { decrypt, encrypt } from 'src/helpers/encryption';
@@ -175,7 +175,7 @@ export class CustomerService {
           external_customer_id: customerDto.external_customer_id,
           business_unit: { id: businessUnit.id },
         },
-        relations: ['business_unit'],
+        relations: ['business_unit', 'tenant'],
       });
 
       if (existing) {
@@ -199,9 +199,12 @@ export class CustomerService {
           status: 'exists',
           qr_code_url: `/qrcodes/qr/${existCustomerQr.short_id}`,
         };
-        if (BUSINESS_UNITS_WITH_UUID.includes(existing.business_unit.id)) {
+        if (existing.tenant.name === 'NATC') {
           responseObj['uuid'] = existing.uuid;
         }
+        // if (BUSINESS_UNITS_WITH_UUID.includes(existing.business_unit.id)) {
+        //   responseObj['uuid'] = existing.uuid;
+        // }
 
         // Return status 'exists' and QR code URL
         results.push(responseObj);
@@ -230,7 +233,6 @@ export class CustomerService {
         hashed_number: hashedPhone,
       });
       const saved = await this.customerRepo.save(customer);
-
       // Create and save QR code for the new customer
       const saveCustomerQrCodeInfo = await this.createAndSaveCustomerQrCode(
         customerUuid,
@@ -253,9 +255,12 @@ export class CustomerService {
         qr_code_url: `/qrcodes/qr/${saveCustomerQrCodeInfo.short_id}`,
       };
 
-      if (BUSINESS_UNITS_WITH_UUID.includes(saved.business_unit.id)) {
+      if (saved.tenant.name === 'NATC') {
         responseObj['uuid'] = saved.uuid;
       }
+      // if (BUSINESS_UNITS_WITH_UUID.includes(saved.business_unit.id)) {
+      //   responseObj['uuid'] = saved.uuid;
+      // }
 
       // Return status 'created' and QR code URL
       results.push(responseObj);
