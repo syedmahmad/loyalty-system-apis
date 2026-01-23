@@ -32,6 +32,7 @@ import { SchedulerModule } from './schedule/schedule.module';
 import { OpenaiModule } from './openai/openai.module';
 import { AuthModule } from 'src/petromin-it/auth/auth.module';
 import { AxiosLoggerInterceptor } from 'src/interceptos/axios-request-log.interceptor';
+import { NewrelicLoggerService } from './common/services/newrelic-logger.service';
 import { HttpModule } from '@nestjs/axios';
 import { CustomerProfileModule } from './petromin-it/profile/profile.module';
 import { ReferralModule } from './petromin-it/referral/referral.module';
@@ -122,7 +123,7 @@ import { MasterModule } from './master/master.module';
     MasterModule,
   ],
   controllers: [AppController],
-  providers: [AppService, AxiosLoggerInterceptor],
+  providers: [AppService, AxiosLoggerInterceptor, NewrelicLoggerService],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
