@@ -588,6 +588,180 @@ export class VehiclesService {
     }
   }
 
+  /**
+   * Optimized: Returns the service list for a vehicle using stored Resty IDs.
+   *
+   * Process:
+   * 1. Get active customer from local DB using uuid
+   * 2. Get active vehicle from local DB using customer.id and plate_no
+   * 3. Extract resty_customer_id and resty_vehicle_id from vehicle
+   * 4. If either ID is missing, return "Service not found"
+   * 5. Fetch service history directly using the stored IDs
+   * 6. Merge feedbacks if available
+   */
+  async getServiceListV1(bodyPayload) {
+    const { customerId, plateNo, businessUnitId, tenantId } = bodyPayload;
+    if (!customerId) throw new NotFoundException('Customer not found');
+
+    try {
+      // Step 1: Get active customer from local DB
+      const customer = await this.customerRepo.findOne({
+        where: {
+          uuid: customerId,
+          status: 1,
+          business_unit: { id: parseInt(businessUnitId) },
+          tenant: { id: parseInt(tenantId) },
+        },
+      });
+
+      if (!customer) throw new NotFoundException('Customer not found');
+
+      // Step 2: Get active vehicle from local DB
+      if (!plateNo) {
+        return {
+          success: false,
+          message: 'plateNo is required',
+          result: null,
+          errors: ['plateNo parameter is missing'],
+        };
+      }
+
+      const vehicle = await this.vehiclesRepository.findOne({
+        where: {
+          customer: { id: customer.id },
+          plate_no: plateNo,
+          status: 1,
+        },
+      });
+
+      if (!vehicle) {
+        return {
+          success: true,
+          message: 'Vehicle not found for this customer',
+          result: null,
+          errors: [],
+        };
+      }
+
+      // Step 3: Extract stored Resty IDs
+      const { resty_customer_id, resty_vehicle_id } = vehicle;
+
+      // Step 4: Return error if either ID is missing
+      if (!resty_customer_id || !resty_vehicle_id) {
+        return {
+          success: true,
+          message: 'Service history not available for this vehicle',
+          result: null,
+          errors: [],
+        };
+      }
+
+      // Step 5: Fetch service history directly using stored IDs
+      const loginInfo = await this.customerLoginInResty();
+      if (!loginInfo?.access_token) {
+        return {
+          success: true,
+          message: 'Service history not available for this vehicle',
+          result: null,
+          errors: [],
+        };
+      }
+
+      const serviceList = await this.getVehicleServiceListFromResty({
+        customer_id: resty_customer_id,
+        vehicle_id: resty_vehicle_id,
+        loginInfo,
+      });
+
+      // If no services found, return null
+      if (
+        !serviceList ||
+        !Array.isArray(serviceList) ||
+        serviceList.length === 0
+      ) {
+        return {
+          success: true,
+          message: 'No services found for this vehicle',
+          result: null,
+          errors: [],
+        };
+      }
+
+      // Add invoiceURL and feedback=null to each service
+      const servicesWithUrl = serviceList.map((val: any) => ({
+        ...val,
+        invoiceURL: 'https://www.gogomotor.com/', // need to hit another API call to get url from mac
+        feedback: null,
+      }));
+
+      const vehicleData = {
+        vehicle_id: resty_vehicle_id,
+        make: vehicle?.make,
+        model: vehicle?.model,
+        year: vehicle?.year,
+        last_mileage: vehicle?.last_mileage,
+        last_service_date: vehicle?.last_service_date,
+        vin: vehicle?.vin_number,
+        plate_no: vehicle?.plate_no,
+        services: servicesWithUrl,
+      };
+
+      // Step 6: Fetch and merge feedbacks if services exist
+      let feedbacks: any[] = [];
+      try {
+        const feedbackRes = await axios.get(
+          `${process.env.DRAGON_WORKSHOPS_URL}/feedback?customer_id=${customerId}`,
+          {
+            headers: {
+              'auth-key': process.env.DRAGON_WORKSHOPS_AUTH_KEY,
+            },
+          },
+        );
+        feedbacks = feedbackRes.data?.feedback?.workshop || [];
+      } catch (err) {
+        console.error(
+          'Error fetching feedbacks:',
+          err?.response?.data || err.message || err,
+        );
+      }
+
+      // Merge feedback onto services
+      let finalResult = vehicleData;
+      if (feedbacks.length) {
+        finalResult = {
+          ...vehicleData,
+          services: vehicleData.services.map((service) => {
+            const feedback = feedbacks.find(
+              (fb) =>
+                fb.workstation_code === service.BranchCode &&
+                fb.workstation_name === service.BranchName &&
+                fb.invoice_number === service.InvoiceNumber,
+            );
+
+            return {
+              ...service,
+              feedback: feedback
+                ? {
+                    rating: feedback.rating || '',
+                  }
+                : null,
+            };
+          }),
+        };
+      }
+
+      return {
+        success: true,
+        message: 'Successfully fetched the data!',
+        result: finalResult,
+        errors: [],
+      };
+    } catch (error: any) {
+      console.log('error in service history', error);
+      throw error;
+    }
+  }
+
   async getLastServiceFeedback(bodyPayload) {
     const { customerId, businessUnitId, tenantId } = bodyPayload;
     if (!customerId) throw new NotFoundException('Customer not found');

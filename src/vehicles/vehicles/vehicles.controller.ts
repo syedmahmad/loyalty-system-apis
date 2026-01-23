@@ -81,6 +81,23 @@ export class VehiclesController {
   }
 
   // get specific vehicle service list based on plat no and cusotmer id.
+  @Post('/service-list-v1')
+  async getServiceListV1(
+    @Headers() headers: Record<string, string>,
+    @Body() body: { customer_id: string; plateNo: string },
+  ) {
+    const tenantId = headers['x-tenant-id'];
+    const businessUnitId = headers['x-business-unit-id'];
+
+    return await this.service.getServiceList({
+      customerId: body.customer_id,
+      plateNo: body.plateNo,
+      tenantId,
+      businessUnitId,
+    });
+  }
+
+  // get specific vehicle service list based on plat no and cusotmer id.
   @Post('/service-list')
   async getServiceList(
     @Headers() headers: Record<string, string>,
