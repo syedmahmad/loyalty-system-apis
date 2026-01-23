@@ -970,6 +970,9 @@ export class VehiclesService {
                 last_invoice_no: eachVehicle?.last_invoice_no || null,
                 workstation_code: eachVehicle?.last_branch_code || null,
                 workstation_name: eachVehicle?.last_branch_name || null,
+                resty_vehicle_id: eachVehicle?.vehicle_id || null,
+                resty_customer_id:
+                  customerInfoFromResty[0]?.customer_id || null,
               });
             } else {
               // Attempt to find an existing vehicle with the same plate_no and customer
@@ -994,6 +997,9 @@ export class VehiclesService {
                   last_invoice_no: eachVehicle?.invoice_number || null,
                   workstation_code: eachVehicle?.branch_code || null,
                   workstation_name: eachVehicle?.branch_name || null,
+                  resty_vehicle_id: eachVehicle?.vehicle_id || null,
+                  resty_customer_id:
+                    customerInfoFromResty[0]?.customer_id || null,
                 });
               }
             }

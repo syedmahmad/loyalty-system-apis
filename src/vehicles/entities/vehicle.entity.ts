@@ -196,4 +196,10 @@ export class Vehicle {
 
   @Column({ type: 'varchar', length: 255, nullable: true })
   workstation_name: string;
+
+  @Column({ type: 'varchar', length: 128, nullable: true })
+  resty_customer_id: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  resty_vehicle_id: string;
 }
