@@ -89,7 +89,7 @@ export class VehiclesController {
     const tenantId = headers['x-tenant-id'];
     const businessUnitId = headers['x-business-unit-id'];
 
-    return await this.service.getServiceList({
+    return await this.service.getServiceListV1({
       customerId: body.customer_id,
       plateNo: body.plateNo,
       tenantId,
