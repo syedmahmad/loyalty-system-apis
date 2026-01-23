@@ -3,11 +3,12 @@ import { LogService } from './log.service';
 import { LoggingInterceptor } from './logging.interceptor';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { GateWayLog } from './entities/log.entity';
+import { NewrelicLoggerService } from '../common/services/newrelic-logger.service';
 
 @Module({
   imports: [TypeOrmModule.forFeature([GateWayLog])],
-  providers: [LogService, LoggingInterceptor],
+  providers: [LogService, LoggingInterceptor, NewrelicLoggerService],
   controllers: [],
-  exports: [LogService, LoggingInterceptor],
+  exports: [LogService, LoggingInterceptor, NewrelicLoggerService],
 })
 export class GateWayLogModule {}
