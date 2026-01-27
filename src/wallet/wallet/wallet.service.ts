@@ -273,6 +273,9 @@ export class WalletService {
       relations: ['orders'],
       take,
       skip,
+      order: {
+        created_at: 'DESC', // Ensure most recent first
+      },
     });
     return {
       data,
