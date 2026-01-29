@@ -27,6 +27,11 @@ export class CustomerProfileController {
     return await this.profileService.getProfile(id, languague_code);
   }
 
+  @Get('/dragon')
+  async getCustomerWithVehiclesForDragon(@Param('id') id: string) {
+    return await this.profileService.getCustomerWithVehiclesForDragon(id);
+  }
+
   @Put()
   async updateProfile(@Param('id') id: string, @Body() dto: UpdateProfileDto) {
     return await this.profileService.updateProfile(id, dto);

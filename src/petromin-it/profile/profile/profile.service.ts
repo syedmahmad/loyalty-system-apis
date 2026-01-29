@@ -141,6 +141,59 @@ export class CustomerProfileService {
     };
   }
 
+  async getCustomerWithVehiclesForDragon(customerId: string) {
+    const customer = await this.customerRepo.findOne({
+      where: { uuid: customerId },
+    });
+
+    if (!customer) throw new NotFoundException('Customer not found');
+
+    try {
+      const decryptedEmail = await this.ociService.decryptData(customer.email);
+      customer.email = decryptedEmail;
+    } catch (err) {
+      console.error('Email Decryption failed:');
+    }
+
+    try {
+      const decryptedPhone = await this.ociService.decryptData(customer.phone);
+      customer.phone = decryptedPhone;
+    } catch (err) {
+      console.error('Phone Decryption failed:');
+    }
+
+    const vehicles = await this.vehiclesRepository.find({
+      where: { customer: { id: customer.id } },
+    });
+
+    return {
+      success: true,
+      message: 'This is the requested customer information',
+      result: {
+        customer: {
+          uuid: customer.uuid,
+          is_new_user: customer.is_new_user,
+          first_name: customer.first_name,
+          last_name: customer.last_name,
+          email: customer.email,
+          phone: customer.phone,
+          gender: customer.gender,
+          DOB: customer.DOB,
+          image_url: customer.image_url,
+          address: customer.address,
+          city: customer.city,
+          referral_code: customer.referral_code,
+          country: customer.country,
+          created_at: customer.created_at,
+          updated_at: customer.updated_at,
+          // external_customer_id: customer.external_customer_id,
+        },
+        vehicles: vehicles,
+      },
+      errors: [],
+    };
+  }
+
   async updateProfile(customerId: string, dto: UpdateProfileDto) {
     const customer = await this.customerRepo.findOne({
       where: { uuid: customerId, status: 1 },
