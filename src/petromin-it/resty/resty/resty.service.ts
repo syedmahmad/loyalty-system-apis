@@ -62,6 +62,47 @@ export class RestyService {
   ) {}
 
   /**
+   * ✅ API 2: Return latest invoice_date stored in system
+   */
+  async getCustomerPEInvoices(filters: any) {
+    // Acceptable filters: customer_mobile, vin, plat_number (any/all, OR logic)
+    const { customer_mobile, vin, plate_number } = filters ?? {};
+
+    // Build dynamic OR conditions array
+    const orConditions = [];
+
+    if (customer_mobile) {
+      orConditions.push({ customer_mobile });
+    }
+    if (vin) {
+      orConditions.push({ vin });
+    }
+    if (plate_number) {
+      orConditions.push({ plate_number });
+    }
+
+    let whereClause = undefined;
+
+    if (orConditions.length === 0) {
+      // No filter provided, return empty result
+      return [];
+    } else if (orConditions.length === 1) {
+      // One filter, use direct where
+      whereClause = orConditions[0];
+    } else {
+      // Multiple filters, use OR logic
+      whereClause = orConditions;
+    }
+
+    const invoices = await this.restyInvoiceCleanDataRepo.find({
+      where: whereClause,
+      order: { invoice_date: 'DESC' },
+    });
+
+    return invoices;
+  }
+
+  /**
    * Process datamart payload and compute summary totals and latest invoice timestamp
    */
   async processDatamart(payload: any) {

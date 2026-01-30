@@ -22,6 +22,12 @@ export class RestyController {
     private readonly txLogRepo: Repository<TransactionSyncLog>,
   ) {}
 
+  // Petromin Express
+  @Post('')
+  async getCustomerPEInvoices(@Body() filters: any) {
+    return await this.restyService.getCustomerPEInvoices(filters);
+  }
+
   @Post('datamart/bulk-create')
   async bulkCreate(@Req() req: Request, @Body() payload: any) {
     const authHeader = req.headers['authorization'];
