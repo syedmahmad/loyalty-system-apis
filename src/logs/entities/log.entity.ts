@@ -19,10 +19,10 @@ export class Log {
   @Column('longtext', { nullable: true })
   responseBody: string;
 
-  @Column('text')
+  @Column({ type: 'varchar', length: 512 })
   url: string;
 
-  @Column('text')
+  @Column({ type: 'varchar', length: 10 })
   method: string;
 
   @Column('int')
