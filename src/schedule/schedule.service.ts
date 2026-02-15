@@ -38,56 +38,56 @@ export class ScheduleService {
    * - Deactivates each expired campaign by setting its 'active' property to false.
    * - Saves the updated campaign and logs the deactivation.
    */
-  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
-  async handleCron() {
-    return newrelic.startBackgroundTransaction(
-      'campaignExpiry',
-      'Cron',
-      async () => {
-        const tx = newrelic.getTransaction();
+  // @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
+  // async handleCron() {
+  //   return newrelic.startBackgroundTransaction(
+  //     'campaignExpiry',
+  //     'Cron',
+  //     async () => {
+  //       const tx = newrelic.getTransaction();
 
-        try {
-          const hostName = os.hostname();
-          const localUrl = 'http://localhost:3000';
-          if (
-            process.env.PROD_SERVER_HOST_NAME === hostName ||
-            process.env.DEV_SERVER_HOST_NAME === hostName ||
-            process.env.UAT_SERVER_HOST_NAME === hostName ||
-            process.env.LOCAL_SERVER_HOST_NAME === localUrl
-          ) {
-            // Set 'today' to midnight (00:00:00) to match campaigns ending today
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            console.log('Running campaign expiry check...');
+  //       try {
+  //         const hostName = os.hostname();
+  //         const localUrl = 'http://localhost:3000';
+  //         if (
+  //           process.env.PROD_SERVER_HOST_NAME === hostName ||
+  //           process.env.DEV_SERVER_HOST_NAME === hostName ||
+  //           process.env.UAT_SERVER_HOST_NAME === hostName ||
+  //           process.env.LOCAL_SERVER_HOST_NAME === localUrl
+  //         ) {
+  //           // Set 'today' to midnight (00:00:00) to match campaigns ending today
+  //           const today = new Date();
+  //           today.setHours(0, 0, 0, 0);
+  //           console.log('Running campaign expiry check...');
 
-            const qb = this.campaignRepository
-              .createQueryBuilder('campaign')
-              .leftJoinAndSelect('campaign.locales', 'locale')
-              .where('campaign.end_date = :today', { today })
-              .andWhere('campaign.active = :active', { active: true });
-            // .andWhere('locale.language_code = :langCode', { langCode: 'en' });
+  //           const qb = this.campaignRepository
+  //             .createQueryBuilder('campaign')
+  //             .leftJoinAndSelect('campaign.locales', 'locale')
+  //             .where('campaign.end_date = :today', { today })
+  //             .andWhere('campaign.active = :active', { active: true });
+  //           // .andWhere('locale.language_code = :langCode', { langCode: 'en' });
 
-            const expiredCampaigns: any = await qb.getMany();
+  //           const expiredCampaigns: any = await qb.getMany();
 
-            for (const campaign of expiredCampaigns) {
-              campaign.active = false;
-              await this.campaignRepository.save(campaign);
-              console.log(
-                `Deactivated campaign: ${campaign?.locales?.[0]?.name}`,
-              );
-            }
-          }
-        } catch (error) {
-          newrelic.noticeError(error);
-          console.error('Campaign expiry cron error:', error);
-        } finally {
-          tx.end();
-        }
-      },
-    );
-  }
+  //           for (const campaign of expiredCampaigns) {
+  //             campaign.active = false;
+  //             await this.campaignRepository.save(campaign);
+  //             console.log(
+  //               `Deactivated campaign: ${campaign?.locales?.[0]?.name}`,
+  //             );
+  //           }
+  //         }
+  //       } catch (error) {
+  //         newrelic.noticeError(error);
+  //         console.error('Campaign expiry cron error:', error);
+  //       } finally {
+  //         tx.end();
+  //       }
+  //     },
+  //   );
+  // }
 
-  // Cron job to remove logs older than 30 days
+  // Cron job to remove logs older than 10 days
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
   async removeOldLogs() {
     return newrelic.startBackgroundTransaction(
@@ -106,7 +106,7 @@ export class ScheduleService {
             process.env.LOCAL_SERVER_HOST_NAME === localUrl
           ) {
             const date = new Date();
-            date.setDate(date.getDate() - 30);
+            date.setDate(date.getDate() - 10);
 
             try {
               const result = await this.logRepository.delete({

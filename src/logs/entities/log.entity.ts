@@ -4,9 +4,11 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
+  Index,
 } from 'typeorm';
 
 @Entity('logs')
+@Index('idx_logs_url', ['url'])
 export class Log {
   @PrimaryGeneratedColumn()
   id: number;
