@@ -9,6 +9,7 @@ import {
 
 @Entity('gateway-logs')
 @Index('idx_gateway-logs_url', ['url'])
+@Index('idx_gateway-logs_created_at', ['createdAt'])
 export class GateWayLog {
   @PrimaryGeneratedColumn()
   id: number;

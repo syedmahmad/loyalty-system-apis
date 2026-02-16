@@ -9,6 +9,7 @@ import {
 
 @Entity('logs')
 @Index('idx_logs_url', ['url'])
+@Index('idx_logs_created_at', ['createdAt'])
 export class Log {
   @PrimaryGeneratedColumn()
   id: number;
