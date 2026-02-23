@@ -433,7 +433,10 @@ export class RulesService extends BaseService {
       rule.frequency = dto.frequency ?? rule.frequency;
       rule.burn_type = dto.burn_type ?? null;
       rule.reward_condition = dto.reward_condition ?? rule.reward_condition;
-      rule.dynamic_conditions = dto.dynamic_conditions || null;
+      // rule.dynamic_conditions = dto.dynamic_conditions || null;
+      rule.dynamic_conditions = this.normalizeDynamicConditions(
+        dto.dynamic_conditions,
+      );
       rule.is_priority = dto.is_priority;
       rule.business_unit_id = dto.business_unit_id;
       rule.validity_after_assignment = dto.validity_after_assignment
@@ -529,5 +532,75 @@ export class RulesService extends BaseService {
     } finally {
       await queryRunner.release();
     }
+  }
+  // Add near top of the class (RulesService)
+  private normalizeDynamicConditions(
+    rawConditions?: any[] | null,
+  ): any[] | null {
+    if (
+      !rawConditions ||
+      !Array.isArray(rawConditions) ||
+      rawConditions.length === 0
+    ) {
+      return null;
+    }
+
+    const normalized = rawConditions.map((c) => {
+      // defensively copy
+      const condition: any = {
+        condition_type: c?.condition_type ?? c?.type ?? null,
+        condition_operator: c?.condition_operator ?? c?.operator ?? null,
+        condition_value: c?.condition_value ?? c?.value ?? null,
+        // keep any other keys (if you store them)
+        ...Object.keys(c)
+          .filter(
+            (k) =>
+              ![
+                'condition_type',
+                'condition_operator',
+                'condition_value',
+                'type',
+                'operator',
+                'value',
+              ].includes(k),
+          )
+          .reduce((acc, k) => ({ ...acc, [k]: c[k] }), {}),
+      };
+
+      // normalize strings
+      if (typeof condition.condition_type === 'string') {
+        condition.condition_type = condition.condition_type.trim();
+      }
+      if (typeof condition.condition_operator === 'string') {
+        condition.condition_operator = condition.condition_operator.trim();
+      }
+      // treat empty string as undefined
+      if (condition.condition_operator === '')
+        condition.condition_operator = undefined;
+
+      // If operator indicates ANY or value is '*' or value is missing -> canonicalize to ANY/*.
+      const opUp = (condition.condition_operator || '')
+        .toString()
+        .toUpperCase();
+      const val = condition.condition_value;
+
+      if (
+        opUp === 'ANY' ||
+        val === '*' ||
+        val === '*' ||
+        val === null ||
+        val === undefined
+      ) {
+        condition.condition_operator = 'ANY';
+        condition.condition_value = '*';
+      } else if (typeof condition.condition_value === 'string') {
+        // Trim value if string
+        condition.condition_value = condition.condition_value.trim();
+      }
+
+      return condition;
+    });
+
+    return normalized;
   }
 }
