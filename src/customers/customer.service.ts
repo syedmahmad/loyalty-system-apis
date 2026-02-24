@@ -2677,20 +2677,367 @@ export class CustomerService {
   //   }
   // }
 
+  // async gvrEarnWithEvent(bodyPayload: GvrEarnBurnWithEventsDto) {
+  //   const { customer_id, BUId, metadata, tenantId } = bodyPayload;
+
+  //   // 1. Find customer by uuid
+  //   const customer = await this.customerRepo.findOne({
+  //     where: {
+  //       uuid: customer_id,
+  //       business_unit: { id: parseInt(BUId) },
+  //       status: 1,
+  //     },
+  //   });
+  //   if (!customer) throw new NotFoundException('Customer not found');
+
+  //   // 2. Load all dynamic earning rules for tenant
+  //   const rules = await this.ruleRepo.find({
+  //     where: {
+  //       status: 1,
+  //       rule_type: Not('burn'),
+  //       tenant_id: Number(tenantId),
+  //       dynamic_conditions: Not(IsNull()),
+  //     },
+  //   });
+
+  //   if (!rules || rules.length === 0) {
+  //     throw new NotFoundException('Earning rule not found');
+  //   }
+
+  //   // Use a Map to accumulate matched rules and sum amounts of matching products per rule
+  //   // key: rule.uuid, value: { rule: Rule, amount: number }
+  //   const matchedRulesMap: Record<
+  //     string,
+  //     { rule: any; amount: number; matchedProducts: any[] }
+  //   > = {};
+
+  //   // iterate products in metadata (if any)
+  //   const products = Array.isArray(metadata?.products) ? metadata.products : [];
+
+  //   // If there are no products, still allow matching if conditions don't require product fields
+  //   for (const rule of rules) {
+  //     // if rule.dynamic_conditions is falsy, skip (we filtered earlier but be defensive)
+  //     if (
+  //       !Array.isArray(rule.dynamic_conditions) ||
+  //       rule.dynamic_conditions.length === 0
+  //     ) {
+  //       continue;
+  //     }
+
+  //     // For each product, check if it satisfies all product-specific dynamic conditions
+  //     // Also support rules that match metadata-level conditions (store_id etc).
+  //     // We'll use two matching modes:
+  //     //  - product-level: conditions that reference product fields (product_name, productcode, quantity, amount) must be checked against each product
+  //     //  - metadata-level: conditions that reference metadata-level fields (store_id etc) can be checked once per request
+
+  //     // Pre-check metadata-level conditions that are not product specific.
+  //     // If any metadata-level condition fails, then this rule cannot match for any product.
+  //     // dynamic_conditions: [{"condition_type":"store_id","condition_operator":"ANY","condition_value":"*"},{"condition_type":"name","condition_operator":"ANY","condition_value":"*"}]
+  //     let metadataConditionsOk = true;
+  //     for (const cond of rule.dynamic_conditions) {
+  //       const condType = (cond.condition_type || '').toString();
+  //       // treat these as metadata-level checks
+  //       if (['store_id', 'store'].includes(condType)) {
+  //         const ok = this.checkMetadataAndDynamicCondition({}, cond, metadata);
+  //         if (!ok) {
+  //           metadataConditionsOk = false;
+  //           break;
+  //         }
+  //       }
+  //     }
+  //     if (!metadataConditionsOk) {
+  //       continue; // this rule can't match because metadata-level condition failed
+  //     }
+
+  //     // Now check product-level matching. If no products present, we still check if rule has no product-specific conditions.
+  //     const productLevelConditions = rule.dynamic_conditions.filter(
+  //       (c) =>
+  //         !['store_id', 'store'].includes((c.condition_type || '').toString()),
+  //     );
+
+  //     if (products.length === 0) {
+  //       // If rule has no product-level conditions, consider it matched with amount = metadata.invoice_amount or 0
+  //       if (productLevelConditions.length === 0) {
+  //         const amountFromMetadata =
+  //           typeof metadata?.invoice_amount === 'number'
+  //             ? metadata.invoice_amount
+  //             : 0;
+  //         matchedRulesMap[rule.uuid] = {
+  //           rule,
+  //           amount:
+  //             (matchedRulesMap[rule.uuid]?.amount || 0) + amountFromMetadata,
+  //           matchedProducts: [],
+  //         };
+  //       }
+  //       continue;
+  //     }
+
+  //     // For each product, check product-level conditions:
+  //     for (const product of products) {
+  //       let allMatch = true;
+  //       for (const cond of productLevelConditions) {
+  //         const isMatch = this.checkMetadataAndDynamicCondition(
+  //           product,
+  //           cond,
+  //           metadata,
+  //         );
+  //         if (!isMatch) {
+  //           allMatch = false;
+  //           break;
+  //         }
+  //       }
+  //       if (allMatch) {
+  //         // accumulate this product's amount to the rule
+  //         const amt =
+  //           product?.amount !== undefined && product?.amount !== null
+  //             ? Number(product.amount)
+  //             : 0;
+  //         if (!matchedRulesMap[rule.uuid]) {
+  //           matchedRulesMap[rule.uuid] = {
+  //             rule,
+  //             amount: 0,
+  //             matchedProducts: [],
+  //           };
+  //         }
+  //         matchedRulesMap[rule.uuid].amount += amt;
+  //         matchedRulesMap[rule.uuid].matchedProducts.push(product);
+  //       }
+  //     }
+  //   }
+
+  //   // Convert map to array of matched rules
+  //   let matchedRules = Object.values(matchedRulesMap).map((r) => r.rule);
+  //   const orderAmount: Record<string, number> = {};
+  //   for (const k of Object.keys(matchedRulesMap)) {
+  //     orderAmount[k] = matchedRulesMap[k].amount;
+  //   }
+
+  //   if (!matchedRules || matchedRules.length === 0) {
+  //     throw new NotFoundException('Earning rule not found');
+  //   }
+
+  //   // filter by BU if any match
+  //   const customerBURules = matchedRules.filter(
+  //     (singleRule) => String(singleRule.business_unit_id) === String(BUId),
+  //   );
+
+  //   if (customerBURules.length) {
+  //     matchedRules = customerBURules;
+  //   } else {
+  //     // group by business_unit_id and pick a single group's rules (existing behavior)
+  //     const grouped = matchedRules.reduce((acc: any, item: any) => {
+  //       const bu = String(item.business_unit_id);
+  //       if (!acc[bu]) acc[bu] = [];
+  //       acc[bu].push(item);
+  //       return acc;
+  //     }, {});
+  //     const groupIds = Object.keys(grouped);
+  //     const singleGroupId =
+  //       groupIds[Math.floor(Math.random() * groupIds.length)];
+  //     matchedRules = grouped[singleGroupId];
+  //   }
+
+  //   if (!matchedRules?.length) {
+  //     throw new NotFoundException('Earning rule not found');
+  //   }
+
+  //   // === rest of flow unchanged but use orderAmount[rule.uuid] as accumulated amount ===
+
+  //   let totalRewardPoints = 0;
+
+  //   for (let index = 0; index <= matchedRules.length - 1; index++) {
+  //     const rule = matchedRules[index];
+
+  //     // 3. Get customer wallet info
+  //     const wallet = await this.walletService.getSingleCustomerWalletInfoById(
+  //       customer.id,
+  //     );
+  //     if (!wallet) throw new NotFoundException('Wallet not found');
+
+  //     // 4. Check frequency and if user already got this reward
+  //     const txWhere: any = {
+  //       wallet: { id: wallet.id },
+  //       business_unit: { id: parseInt(BUId) },
+  //       type: 'earn',
+  //     };
+
+  //     const previousTx = await this.txRepo.findOne({
+  //       where: txWhere,
+  //       order: { created_at: 'DESC' },
+  //     });
+
+  //     // Frequency logic (unchanged)
+  //     if (rule.frequency === 'once' && previousTx) {
+  //       if (matchedRules.length > 1) {
+  //         continue;
+  //       }
+  //       throw new BadRequestException(
+  //         'Reward for this event already granted (once per customer)',
+  //       );
+  //     }
+  //     if (rule.frequency === 'daily' && previousTx) {
+  //       const today = dayjs().startOf('day');
+  //       const txDate = dayjs(previousTx.created_at).startOf('day');
+  //       if (txDate.isSame(today)) {
+  //         if (matchedRules.length > 1) {
+  //           continue;
+  //         }
+  //         throw new BadRequestException(
+  //           'Reward for this event already granted today',
+  //         );
+  //       }
+  //     }
+  //     if (rule.frequency === 'yearly' && previousTx) {
+  //       const thisYear = dayjs().year();
+  //       const txYear = dayjs(previousTx.created_at).year();
+  //       if (txYear === thisYear) {
+  //         if (matchedRules.length > 1) {
+  //           continue;
+  //         }
+  //         throw new BadRequestException(
+  //           'Reward for this event already granted this year',
+  //         );
+  //       }
+  //     }
+
+  //     // 5. Calculate reward points
+  //     let rewardPoints = rule.reward_points;
+  //     const Orderamount = orderAmount[rule.uuid]
+  //       ? Number(orderAmount[rule.uuid])
+  //       : undefined;
+
+  //     if (['spend and earn', 'dynamic rule'].includes(rule.rule_type)) {
+  //       if (!Orderamount) {
+  //         throw new BadRequestException(
+  //           'Amount is required for spend and earn rule',
+  //         );
+  //       }
+  //       // in this case give rewards in the multple of what user spends.
+  //       if (rule.reward_condition === 'perAmount') {
+  //         if (Orderamount < rule.min_amount_spent) {
+  //           if (matchedRules.length > 1) {
+  //             continue;
+  //           }
+  //           throw new BadRequestException(
+  //             `Minimum amount to earn points is ${rule.min_amount_spent}`,
+  //           );
+  //         }
+  //         const multiplier = Math.floor(Orderamount / rule.min_amount_spent);
+  //         rewardPoints = multiplier * rewardPoints;
+  //       } else if (
+  //         rule.reward_condition === 'minimum' ||
+  //         rule.reward_condition === null
+  //       ) {
+  //         if (Orderamount < rule.min_amount_spent) {
+  //           if (matchedRules.length > 1) {
+  //             continue;
+  //           }
+  //           throw new BadRequestException(
+  //             `Minimum amount to earn points is ${rule.min_amount_spent}`,
+  //           );
+  //         }
+  //       }
+  //     }
+
+  //     if (!rewardPoints || rewardPoints <= 0) {
+  //       throw new BadRequestException('No reward points to grant');
+  //     }
+
+  //     const walletSettings = await this.walletSettingsRepo.findOne({
+  //       where: { business_unit: { id: parseInt(BUId) } },
+  //     });
+
+  //     const pendingMethod = walletSettings?.pending_method || 'none';
+  //     const pendingDays = walletSettings?.pending_days || 0;
+
+  //     // 7. Update wallet balances
+  //     if (pendingMethod === 'none') {
+  //       wallet.available_balance += rewardPoints;
+  //       wallet.total_balance += rewardPoints;
+  //     } else if (pendingMethod === 'fixed_days') {
+  //       wallet.locked_balance += rewardPoints;
+  //       wallet.total_balance += rewardPoints;
+  //     }
+
+  //     // 8. Save wallet order if amount exists
+  //     let walletOrderRes;
+  //     if (
+  //       metadata &&
+  //       typeof metadata === 'object' &&
+  //       Orderamount !== undefined
+  //     ) {
+  //       const walletOrder: Partial<WalletOrder> = {
+  //         wallet: wallet,
+  //         business_unit: wallet.business_unit,
+  //         amount: Orderamount,
+  //         metadata,
+  //         discount: 0,
+  //         subtotal: Orderamount,
+  //       };
+  //       walletOrderRes = await this.WalletOrderrepo.save(walletOrder);
+  //     }
+
+  //     // 9. Create wallet_transaction
+  //     const walletTransactionPayload = {
+  //       wallet_id: wallet.id,
+  //       business_unit_id: wallet.business_unit.id,
+  //       wallet_order_id: walletOrderRes?.id,
+  //       type: WalletTransactionType.EARN,
+  //       source_type: rule?.locales?.[0]?.name,
+  //       amount: Orderamount || 0,
+  //       prev_available_points: wallet.available_balance,
+  //       points_balance: rewardPoints,
+  //       status:
+  //         pendingDays > 0
+  //           ? WalletTransactionStatus.PENDING
+  //           : WalletTransactionStatus.ACTIVE,
+  //       description: `Earned ${rewardPoints} points (${rule?.locales?.[0]?.name})`,
+  //       unlock_date:
+  //         pendingDays > 0 ? dayjs().add(pendingDays, 'day').toDate() : null,
+  //       expiry_date: rule.validity_after_assignment
+  //         ? pendingDays > 0
+  //           ? dayjs()
+  //               .add(pendingDays + rule.validity_after_assignment, 'day')
+  //               .toDate()
+  //           : dayjs().add(rule.validity_after_assignment, 'day').toDate()
+  //         : null,
+  //       created_at: dayjs().toDate(),
+  //       invoice_id: metadata?.invoice_no,
+  //       invoice_no: metadata?.invoice_no,
+  //       transaction_reference: 'GVR',
+  //       external_program_type: 'GVR Earn',
+  //     };
+
+  //     await this.walletService.addTransaction(
+  //       walletTransactionPayload,
+  //       customer?.id,
+  //       true,
+  //     );
+
+  //     totalRewardPoints += rewardPoints;
+  //   }
+
+  //   return {
+  //     message: 'Points earned successfully',
+  //     points: totalRewardPoints,
+  //   };
+  // }
   async gvrEarnWithEvent(bodyPayload: GvrEarnBurnWithEventsDto) {
     const { customer_id, BUId, metadata, tenantId } = bodyPayload;
 
-    // 1. Find customer by uuid
+    const buId = parseInt(BUId);
+
+    // 1️⃣ Find customer
     const customer = await this.customerRepo.findOne({
       where: {
         uuid: customer_id,
-        business_unit: { id: parseInt(BUId) },
+        business_unit: { id: buId },
         status: 1,
       },
     });
     if (!customer) throw new NotFoundException('Customer not found');
 
-    // 2. Load all dynamic earning rules for tenant
+    // 2️⃣ Get active dynamic rule(s)
     const rules = await this.ruleRepo.find({
       where: {
         status: 1,
@@ -2698,423 +3045,236 @@ export class CustomerService {
         tenant_id: Number(tenantId),
         dynamic_conditions: Not(IsNull()),
       },
+      relations: ['locales', 'tiers'],
     });
 
-    if (!rules || rules.length === 0) {
+    if (!rules.length) {
       throw new NotFoundException('Earning rule not found');
     }
 
-    // Use a Map to accumulate matched rules and sum amounts of matching products per rule
-    // key: rule.uuid, value: { rule: Rule, amount: number }
-    const matchedRulesMap: Record<
-      string,
-      { rule: any; amount: number; matchedProducts: any[] }
-    > = {};
-
-    // iterate products in metadata (if any)
     const products = Array.isArray(metadata?.products) ? metadata.products : [];
 
-    // If there are no products, still allow matching if conditions don't require product fields
+    let matchedRule = null;
+    let eligibleAmount = 0;
+
+    // 3️⃣ Find matching rule
     for (const rule of rules) {
-      // if rule.dynamic_conditions is falsy, skip (we filtered earlier but be defensive)
-      if (
-        !Array.isArray(rule.dynamic_conditions) ||
-        rule.dynamic_conditions.length === 0
-      ) {
-        continue;
-      }
+      const conditions = rule.dynamic_conditions || [];
 
-      // For each product, check if it satisfies all product-specific dynamic conditions
-      // Also support rules that match metadata-level conditions (store_id etc).
-      // We'll use two matching modes:
-      //  - product-level: conditions that reference product fields (product_name, productcode, quantity, amount) must be checked against each product
-      //  - metadata-level: conditions that reference metadata-level fields (store_id etc) can be checked once per request
+      let metadataValid = true;
 
-      // Pre-check metadata-level conditions that are not product specific.
-      // If any metadata-level condition fails, then this rule cannot match for any product.
-      let metadataConditionsOk = true;
-      for (const cond of rule.dynamic_conditions) {
-        const condType = (cond.condition_type || '').toString();
-        // treat these as metadata-level checks
-        if (['store_id', 'store'].includes(condType)) {
+      // First validate metadata-level conditions
+      for (const cond of conditions) {
+        if (!products.length) break;
+
+        const isProductField = [
+          'name',
+          'product_name',
+          'quantity',
+          'amount',
+        ].includes(cond.condition_type);
+
+        if (!isProductField) {
           const ok = this.checkMetadataAndDynamicCondition({}, cond, metadata);
           if (!ok) {
-            metadataConditionsOk = false;
+            metadataValid = false;
             break;
           }
         }
       }
-      if (!metadataConditionsOk) {
-        continue; // this rule can't match because metadata-level condition failed
-      }
 
-      // Now check product-level matching. If no products present, we still check if rule has no product-specific conditions.
-      const productLevelConditions = rule.dynamic_conditions.filter(
-        (c) =>
-          !['store_id', 'store'].includes((c.condition_type || '').toString()),
-      );
+      if (!metadataValid) continue;
 
-      if (products.length === 0) {
-        // If rule has no product-level conditions, consider it matched with amount = metadata.invoice_amount or 0
-        if (productLevelConditions.length === 0) {
-          const amountFromMetadata =
-            typeof metadata?.invoice_amount === 'number'
-              ? metadata.invoice_amount
-              : 0;
-          matchedRulesMap[rule.uuid] = {
-            rule,
-            amount:
-              (matchedRulesMap[rule.uuid]?.amount || 0) + amountFromMetadata,
-            matchedProducts: [],
-          };
-        }
-        continue;
-      }
+      // 4️⃣ Calculate eligible amount
 
-      // For each product, check product-level conditions:
-      for (const product of products) {
-        let allMatch = true;
-        for (const cond of productLevelConditions) {
-          const isMatch = this.checkMetadataAndDynamicCondition(
-            product,
-            cond,
-            metadata,
-          );
-          if (!isMatch) {
-            allMatch = false;
-            break;
+      if (products.length > 0) {
+        let total = 0;
+
+        for (const product of products) {
+          let productMatch = true;
+
+          for (const cond of conditions) {
+            const isProductField = [
+              'name',
+              'product_name',
+              'quantity',
+              'amount',
+            ].includes(cond.condition_type);
+
+            if (isProductField) {
+              const ok = this.checkMetadataAndDynamicCondition(
+                product,
+                cond,
+                metadata,
+              );
+              if (!ok) {
+                productMatch = false;
+                break;
+              }
+            }
+          }
+
+          if (productMatch) {
+            total += Number(product.amount || 0);
           }
         }
-        if (allMatch) {
-          // accumulate this product's amount to the rule
-          const amt =
-            product?.amount !== undefined && product?.amount !== null
-              ? Number(product.amount)
-              : 0;
-          if (!matchedRulesMap[rule.uuid]) {
-            matchedRulesMap[rule.uuid] = {
-              rule,
-              amount: 0,
-              matchedProducts: [],
-            };
-          }
-          matchedRulesMap[rule.uuid].amount += amt;
-          matchedRulesMap[rule.uuid].matchedProducts.push(product);
+
+        if (total > 0) {
+          matchedRule = rule;
+          eligibleAmount = total;
+          break;
+        }
+      } else {
+        // 🔹 Fallback to invoice_amount
+        const invoiceAmount = Number(metadata?.invoice_amount || 0);
+
+        if (invoiceAmount > 0) {
+          matchedRule = rule;
+          eligibleAmount = invoiceAmount;
+          break;
         }
       }
     }
 
-    // Convert map to array of matched rules
-    let matchedRules = Object.values(matchedRulesMap).map((r) => r.rule);
-    const orderAmount: Record<string, number> = {};
-    for (const k of Object.keys(matchedRulesMap)) {
-      orderAmount[k] = matchedRulesMap[k].amount;
-    }
-
-    if (!matchedRules || matchedRules.length === 0) {
+    if (!matchedRule) {
       throw new NotFoundException('Earning rule not found');
     }
 
-    // filter by BU if any match
-    const customerBURules = matchedRules.filter(
-      (singleRule) => String(singleRule.business_unit_id) === String(BUId),
+    // 5️⃣ Frequency check
+    const wallet = await this.walletService.getSingleCustomerWalletInfoById(
+      customer.id,
     );
+    if (!wallet) throw new NotFoundException('Wallet not found');
 
-    if (customerBURules.length) {
-      matchedRules = customerBURules;
-    } else {
-      // group by business_unit_id and pick a single group's rules (existing behavior)
-      const grouped = matchedRules.reduce((acc: any, item: any) => {
-        const bu = String(item.business_unit_id);
-        if (!acc[bu]) acc[bu] = [];
-        acc[bu].push(item);
-        return acc;
-      }, {});
-      const groupIds = Object.keys(grouped);
-      const singleGroupId =
-        groupIds[Math.floor(Math.random() * groupIds.length)];
-      matchedRules = grouped[singleGroupId];
-    }
-
-    if (!matchedRules?.length) {
-      throw new NotFoundException('Earning rule not found');
-    }
-
-    // === rest of flow unchanged but use orderAmount[rule.uuid] as accumulated amount ===
-
-    let totalRewardPoints = 0;
-
-    for (let index = 0; index <= matchedRules.length - 1; index++) {
-      const rule = matchedRules[index];
-
-      // 3. Get customer wallet info
-      const wallet = await this.walletService.getSingleCustomerWalletInfoById(
-        customer.id,
-      );
-      if (!wallet) throw new NotFoundException('Wallet not found');
-
-      // 4. Check frequency and if user already got this reward
-      const txWhere: any = {
+    const previousTx = await this.txRepo.findOne({
+      where: {
         wallet: { id: wallet.id },
-        business_unit: { id: parseInt(BUId) },
-        type: 'earn',
-      };
+        business_unit: { id: buId },
+        // type: 'earn',
+      },
+      order: { created_at: 'DESC' },
+    });
 
-      const previousTx = await this.txRepo.findOne({
-        where: txWhere,
-        order: { created_at: 'DESC' },
-      });
+    if (matchedRule.frequency === 'once' && previousTx) {
+      throw new BadRequestException('Already rewarded once');
+    }
 
-      // Frequency logic (unchanged)
-      if (rule.frequency === 'once' && previousTx) {
-        if (matchedRules.length > 1) {
-          continue;
-        }
+    if (matchedRule.frequency === 'daily' && previousTx) {
+      if (dayjs(previousTx.created_at).isSame(dayjs(), 'day')) {
+        throw new BadRequestException('Already rewarded today');
+      }
+    }
+
+    if (matchedRule.frequency === 'yearly' && previousTx) {
+      if (dayjs(previousTx.created_at).year() === dayjs().year()) {
+        throw new BadRequestException('Already rewarded this year');
+      }
+    }
+
+    // 6️⃣ Calculate points
+    let rewardPoints = matchedRule.reward_points;
+
+    if (['spend and earn', 'dynamic rule'].includes(matchedRule.rule_type)) {
+      if (eligibleAmount < matchedRule.min_amount_spent) {
         throw new BadRequestException(
-          'Reward for this event already granted (once per customer)',
+          `Minimum amount is ${matchedRule.min_amount_spent}`,
         );
       }
-      if (rule.frequency === 'daily' && previousTx) {
-        const today = dayjs().startOf('day');
-        const txDate = dayjs(previousTx.created_at).startOf('day');
-        if (txDate.isSame(today)) {
-          if (matchedRules.length > 1) {
-            continue;
-          }
-          throw new BadRequestException(
-            'Reward for this event already granted today',
-          );
-        }
+
+      if (matchedRule.reward_condition === 'perAmount') {
+        const multiplier = Math.floor(
+          eligibleAmount / matchedRule.min_amount_spent,
+        );
+        rewardPoints = multiplier * rewardPoints;
       }
-      if (rule.frequency === 'yearly' && previousTx) {
-        const thisYear = dayjs().year();
-        const txYear = dayjs(previousTx.created_at).year();
-        if (txYear === thisYear) {
-          if (matchedRules.length > 1) {
-            continue;
-          }
-          throw new BadRequestException(
-            'Reward for this event already granted this year',
-          );
-        }
+    }
+
+    if (!rewardPoints || rewardPoints <= 0) {
+      throw new BadRequestException('No reward points');
+    }
+
+    // 7️⃣ Tier conversion factor
+    const customerTier = await this.tiersService.getCurrentCustomerTier(
+      customer.id,
+    );
+
+    if (customerTier?.tier?.id) {
+      const tierRow = matchedRule.tiers?.find(
+        (t) => t.tier_id === customerTier.tier.id,
+      );
+
+      if (tierRow?.point_conversion_rate) {
+        rewardPoints = rewardPoints * Number(tierRow.point_conversion_rate);
       }
+    }
 
-      // 5. Calculate reward points
-      let rewardPoints = rule.reward_points;
-      const Orderamount = orderAmount[rule.uuid]
-        ? Number(orderAmount[rule.uuid])
-        : undefined;
-
-      if (['spend and earn', 'dynamic rule'].includes(rule.rule_type)) {
-        if (!Orderamount) {
-          throw new BadRequestException(
-            'Amount is required for spend and earn rule',
-          );
-        }
-        // in this case give rewards in the multple of what user spends.
-        if (rule.reward_condition === 'perAmount') {
-          if (Orderamount < rule.min_amount_spent) {
-            if (matchedRules.length > 1) {
-              continue;
-            }
-            throw new BadRequestException(
-              `Minimum amount to earn points is ${rule.min_amount_spent}`,
-            );
-          }
-          const multiplier = Math.floor(Orderamount / rule.min_amount_spent);
-          rewardPoints = multiplier * rewardPoints;
-        } else if (
-          rule.reward_condition === 'minimum' ||
-          rule.reward_condition === null
-        ) {
-          if (Orderamount < rule.min_amount_spent) {
-            if (matchedRules.length > 1) {
-              continue;
-            }
-            throw new BadRequestException(
-              `Minimum amount to earn points is ${rule.min_amount_spent}`,
-            );
-          }
-        }
-      }
-
-      if (!rewardPoints || rewardPoints <= 0) {
-        throw new BadRequestException('No reward points to grant');
-      }
-
-      const walletSettings = await this.walletSettingsRepo.findOne({
-        where: { business_unit: { id: parseInt(BUId) } },
-      });
-
-      const pendingMethod = walletSettings?.pending_method || 'none';
-      const pendingDays = walletSettings?.pending_days || 0;
-
-      // 7. Update wallet balances
-      if (pendingMethod === 'none') {
-        wallet.available_balance += rewardPoints;
-        wallet.total_balance += rewardPoints;
-      } else if (pendingMethod === 'fixed_days') {
-        wallet.locked_balance += rewardPoints;
-        wallet.total_balance += rewardPoints;
-      }
-
-      // 8. Save wallet order if amount exists
-      let walletOrderRes;
-      if (
-        metadata &&
-        typeof metadata === 'object' &&
-        Orderamount !== undefined
-      ) {
-        const walletOrder: Partial<WalletOrder> = {
-          wallet: wallet,
-          business_unit: wallet.business_unit,
-          amount: Orderamount,
-          metadata,
-          discount: 0,
-          subtotal: Orderamount,
-        };
-        walletOrderRes = await this.WalletOrderrepo.save(walletOrder);
-      }
-
-      // 9. Create wallet_transaction
-      const walletTransactionPayload = {
+    // 8️⃣ Credit wallet
+    await this.walletService.addTransaction(
+      {
         wallet_id: wallet.id,
         business_unit_id: wallet.business_unit.id,
-        wallet_order_id: walletOrderRes?.id,
         type: WalletTransactionType.EARN,
-        source_type: rule?.locales?.[0]?.name,
-        amount: Orderamount || 0,
-        prev_available_points: wallet.available_balance,
+        amount: eligibleAmount,
         points_balance: rewardPoints,
-        status:
-          pendingDays > 0
-            ? WalletTransactionStatus.PENDING
-            : WalletTransactionStatus.ACTIVE,
-        description: `Earned ${rewardPoints} points (${rule?.locales?.[0]?.name})`,
-        unlock_date:
-          pendingDays > 0 ? dayjs().add(pendingDays, 'day').toDate() : null,
-        expiry_date: rule.validity_after_assignment
-          ? pendingDays > 0
-            ? dayjs()
-                .add(pendingDays + rule.validity_after_assignment, 'day')
-                .toDate()
-            : dayjs().add(rule.validity_after_assignment, 'day').toDate()
-          : null,
-        created_at: dayjs().toDate(),
-        invoice_id: metadata?.invoice_no,
+        prev_available_points: wallet.available_balance,
+        status: WalletTransactionStatus.ACTIVE,
+        description: `Earned ${rewardPoints} points`,
         invoice_no: metadata?.invoice_no,
         transaction_reference: 'GVR',
         external_program_type: 'GVR Earn',
-      };
-
-      await this.walletService.addTransaction(
-        walletTransactionPayload,
-        customer?.id,
-        true,
-      );
-
-      totalRewardPoints += rewardPoints;
-    }
+      },
+      customer.id,
+      true,
+    );
 
     return {
       message: 'Points earned successfully',
-      points: totalRewardPoints,
+      points: rewardPoints,
     };
   }
 
   checkMetadataAndDynamicCondition(product, condition, metadata) {
-    if (!condition || !condition.condition_type) return false;
+    const { condition_type, condition_operator, condition_value } = condition;
 
-    const conditionType = (condition.condition_type || '').toString();
-    const rawOp = (condition.condition_operator || '').toString();
-    const rawVal = condition.condition_value;
-
-    // ANY/wildcard handling => match anything
-    if (rawOp && rawOp.toString().trim().toUpperCase() === 'ANY') return true;
-    if (rawVal === '*' || rawVal === '*') return true;
-    if (rawVal === null || rawVal === undefined) {
-      // treat missing value as ANY (this is intentional per normalize logic)
+    // 🔹 ANY support
+    if (
+      (condition_operator || '').toUpperCase() === 'ANY' ||
+      condition_value === '*'
+    ) {
       return true;
     }
 
-    // Helper to read field values from product or metadata
-    const readValue = (obj, keys) => {
-      if (!obj) return undefined;
-      for (const k of keys) {
-        if (obj[k] !== undefined && obj[k] !== null && obj[k] !== '')
-          return obj[k];
-      }
-      return undefined;
-    };
-
-    let actualValueRaw;
-    if (['store_id', 'store'].includes(conditionType)) {
-      actualValueRaw =
-        readValue(metadata, ['store_id', 'store']) ||
-        readValue(product, ['store_id', 'store']);
-    } else if (['product_name', 'name'].includes(conditionType)) {
-      actualValueRaw =
-        readValue(product, [
-          'name',
-          'product_name',
-          'productcode',
-          'productCode',
-        ]) || readValue(metadata, ['product_name', 'productcode']);
-    } else {
-      // generic fallback - try product first then metadata
-      actualValueRaw = product?.[conditionType] ?? metadata?.[conditionType];
-    }
+    const actualValueRaw =
+      product?.[condition_type] ?? metadata?.[condition_type];
 
     if (actualValueRaw === undefined || actualValueRaw === null) return false;
 
     const actualValue =
       typeof actualValueRaw === 'string'
-        ? actualValueRaw.trim().toLowerCase()
+        ? actualValueRaw.toLowerCase()
         : actualValueRaw;
 
     const conditionValue =
-      typeof rawVal === 'string' ? rawVal.trim().toLowerCase() : rawVal;
+      typeof condition_value === 'string'
+        ? condition_value.toLowerCase()
+        : condition_value;
 
-    const op = (rawOp || '').toString().trim();
-
-    // string comparisons (case-insensitive)
-    if (typeof actualValue === 'string' && typeof conditionValue === 'string') {
-      if (op === '==' || op.toLowerCase().includes('equal')) {
-        return actualValue === conditionValue;
-      }
-      if (op === '!=' || op.toLowerCase().includes('not')) {
-        return actualValue !== conditionValue;
-      }
-      if (op.toLowerCase() === 'contains') {
-        return actualValue.includes(conditionValue);
-      }
-      if (op.toLowerCase() === 'in') {
-        // conditionValue might be comma separated
-        const items = Array.isArray(rawVal)
-          ? rawVal.map(String).map((s) => s.trim().toLowerCase())
-          : (rawVal || '')
-              .toString()
-              .split(',')
-              .map((s) => s.trim().toLowerCase());
-        return items.includes(actualValue);
-      }
+    switch (condition_operator) {
+      case '==':
+        return actualValue == conditionValue;
+      case '!=':
+        return actualValue != conditionValue;
+      case '>':
+        return Number(actualValue) > Number(conditionValue);
+      case '<':
+        return Number(actualValue) < Number(conditionValue);
+      case '>=':
+        return Number(actualValue) >= Number(conditionValue);
+      case '<=':
+        return Number(actualValue) <= Number(conditionValue);
+      default:
+        return false;
     }
-
-    // numeric comparisons
-    const aNum = Number(actualValue);
-    const bNum = Number(conditionValue);
-    if (!isNaN(aNum) && !isNaN(bNum)) {
-      if (op === '>') return aNum > bNum;
-      if (op === '>=') return aNum >= bNum;
-      if (op === '<') return aNum < bNum;
-      if (op === '<=') return aNum <= bNum;
-      if (op === '==' || op.toLowerCase().includes('equal'))
-        return aNum === bNum;
-      if (op === '!=') return aNum !== bNum;
-    }
-
-    // fallback strict equality
-    return actualValue === conditionValue;
   }
 
   async gvrBurnWithEvent(bodyPayload: GvrEarnBurnWithEventsDto) {
