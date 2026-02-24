@@ -3035,9 +3035,10 @@ export class CustomerService {
         status: 1,
       },
     });
+
     if (!customer) throw new NotFoundException('Customer not found');
 
-    // 2️⃣ Get active dynamic rule(s)
+    // 2️⃣ Get active dynamic earn rules
     const rules = await this.ruleRepo.find({
       where: {
         status: 1,
@@ -3054,7 +3055,7 @@ export class CustomerService {
 
     const products = Array.isArray(metadata?.products) ? metadata.products : [];
 
-    let matchedRule = null;
+    let matchedRule: any = null;
     let eligibleAmount = 0;
 
     // 3️⃣ Find matching rule
@@ -3063,10 +3064,8 @@ export class CustomerService {
 
       let metadataValid = true;
 
-      // First validate metadata-level conditions
+      // Validate metadata-level conditions
       for (const cond of conditions) {
-        if (!products.length) break;
-
         const isProductField = [
           'name',
           'product_name',
@@ -3085,8 +3084,7 @@ export class CustomerService {
 
       if (!metadataValid) continue;
 
-      // 4️⃣ Calculate eligible amount
-
+      // 🔹 PRIORITY 1: If products exist → use product amounts
       if (products.length > 0) {
         let total = 0;
 
@@ -3124,10 +3122,11 @@ export class CustomerService {
           eligibleAmount = total;
           break;
         }
-      } else {
-        // 🔹 Fallback to invoice_amount
-        const invoiceAmount = Number(metadata?.invoice_amount || 0);
+      }
 
+      // 🔹 PRIORITY 2: Fallback to invoice_amount
+      if (!products.length) {
+        const invoiceAmount = Number(metadata?.invoice_amount || 0);
         if (invoiceAmount > 0) {
           matchedRule = rule;
           eligibleAmount = invoiceAmount;
@@ -3140,17 +3139,22 @@ export class CustomerService {
       throw new NotFoundException('Earning rule not found');
     }
 
-    // 5️⃣ Frequency check
+    // 4️⃣ Wallet
     const wallet = await this.walletService.getSingleCustomerWalletInfoById(
       customer.id,
     );
     if (!wallet) throw new NotFoundException('Wallet not found');
 
+    // 5️⃣ Frequency check
+    // const sourceType = matchedRule?.locales?.[0]?.name || 'GVR Earn';
+    const sourceType = 'GVR Earn';
+
     const previousTx = await this.txRepo.findOne({
       where: {
         wallet: { id: wallet.id },
         business_unit: { id: buId },
-        // type: 'earn',
+        type: WalletTransactionType.EARN,
+        source_type: sourceType,
       },
       order: { created_at: 'DESC' },
     });
@@ -3193,7 +3197,7 @@ export class CustomerService {
       throw new BadRequestException('No reward points');
     }
 
-    // 7️⃣ Tier conversion factor
+    // 7️⃣ Apply tier conversion factor
     const customerTier = await this.tiersService.getCurrentCustomerTier(
       customer.id,
     );
@@ -3213,13 +3217,24 @@ export class CustomerService {
       {
         wallet_id: wallet.id,
         business_unit_id: wallet.business_unit.id,
+
         type: WalletTransactionType.EARN,
+
+        // 🔥 CRITICAL FOR HISTORY
+        source_type: sourceType,
+        created_at: dayjs().toDate(),
+
         amount: eligibleAmount,
         points_balance: rewardPoints,
         prev_available_points: wallet.available_balance,
+
         status: WalletTransactionStatus.ACTIVE,
-        description: `Earned ${rewardPoints} points`,
+
+        description: `Earned ${rewardPoints} points (${sourceType})`,
+
+        invoice_id: metadata?.invoice_no,
         invoice_no: metadata?.invoice_no,
+
         transaction_reference: 'GVR',
         external_program_type: 'GVR Earn',
       },
