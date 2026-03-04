@@ -59,7 +59,6 @@ export class PartnersService {
     try {
       const partner = queryRunner.manager.create(Partner, {
         name: dto.name,
-        type: dto.type,
         description: dto.description,
         logo_url: dto.logo_url,
         is_active: 1,
@@ -116,7 +115,6 @@ export class PartnersService {
         { id },
         {
           ...(dto.name !== undefined && { name: dto.name }),
-          ...(dto.type !== undefined && { type: dto.type }),
           ...(dto.description !== undefined && {
             description: dto.description,
           }),

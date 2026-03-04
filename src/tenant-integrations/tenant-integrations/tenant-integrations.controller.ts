@@ -9,7 +9,10 @@ import {
   Delete,
   UseGuards,
   BadRequestException,
+  UseInterceptors,
+  UploadedFile,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import * as jwt from 'jsonwebtoken';
 import { TenantIntegrationsService } from './tenant-integrations.service';
 import { CreateTenantIntegrationDto } from '../dto/create-tenant-integration.dto';
@@ -18,6 +21,7 @@ import { AuthTokenGuard } from 'src/users/guards/authTokenGuard';
 import { InjectRepository } from '@nestjs/typeorm';
 import { User } from 'src/users/entities/user.entity';
 import { Repository } from 'typeorm';
+import { OciService } from 'src/oci/oci.service';
 
 @Controller('tenant-integrations')
 export class TenantIntegrationsController {
@@ -25,7 +29,30 @@ export class TenantIntegrationsController {
     private readonly service: TenantIntegrationsService,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    private readonly ociService: OciService,
   ) {}
+
+  @UseGuards(AuthTokenGuard)
+  @Post('upload-certificate')
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadCertificate(@UploadedFile() file: Express.Multer.File) {
+    if (!file) throw new BadRequestException('No file provided');
+
+    const ext = file.originalname.split('.').pop()?.toLowerCase();
+    const allowed = ['pem', 'crt', 'cer', 'key'];
+    if (!allowed.includes(ext)) {
+      throw new BadRequestException('Only .pem, .crt, .cer, .key files are accepted');
+    }
+
+    const objectName = `partner-certs/${Date.now()}-${file.originalname}`;
+    await this.ociService.uploadBufferToOci(
+      file.buffer,
+      process.env.OCI_BUCKET,
+      objectName,
+    );
+
+    return { url: `${process.env.OCI_URL}/${objectName}` };
+  }
 
   @Get('by-tenant/:tenantId')
   async findByTenant(@Param('tenantId') tenantId: string) {

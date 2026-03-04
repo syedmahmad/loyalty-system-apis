@@ -6,10 +6,6 @@ export class CreatePartnerDto {
   name: string;
 
   @IsString()
-  @IsNotEmpty()
-  type: string; // 'QITAF' | 'AL_FURSAN' | future types
-
-  @IsString()
   @IsOptional()
   description?: string;
 

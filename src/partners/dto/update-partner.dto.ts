@@ -7,10 +7,6 @@ export class UpdatePartnerDto {
 
   @IsString()
   @IsOptional()
-  type?: string;
-
-  @IsString()
-  @IsOptional()
   description?: string;
 
   @IsString()

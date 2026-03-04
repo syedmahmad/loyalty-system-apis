@@ -50,6 +50,7 @@ import { OffersModule } from './offers/offers.module';
 import { MasterModule } from './master/master.module';
 import { PartnersModule } from './partners/partners.module';
 import { TenantIntegrationsModule } from './tenant-integrations/tenant-integrations.module';
+import { TenantPartnerTerminalsModule } from './tenant-partner-terminals/tenant-partner-terminals.module';
 
 @Module({
   imports: [
@@ -125,6 +126,7 @@ import { TenantIntegrationsModule } from './tenant-integrations/tenant-integrati
     MasterModule,
     PartnersModule,
     TenantIntegrationsModule,
+    TenantPartnerTerminalsModule,
   ],
   controllers: [AppController],
   providers: [AppService, AxiosLoggerInterceptor, NewrelicLoggerService],

@@ -6,7 +6,6 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   BeforeInsert,
-  OneToMany,
 } from 'typeorm';
 
 @Entity('partners')
@@ -24,17 +23,9 @@ export class Partner {
     }
   }
 
-  /** Display name, e.g. "Qitaf" or "Al Fursan" */
+  /** Display name, e.g. "STC Qitaf" or "Al Fursan" */
   @Column({ unique: true })
   name: string;
-
-  /**
-   * Machine-readable type key — drives config schema on the frontend.
-   * e.g. 'QITAF' | 'AL_FURSAN'
-   * Stored as varchar for easy extensibility without enum migrations.
-   */
-  @Column({ type: 'varchar', length: 50 })
-  type: string;
 
   @Column({ type: 'text', nullable: true })
   description: string;
