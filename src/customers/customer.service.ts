@@ -4164,4 +4164,97 @@ export class CustomerService {
       allFilesValid,
     };
   }
+
+  async rewardHistory(mobile_number: string, lang_code: string) {
+    const plainMobile = mobile_number.trim();
+    const hashedPhone = encrypt(plainMobile);
+
+    const customer = await this.customerRepo.findOne({
+      where: { hashed_number: hashedPhone },
+    });
+
+    if (!customer) {
+      return {
+        success: false,
+        message: 'Customer not found11',
+        result: null,
+        errors: [],
+      };
+    }
+
+    const wallet = await this.walletRepo.findOne({
+      where: { customer: { id: customer.id } },
+    });
+
+    const total_points = wallet ? Number(wallet.total_balance) : 0;
+
+    const coupons_count = await this.userCouponRepo.count({
+      where: { customer: { id: customer.id } },
+    });
+
+    let customer_tier = null;
+    try {
+      const tierInfo = await this.tiersService.getCurrentCustomerTier(
+        customer.id,
+        lang_code,
+      );
+      if (tierInfo && tierInfo.tier) {
+        customer_tier = tierInfo.tier;
+      }
+    } catch {
+      customer_tier = null;
+    }
+
+    const transactions = wallet
+      ? await this.txRepo.find({
+          where: [
+            { wallet: { id: wallet.id }, type: WalletTransactionType.EARN },
+            { wallet: { id: wallet.id }, type: WalletTransactionType.BURN },
+          ],
+          order: { created_at: 'DESC' },
+        })
+      : [];
+
+    const reward_transactions = transactions.map((tx) => ({
+      transaction_uuid: tx.uuid,
+      type: tx.type === WalletTransactionType.EARN ? 'earn' : 'burn',
+      amount: Number(tx.amount),
+      description: tx.description,
+      reference_type: tx.source_type,
+      reference_id: tx.source_id,
+      point_balance: tx.point_balance,
+      invoice_id: tx.invoice_id,
+      invoice_no: tx.invoice_no,
+      created_at: tx.created_at,
+    }));
+
+    return {
+      success: true,
+      message: 'This is the requested profile information',
+      result: {
+        customer: {
+          uuid: customer.uuid,
+          is_new_user: customer.is_new_user,
+          first_name: customer.first_name,
+          last_name: customer.last_name,
+          email: customer.email,
+          phone: customer.phone,
+          gender: customer.gender,
+          DOB: customer.DOB,
+          image_url: customer.image_url,
+          address: customer.address,
+          city: customer.city,
+          referral_code: customer.referral_code,
+          country: customer.country,
+          created_at: customer.created_at,
+          external_customer_id: customer.external_customer_id,
+        },
+        total_points,
+        coupons_count,
+        customer_tier,
+        reward_transactions,
+      },
+      errors: [],
+    };
+  }
 }
