@@ -82,6 +82,40 @@ export class RestyController {
     };
   }
 
+  /**
+   * 📱 MOBILE BANNER API 1: Get pending (unclaimed) points for a logged-in customer.
+   *
+   * Request body: { uuid: string }
+   *
+   * Returns total pending points + per-invoice breakdown:
+   *   { total_pending_points, invoice_count, invoices: [{ invoice_no, invoice_date, invoice_amount, pending_points }] }
+   */
+  @Post('pending-points')
+  async getPendingPoints(@Body() body: { uuid: string }) {
+    if (!body?.uuid) {
+      throw new BadRequestException('uuid is required');
+    }
+    return this.restyService.getPendingPointsForCustomer(body.uuid);
+  }
+
+  /**
+   * 📱 MOBILE BANNER API 2: Claim all pending invoices for a logged-in customer.
+   *
+   * Request body: { uuid: string }
+   *
+   * Claims every unclaimed invoice for the customer in one shot:
+   * creates wallet transactions, updates wallet balances, sends a single notification.
+   *
+   * Returns: { total_points_claimed, invoices_claimed, invoices_skipped, invoices_failed }
+   */
+  @Post('claim-points')
+  async claimPoints(@Body() body: { uuid: string }) {
+    if (!body?.uuid) {
+      throw new BadRequestException('uuid is required');
+    }
+    return this.restyService.claimPendingPointsForCustomer(body.uuid);
+  }
+
   @Post('mac-sync/service-job')
   async createServiceJob(@Req() req: any, @Body() payload: any) {
     const authHeader = req.headers['authorization'];

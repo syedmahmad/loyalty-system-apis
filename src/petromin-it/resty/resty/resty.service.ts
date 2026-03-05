@@ -1,4 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  NotFoundException,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import { RestyInvoicesInfo } from '../entities/resty_invoices_info.entity';
@@ -569,7 +574,7 @@ export class RestyService {
    * Schedule: Runs every 5 minutes to process unclaimed invoices
    */
   // @Cron('*/5 * * * *', { timeZone: 'UTC' })
-  @Cron(CronExpression.EVERY_10_MINUTES)
+  // @Cron(CronExpression.EVERY_10_MINUTES)
   async processUnclaimedInvoicesAndAssignPoints() {
     const hostName = os.hostname();
     const localUrl = 'http://localhost:3000';
@@ -1166,5 +1171,416 @@ export class RestyService {
       await this.pointsLogRepo.save(savedLog);
       throw error; // Re-throw to mark as failed in Promise.allSettled
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // 📱 MOBILE APP BANNER APIs
+  // ---------------------------------------------------------------------------
+
+  /**
+   * API 1: Get pending (unclaimed) points for a logged-in customer.
+   *
+   * Flow:
+   *  uuid → find active customer → decrypt phone →
+   *  fetch unclaimed invoices → calculate points per invoice →
+   *  return total + per-invoice breakdown
+   */
+  async getPendingPointsForCustomer(uuid: string) {
+    try {
+      // 🔹 Resolve customer
+      const customer = await this.customerRepo.findOne({
+        where: { uuid, status: 1 },
+      });
+
+      if (!customer) {
+        throw new NotFoundException('Customer not found');
+      }
+
+      const phone = decrypt(customer.hashed_number);
+
+      // 🔹 Fetch all unclaimed invoices for this phone
+      const pendingInvoices = await this.restyIncoicesInfoRepo.find({
+        where: {
+          phone,
+          is_claimed: false,
+          should_assign_points_after_migration: true,
+          already_processed_invoice: false,
+          // loyalty_customer: true,
+          // missing_invoice_or_phone: false,
+        },
+        order: { invoice_date: 'DESC' },
+      });
+
+      if (!pendingInvoices.length) {
+        return {
+          success: true,
+          data: { total_pending_points: 0, invoice_count: 0, invoices: [] },
+        };
+      }
+
+      // 🔹 Fetch earning rule
+      const businessUnitId = Number(process.env.NCMC_PETROMIN_BU);
+      const earningRule = await this.rulesRepo.findOne({
+        where: {
+          business_unit: { id: businessUnitId },
+          rule_type: 'spend and earn',
+          reward_condition: 'perAmount',
+        },
+        relations: ['tiers'],
+      });
+
+      if (!earningRule) {
+        return {
+          success: true,
+          data: {
+            total_pending_points: 0,
+            invoice_count: pendingInvoices.length,
+            invoices: [],
+            message: 'No earning rule configured',
+          },
+        };
+      }
+
+      // 🔹 Fetch tier multiplier once (same customer for all invoices)
+      const currentCustomerTier = await this.tierService.getCurrentCustomerTier(
+        customer.id,
+      );
+
+      // 🔹 Calculate points per invoice
+      const invoiceList = pendingInvoices.map((invoice) => {
+        const minAmountSpent =
+          parseInt(earningRule.min_amount_spent as any) === 0
+            ? 1
+            : parseInt(earningRule.min_amount_spent as any);
+
+        const multiplier = (invoice.invoice_amount || 0) / minAmountSpent;
+        let rewardPoints = multiplier * earningRule.reward_points;
+
+        if (currentCustomerTier?.tier) {
+          const matchingRuleTier = earningRule.tiers.find(
+            (rt) => rt.tier.id === currentCustomerTier.tier.id,
+          );
+          if (
+            matchingRuleTier?.point_conversion_rate &&
+            matchingRuleTier?.point_conversion_rate !== 1
+          ) {
+            rewardPoints +=
+              rewardPoints * matchingRuleTier.point_conversion_rate;
+          }
+        }
+
+        return {
+          invoice_no: invoice.invoice_no,
+          invoice_date: invoice.invoice_date,
+          invoice_amount: invoice.invoice_amount,
+          pending_points: Math.round(rewardPoints),
+        };
+      });
+
+      const totalPendingPoints = invoiceList.reduce(
+        (sum, inv) => sum + inv.pending_points,
+        0,
+      );
+
+      return {
+        success: true,
+        data: {
+          total_pending_points: totalPendingPoints,
+          invoice_count: invoiceList.length,
+          invoices: invoiceList,
+        },
+      };
+    } catch (error) {
+      // Let NestJS HTTP exceptions (404, 400, etc.) propagate unchanged
+      if (
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException
+      ) {
+        throw error;
+      }
+      console.error('❌ getPendingPointsForCustomer failed:', error.message);
+      throw new InternalServerErrorException(
+        'Failed to retrieve pending points. Please try again.',
+      );
+    }
+  }
+
+  /**
+   * API 2: Claim all pending invoices for a logged-in customer.
+   *
+   * Flow:
+   *  uuid → find active customer (with wallet) → decrypt phone →
+   *  fetch unclaimed invoices → for each invoice: calculate points,
+   *  create wallet transaction, update wallet balances, mark invoice claimed →
+   *  send ONE notification with total points earned
+   */
+  async claimPendingPointsForCustomer(uuid: string) {
+    // 🔹 Resolve customer with wallet
+    let customer = await this.customerRepo.findOne({
+      where: { uuid, status: 1 },
+      relations: ['tenant', 'business_unit', 'wallet'],
+    });
+
+    if (!customer) {
+      throw new NotFoundException('Customer not found');
+    }
+
+    const phone = decrypt(customer.hashed_number);
+
+    // 🔹 Fetch all unclaimed invoices for this phone
+    const pendingInvoices = await this.restyIncoicesInfoRepo.find({
+      where: {
+        phone,
+        is_claimed: false,
+        should_assign_points_after_migration: true,
+        already_processed_invoice: false,
+        // loyalty_customer: true,
+        // missing_invoice_or_phone: false,
+      },
+      order: { invoice_date: 'ASC' }, // oldest first
+    });
+
+    if (!pendingInvoices.length) {
+      return {
+        success: true,
+        message: 'No pending invoices to claim',
+        data: { total_points_claimed: 0, invoices_claimed: 0 },
+      };
+    }
+
+    // 🔹 Fetch earning rule and wallet settings
+    const businessUnitId = Number(process.env.NCMC_PETROMIN_BU);
+    const tenantId = parseInt(process.env.NCMC_PETROMIN_TENANT!, 10);
+
+    const settings = await this.settingsRepo.findOne({
+      where: { business_unit: { id: businessUnitId } },
+    });
+
+    const earningRule = await this.rulesRepo.findOne({
+      where: {
+        business_unit: { id: businessUnitId },
+        rule_type: 'spend and earn',
+        reward_condition: 'perAmount',
+      },
+      relations: ['tiers'],
+    });
+
+    if (!earningRule) {
+      throw new BadRequestException(
+        'No earning rule configured for this business unit',
+      );
+    }
+
+    // 🔹 Ensure wallet exists
+    if (!customer.wallet?.id) {
+      await this.walletService.createWallet({
+        customer_id: customer.id,
+        business_unit_id: businessUnitId,
+        tenant_id: tenantId,
+      });
+      customer = await this.customerRepo.findOne({
+        where: { uuid, status: 1 },
+        relations: ['tenant', 'business_unit', 'wallet'],
+      });
+    }
+
+    // 🔹 Tier multiplier (fetched once — same customer for all invoices)
+    const currentCustomerTier = await this.tierService.getCurrentCustomerTier(
+      customer.id,
+    );
+
+    const stats = {
+      claimed: 0,
+      skipped: 0,
+      totalPoints: 0,
+      failed: [] as string[],
+    };
+
+    // 🔹 Process each invoice with per-invoice rollback on failure
+    for (const invoice of pendingInvoices) {
+      let savedTransaction: WalletTransaction | null = null;
+      const walletSnapshot = {
+        total_balance: customer.wallet.total_balance,
+        available_balance: customer.wallet.available_balance,
+        total_earned_points: customer.wallet.total_earned_points,
+      };
+
+      try {
+        // Skip if already recorded in wallet_transactions
+        const existingTx = await this.walletTransactionRepo.findOne({
+          where: { invoice_no: invoice.invoice_no },
+        });
+
+        if (existingTx) {
+          invoice.is_claimed = true;
+          invoice.claimed_points = existingTx.point_balance || 0;
+          invoice.already_processed_invoice = true;
+          await this.restyIncoicesInfoRepo.save(invoice);
+          stats.skipped++;
+          continue;
+        }
+
+        // Calculate points (same formula as cron)
+        const minAmountSpent =
+          parseInt(earningRule.min_amount_spent as any) === 0
+            ? 1
+            : parseInt(earningRule.min_amount_spent as any);
+
+        const multiplier = (invoice.invoice_amount || 0) / minAmountSpent;
+        let rewardPoints = multiplier * earningRule.reward_points;
+
+        if (currentCustomerTier?.tier) {
+          const matchingRuleTier = earningRule.tiers.find(
+            (rt) => rt.tier.id === currentCustomerTier.tier.id,
+          );
+          if (
+            matchingRuleTier?.point_conversion_rate &&
+            matchingRuleTier?.point_conversion_rate !== 1
+          ) {
+            rewardPoints +=
+              rewardPoints * matchingRuleTier.point_conversion_rate;
+          }
+        }
+
+        const finalPoints = Math.round(rewardPoints);
+
+        // 🔸 Step A: Create wallet transaction record
+        const transaction = this.walletTransactionRepo.create({
+          wallet: { id: customer.wallet.id },
+          business_unit: { id: businessUnitId },
+          type: WalletTransactionType.EARN,
+          status: WalletTransactionStatus.ACTIVE,
+          amount: invoice.invoice_amount,
+          invoice_id: invoice.invoice_id,
+          invoice_no: invoice.invoice_no,
+          created_at: dayjs().toDate(),
+          point_balance: finalPoints,
+          source_type: 'transaction',
+          description: `Points earned for invoice ${invoice.invoice_no}`,
+          created_by: 0,
+          prev_available_points: customer.wallet.available_balance,
+          external_program_type: 'Customer Claim API',
+          transaction_reference: `Points earned for transactions performed on service stations`,
+          expiry_date: dayjs(invoice.invoice_date)
+            .add(Number(settings?.expiration_value ?? 365), 'day')
+            .toDate(),
+          customer: { id: customer.id },
+          uuid: uuidv4(),
+        });
+
+        savedTransaction = await this.walletTransactionRepo.save(transaction);
+
+        // 🔸 Step B: Update wallet balances
+        // If this fails → rollback by deleting the transaction just created
+        try {
+          customer.wallet.total_balance += finalPoints;
+          customer.wallet.available_balance += finalPoints;
+          customer.wallet.total_earned_points += finalPoints;
+          await this.walletRepo.save(customer.wallet);
+        } catch (walletErr) {
+          console.error(
+            `🔄 Wallet update failed for invoice ${invoice.invoice_no}, rolling back transaction ${savedTransaction.id}...`,
+          );
+          // Compensating action: delete the transaction we just created
+          try {
+            await this.walletTransactionRepo.delete(savedTransaction.id);
+          } catch (deleteErr) {
+            console.error(
+              `⚠️ Failed to rollback transaction ${savedTransaction.id}: ${deleteErr.message}. Manual cleanup may be needed.`,
+            );
+          }
+          // Restore in-memory wallet state for next invoice
+          customer.wallet.total_balance = walletSnapshot.total_balance;
+          customer.wallet.available_balance = walletSnapshot.available_balance;
+          customer.wallet.total_earned_points =
+            walletSnapshot.total_earned_points;
+          throw walletErr; // Caught by outer catch → pushed to failed[]
+        }
+
+        // 🔸 Step C: Mark invoice as claimed
+        // If this fails the wallet is already updated — acceptable inconsistency.
+        // The next cron run detects the existing wallet_transaction and auto-syncs the invoice status.
+        try {
+          invoice.is_claimed = true;
+          invoice.claimed_points = finalPoints;
+          invoice.claim_id = uuidv4();
+          invoice.claim_date = new Date().toISOString();
+          await this.restyIncoicesInfoRepo.save(invoice);
+        } catch (invoiceErr) {
+          console.error(
+            `⚠️ Invoice ${invoice.invoice_no}: points added to wallet but invoice record update failed. ` +
+              `Will self-heal on next cron run. Error: ${invoiceErr.message}`,
+          );
+          // Points are in the wallet — count as claimed even though the row update failed
+        }
+
+        stats.claimed++;
+        stats.totalPoints += finalPoints;
+      } catch (err) {
+        stats.failed.push(invoice.invoice_no);
+        console.error(
+          `❌ Failed to claim invoice ${invoice.invoice_no}: ${err.message}`,
+        );
+      }
+    }
+
+    // 🔹 Send ONE notification for all claimed points
+    if (stats.totalPoints > 0) {
+      const deviceTokens = await this.deviceTokenRepo.find({
+        where: { customer: { id: customer.id } },
+        order: { createdAt: 'DESC' },
+      });
+
+      const templateId = process.env.EARNED_POINTS_TEMPLATE_ID;
+      const tokensString = deviceTokens.map((t) => t.token).join(',');
+
+      if (tokensString && templateId) {
+        const notifPayload = {
+          template_id: templateId,
+          language_code: 'en',
+          business_name: 'PETROMINit',
+          to: [
+            {
+              user_device_token: tokensString,
+              customer_mobile: decrypt(customer.hashed_number),
+              dynamic_fields: {
+                rewardPoints: stats.totalPoints.toString(),
+                event: `${stats.claimed} invoice(s) claimed`,
+              },
+            },
+          ],
+        };
+
+        const saveNotificationPayload = {
+          title: 'Points Claimed',
+          body: `You have successfully claimed ${stats.totalPoints} points from ${stats.claimed} invoice(s)`,
+          customer_id: customer.id,
+        };
+
+        try {
+          this.notificationService.sendToUser(
+            notifPayload,
+            saveNotificationPayload,
+          );
+        } catch (notifErr) {
+          console.log(`⚠️ Notification failed after claim:`, notifErr.message);
+        }
+      }
+    }
+
+    return {
+      success: stats.failed.length === 0,
+      message:
+        stats.claimed > 0
+          ? `Successfully claimed points from ${stats.claimed} invoice(s)${stats.failed.length ? ` (${stats.failed.length} failed)` : ''}`
+          : 'No invoices were claimed',
+      data: {
+        total_points_claimed: stats.totalPoints,
+        invoices_claimed: stats.claimed,
+        invoices_skipped: stats.skipped,
+        invoices_failed: stats.failed.length,
+        ...(stats.failed.length && { failed_invoice_nos: stats.failed }),
+      },
+    };
   }
 }
