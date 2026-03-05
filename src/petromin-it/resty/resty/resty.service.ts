@@ -584,9 +584,9 @@ export class RestyService {
     }
 
     /** 🔒 CRON LOCK */
-    await this.pointsLogRepo.findOne({
-      where: { status: PointsAssignmentStatus.STARTED },
-    });
+    // await this.pointsLogRepo.findOne({
+    //   where: { status: PointsAssignmentStatus.STARTED },
+    // });
 
     // Previous points assignment run was interrupted, mark it as partial success
     const runningCron = await this.pointsLogRepo.findOne({
@@ -633,6 +633,8 @@ export class RestyService {
           is_claimed: false,
           should_assign_points_after_migration: true,
           already_processed_invoice: false,
+          loyalty_customer: true,
+          missing_invoice_or_phone: false,
         },
         take: 5000,
         order: { created_at: 'ASC' }, // Process oldest first (FIFO)
@@ -936,6 +938,8 @@ export class RestyService {
           `⚠️ Invoice ${invoice.id} missing phone or invoice_no, skipping...`,
         );
         stats.skippedInvoices++;
+        invoice.missing_invoice_or_phone = true;
+        await this.restyIncoicesInfoRepo.save(invoice);
         await this.pointsLogRepo.save(savedLog);
         return;
       }
@@ -984,7 +988,8 @@ export class RestyService {
         await this.pointsLogRepo.save(savedLog);
 
         // Mark as already processed so the cron does not keep retrying this invoice
-        invoice.already_processed_invoice = true;
+        // invoice.already_processed_invoice = true;
+        invoice.loyalty_customer = false;
         await this.restyIncoicesInfoRepo.save(invoice);
         return;
       }
