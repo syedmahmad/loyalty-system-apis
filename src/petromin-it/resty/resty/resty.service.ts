@@ -584,9 +584,9 @@ export class RestyService {
     }
 
     /** 🔒 CRON LOCK */
-    await this.pointsLogRepo.findOne({
-      where: { status: PointsAssignmentStatus.STARTED },
-    });
+    // await this.pointsLogRepo.findOne({
+    //   where: { status: PointsAssignmentStatus.STARTED },
+    // });
 
     // Previous points assignment run was interrupted, mark it as partial success
     const runningCron = await this.pointsLogRepo.findOne({
@@ -633,6 +633,8 @@ export class RestyService {
           is_claimed: false,
           should_assign_points_after_migration: true,
           already_processed_invoice: false,
+          loyalty_customer: true,
+          missing_invoice_or_phone: false,
         },
         take: 5000,
         order: { created_at: 'ASC' }, // Process oldest first (FIFO)
@@ -707,10 +709,13 @@ export class RestyService {
       const hashedPhones = uniquePhones.map((phone) => encrypt(phone));
 
       // Fetch all customers with these hashed phone numbers, there are chances that some customer not exist
+      // CHANGE: Only fetch active app users (status=1). Previously also fetched non-app users (status=2).
+      // Non-app users should no longer receive points — only active app users qualify.
       const existingCustomers = await this.customerRepo.find({
         where: {
           hashed_number: In(hashedPhones),
-          status: In([1, 2]),
+          status: 1, // Only active app users
+          // status: In([1, 2]), // Previously included non-app users (status=2)
         },
         order: {
           id: 'DESC', // or created_at: 'DESC'
@@ -734,55 +739,76 @@ export class RestyService {
         }
       }
 
+      // CHANGE: Non-app users (customers not in our loyalty app) no longer get points.
+      // We previously created customers with status=2 here so that points could be assigned
+      // to them before they joined the app (and they'd see those points once they signed up).
+      // This behaviour is now disabled — only active app users (status=1) receive points.
+      // The block below is commented out so it can be re-enabled in the future if needed.
+      //
+      // if (newCustomerPhones.size > 0) {
+      //   console.log(`👥 Creating ${newCustomerPhones.size} new customers...`);
+      //   const tenantId = parseInt(process.env.NCMC_PETROMIN_TENANT!, 10);
+      //
+      //   const newCustomersToCreate = Array.from(newCustomerPhones).map(
+      //     (phone) => {
+      //       const invoice = unclaimedInvoices.find(
+      //         (inv) => inv.phone === phone,
+      //       );
+      //       return this.customerRepo.create({
+      //         tenant: { id: tenantId },
+      //         business_unit: { id: businessUnitId },
+      //         hashed_number: encrypt(phone),
+      //         name: invoice?.customer_name || 'Customer',
+      //         email: invoice?.customer_email || null,
+      //         country_code: '+966',
+      //         phone: phone.replace(/^\+?966/, ''),
+      //         uuid: uuidv4(),
+      //         status: 2, // Non-app user placeholder
+      //       });
+      //     },
+      //   );
+      //
+      //   // bulk insertion of new customers
+      //   const savedCustomers =
+      //     await this.customerRepo.save(newCustomersToCreate);
+      //
+      //   // Create wallets for new customers
+      //   for (const customer of savedCustomers) {
+      //     await this.walletService.createWallet({
+      //       customer_id: customer.id,
+      //       business_unit_id: businessUnitId,
+      //       tenant_id: tenantId,
+      //     });
+      //   }
+      //
+      //   stats.newCustomers += savedCustomers.length;
+      //   stats.existingCustomers += customerMap.size;
+      //   savedLog.new_customers_created = stats.newCustomers;
+      //   savedLog.existing_customers = customerMap.size;
+      //   await this.pointsLogRepo.save(savedLog);
+      //   console.log(`✅ Created ${savedCustomers.length} new customers`);
+      // }
+
+      // Log stats: no new customers are created anymore, only active app users are counted
+      stats.existingCustomers = customerMap.size; // active app users found for these invoices
+      stats.newCustomers = 0; // always 0 — non-app user creation is disabled
+      savedLog.existing_customers = stats.existingCustomers;
+      savedLog.new_customers_created = stats.newCustomers;
+      await this.pointsLogRepo.save(savedLog);
+
       if (newCustomerPhones.size > 0) {
-        console.log(`👥 Creating ${newCustomerPhones.size} new customers...`);
-        const tenantId = parseInt(process.env.NCMC_PETROMIN_TENANT!, 10);
-
-        const newCustomersToCreate = Array.from(newCustomerPhones).map(
-          (phone) => {
-            const invoice = unclaimedInvoices.find(
-              (inv) => inv.phone === phone,
-            );
-            return this.customerRepo.create({
-              tenant: { id: tenantId },
-              business_unit: { id: businessUnitId },
-              hashed_number: encrypt(phone),
-              name: invoice?.customer_name || 'Customer',
-              email: invoice?.customer_email || null,
-              country_code: '+966',
-              phone: phone.replace(/^\+?966/, ''),
-              uuid: uuidv4(),
-              status: 2,
-            });
-          },
+        console.log(
+          `ℹ️ ${newCustomerPhones.size} phone(s) not found as active app users — skipping (non-app users no longer receive points).`,
         );
-
-        // bulk insertion of new customers
-        const savedCustomers =
-          await this.customerRepo.save(newCustomersToCreate);
-
-        // Create wallets for new customers
-        for (const customer of savedCustomers) {
-          await this.walletService.createWallet({
-            customer_id: customer.id,
-            business_unit_id: businessUnitId,
-            tenant_id: tenantId,
-          });
-        }
-
-        stats.newCustomers += savedCustomers.length;
-        stats.existingCustomers += customerMap.size;
-        savedLog.new_customers_created = stats.newCustomers;
-        savedLog.existing_customers = customerMap.size;
-        await this.pointsLogRepo.save(savedLog);
-        console.log(`✅ Created ${savedCustomers.length} new customers`);
       }
 
       // Reload customers with wallet relations
+      // CHANGE: Only reload active app users (status=1). Previously also included status=2.
       const reloadedCustomers = await this.customerRepo.find({
         where: {
           hashed_number: In(hashedPhones),
-          status: In([1, 2]),
+          status: 1, // Only active app users
+          // status: In([1, 2]), // Previously included non-app users (status=2)
         },
         order: {
           id: 'DESC', // or created_at: 'DESC'
@@ -912,6 +938,8 @@ export class RestyService {
           `⚠️ Invoice ${invoice.id} missing phone or invoice_no, skipping...`,
         );
         stats.skippedInvoices++;
+        invoice.missing_invoice_or_phone = true;
+        await this.restyIncoicesInfoRepo.save(invoice);
         await this.pointsLogRepo.save(savedLog);
         return;
       }
@@ -948,6 +976,24 @@ export class RestyService {
       const businessUnitId = Number(process.env.NCMC_PETROMIN_BU);
       const tenantId = parseInt(process.env.NCMC_PETROMIN_TENANT!, 10);
 
+      // CHANGE: Skip invoices for non-app users — only active app users (status=1) receive points.
+      // Previously, non-app users were created with status=2 and would still be found here.
+      // Now, if no customer is found it means the phone does not belong to an active app user.
+      if (!customer) {
+        console.log(
+          `⏭️ Invoice ${invoice.invoice_no} — phone not linked to an active app user, skipping...`,
+        );
+        stats.skippedInvoices++;
+        savedLog.skipped_invoices = stats.skippedInvoices;
+        await this.pointsLogRepo.save(savedLog);
+
+        // Mark as already processed so the cron does not keep retrying this invoice
+        // invoice.already_processed_invoice = true;
+        invoice.loyalty_customer = false;
+        await this.restyIncoicesInfoRepo.save(invoice);
+        return;
+      }
+
       if (!customer?.wallet || !customer?.wallet?.id) {
         await this.walletService.createWallet({
           customer_id: customer.id,
@@ -958,7 +1004,8 @@ export class RestyService {
         customer = await this.customerRepo.findOne({
           where: {
             hashed_number: customer.hashed_number,
-            status: In([1, 2]),
+            status: 1, // Only active app users
+            // status: In([1, 2]), // Previously included non-app users (status=2)
           },
           relations: ['tenant', 'business_unit', 'wallet'],
         });

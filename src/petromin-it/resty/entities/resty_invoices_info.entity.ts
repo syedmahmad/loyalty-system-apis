@@ -19,6 +19,8 @@ import {
   'is_claimed',
   'should_assign_points_after_migration',
   'already_processed_invoice',
+  'loyalty_customer',
+  'missing_invoice_or_phone',
 ])
 export class RestyInvoicesInfo {
   @PrimaryGeneratedColumn()
@@ -94,4 +96,10 @@ export class RestyInvoicesInfo {
 
   @Column({ type: 'int', nullable: true })
   sync_log_id: number | null;
+
+  @Column({ type: 'boolean', default: true })
+  loyalty_customer: boolean;
+
+  @Column({ type: 'boolean', default: false })
+  missing_invoice_or_phone: boolean;
 }
