@@ -145,7 +145,7 @@ export class LoyaltyAnalyticsService {
 
     // Filter wallets created between startDate and endDate
     if (startDate && endDate) {
-      qb.where('wallet.updated_at BETWEEN :start AND :end', {
+      qb.where('wallet.created_at BETWEEN :start AND :end', {
         start: startDate,
         end: endDate,
       });
