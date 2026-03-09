@@ -132,53 +132,18 @@ export class LoyaltyAnalyticsService {
   }
 
   private async getPointSummary(startDate?: string, endDate?: string) {
-    // Total earned points: from wallet_transaction, filtered by created_at
     const earnQb = this.walletTransactionRepository
       .createQueryBuilder('tx')
       .select('SUM(tx.point_balance)', 'totalEarned')
       .where('tx.type = :type', { type: 'earn' })
       .andWhere('tx.status = :status', { status: 'active' });
 
-    if (startDate && endDate) {
-      earnQb.andWhere('tx.created_at BETWEEN :start AND :end', {
-        start: startDate,
-        end: endDate,
-      });
-    }
-
-    const earnedResult = await earnQb.getRawOne();
-    const totalEarned = parseFloat(earnedResult?.totalEarned || 0);
-
-    // Total remaining: current live balance snapshot from wallet (not date-scoped by design)
-    // remaining balance
-    // is a point-in-time snapshot and can't meaningfully be reconstructed for a historical date range.
-    const remainingResult = await this.walletRepository
-      .createQueryBuilder('wallet')
-      .select('SUM(wallet.available_balance)', 'totalRemaining')
-      .getRawOne();
-
-    const totalRemaining = parseFloat(remainingResult?.totalRemaining || 0);
-
-    // Total burnt points (active): from wallet_transaction, filtered by created_at
-    // SELECT SUM(point_balance) FROM wallet_transaction WHERE status='active' AND type='burn' [AND created_at BETWEEN ...]
     const activeBurnQb = this.walletTransactionRepository
       .createQueryBuilder('tx')
       .select('SUM(tx.point_balance)', 'totalBurnt')
       .where('tx.type = :type', { type: 'burn' })
       .andWhere('tx.status = :status', { status: 'active' });
 
-    if (startDate && endDate) {
-      activeBurnQb.andWhere('tx.created_at BETWEEN :start AND :end', {
-        start: startDate,
-        end: endDate,
-      });
-    }
-
-    const activeBurnResult = await activeBurnQb.getRawOne();
-    const totalBurnt = parseFloat(activeBurnResult?.totalBurnt || 0);
-
-    // Not confirmed burnt points: from wallet_transaction, filtered by created_at
-    // SELECT SUM(point_balance) FROM wallet_transaction WHERE status='not_confirmed' AND type='burn' [AND created_at BETWEEN ...]
     const notConfirmedBurnQb = this.walletTransactionRepository
       .createQueryBuilder('tx')
       .select('SUM(tx.point_balance)', 'totalNotConfirmedBurnt')
@@ -186,13 +151,38 @@ export class LoyaltyAnalyticsService {
       .andWhere('tx.status = :status', { status: 'not_confirmed' });
 
     if (startDate && endDate) {
+      earnQb.andWhere('tx.created_at BETWEEN :start AND :end', {
+        start: startDate,
+        end: endDate,
+      });
+      activeBurnQb.andWhere('tx.created_at BETWEEN :start AND :end', {
+        start: startDate,
+        end: endDate,
+      });
       notConfirmedBurnQb.andWhere('tx.created_at BETWEEN :start AND :end', {
         start: startDate,
         end: endDate,
       });
     }
 
-    const notConfirmedBurnResult = await notConfirmedBurnQb.getRawOne();
+    const [
+      earnedResult,
+      remainingResult,
+      activeBurnResult,
+      notConfirmedBurnResult,
+    ] = await Promise.all([
+      earnQb.getRawOne(),
+      this.walletRepository
+        .createQueryBuilder('wallet')
+        .select('SUM(wallet.available_balance)', 'totalRemaining')
+        .getRawOne(),
+      activeBurnQb.getRawOne(),
+      notConfirmedBurnQb.getRawOne(),
+    ]);
+
+    const totalEarned = parseFloat(earnedResult?.totalEarned || 0);
+    const totalRemaining = parseFloat(remainingResult?.totalRemaining || 0);
+    const totalBurnt = parseFloat(activeBurnResult?.totalBurnt || 0);
     const totalNotConfirmedBurnt = parseFloat(
       notConfirmedBurnResult?.totalNotConfirmedBurnt || 0,
     );
