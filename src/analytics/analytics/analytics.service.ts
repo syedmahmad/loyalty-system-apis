@@ -2,10 +2,14 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Wallet } from 'src/wallet/entities/wallet.entity';
 import { WalletTransaction } from 'src/wallet/entities/wallet-transaction.entity';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { Coupon } from 'src/coupons/entities/coupon.entity';
 import { UserCoupon } from 'src/wallet/entities/user-coupon.entity';
 import { CouponUsage } from 'src/coupons/entities/coupon-usages.entity';
+import { RestyInvoicesInfo } from 'src/petromin-it/resty/entities/resty_invoices_info.entity';
+import { Rule } from 'src/rules/entities/rules.entity';
+import { Customer } from 'src/customers/entities/customer.entity';
+import { encrypt } from 'src/helpers/encryption';
 
 @Injectable()
 export class LoyaltyAnalyticsService {
@@ -24,6 +28,15 @@ export class LoyaltyAnalyticsService {
 
     @InjectRepository(CouponUsage)
     private couponUsageRepo: Repository<CouponUsage>,
+
+    @InjectRepository(RestyInvoicesInfo)
+    private readonly restyInvoicesRepository: Repository<RestyInvoicesInfo>,
+
+    @InjectRepository(Rule)
+    private readonly rulesRepository: Repository<Rule>,
+
+    @InjectRepository(Customer)
+    private readonly customerRepository: Repository<Customer>,
   ) {}
 
   async pointsSplit(permission: any, startDate?: string, endDate?: string) {
@@ -183,8 +196,8 @@ export class LoyaltyAnalyticsService {
     const totalEarned = parseFloat(earnedResult?.totalEarned || 0);
     const totalRemaining = parseFloat(remainingResult?.totalRemaining || 0);
     const totalBurnt = parseFloat(activeBurnResult?.totalBurnt || 0);
-    const totalNotConfirmedBurnt = parseFloat(
-      notConfirmedBurnResult?.totalNotConfirmedBurnt || 0,
+    const totalNotConfirmedBurnt = Math.abs(
+      parseFloat(notConfirmedBurnResult?.totalNotConfirmedBurnt || 0),
     );
 
     return {
@@ -203,7 +216,7 @@ export class LoyaltyAnalyticsService {
       .addSelect('COUNT(*)', 'transactionCount')
       .addSelect('SUM(tx.point_balance)', 'totalPoints')
       .addSelect('SUM(tx.amount)', 'totalAmount')
-      .where('tx.type = :type', { type: 'earn' })
+      .where('tx.type IN (:...types)', { types: ['earn', 'adjustment'] })
       .andWhere('tx.status = :status', { status: 'active' });
 
     if (startDate && endDate) {
@@ -303,6 +316,120 @@ export class LoyaltyAnalyticsService {
       earned: Number(row.earned || 0),
       burnt: Number(row.burnt || 0),
     }));
+  }
+
+  async getNonClaimedPoints(
+    permission: any,
+    startDate?: string,
+    endDate?: string,
+  ) {
+    if (!permission.canViewAnalytics) {
+      throw new BadRequestException(
+        "You don't have permission to access analytics",
+      );
+    }
+    return this.getUnclaimedPointsSummary(startDate, endDate);
+  }
+
+  private async getUnclaimedPointsSummary(
+    startDate?: string,
+    endDate?: string,
+  ) {
+    // Same earning rule lookup as getPendingPointsForCustomer in resty.service
+    const businessUnitId = Number(process.env.NCMC_PETROMIN_BU);
+    const earnRule = await this.rulesRepository.findOne({
+      where: {
+        business_unit: { id: businessUnitId },
+        rule_type: 'spend and earn',
+        reward_condition: 'perAmount',
+      },
+    });
+
+    const minAmountSpent = Number(earnRule?.min_amount_spent) || 1;
+    const rewardPoints = earnRule?.reward_points || 0;
+    const pointsPerSar = rewardPoints / minAmountSpent;
+
+    // Step 1: Aggregate invoices by phone in DB — one row per unique phone,
+    // not per invoice. Same filters as getPendingPointsForCustomer (minus phone).
+    const qb = this.restyInvoicesRepository
+      .createQueryBuilder('inv')
+      .select('inv.phone', 'phone')
+      .addSelect('COUNT(inv.id)', 'invoiceCount')
+      .addSelect('COALESCE(SUM(inv.invoice_amount), 0)', 'totalAmount')
+      .where('inv.is_claimed = :claimed', { claimed: false })
+      .andWhere('inv.should_assign_points_after_migration = :sap', {
+        sap: true,
+      })
+      .andWhere('inv.already_processed_invoice = :ap', { ap: false })
+      .andWhere('inv.phone IS NOT NULL');
+
+    if (startDate && endDate) {
+      qb.andWhere('inv.created_at BETWEEN :start AND :end', {
+        start: startDate,
+        end: endDate,
+      });
+    }
+
+    const phoneRows: {
+      phone: string;
+      invoiceCount: string;
+      totalAmount: string;
+    }[] = await qb.groupBy('inv.phone').getRawMany();
+
+    if (!phoneRows.length) {
+      return {
+        unclaimedCount: 0,
+        totalAmount: 0,
+        estimatedPoints: 0,
+        pointsPerSar,
+      };
+    }
+
+    // Step 2: Encrypt unique phones to match against hashed_number
+    const phoneToHash = new Map<string, string>();
+    for (const row of phoneRows) {
+      try {
+        phoneToHash.set(row.phone, encrypt(row.phone));
+      } catch {
+        // skip phones that fail encryption
+      }
+    }
+
+    const hashedPhones = [...phoneToHash.values()];
+    if (!hashedPhones.length) {
+      return {
+        unclaimedCount: 0,
+        totalAmount: 0,
+        estimatedPoints: 0,
+        pointsPerSar,
+      };
+    }
+
+    // Step 3: TypeORM indexed find() on hashed_number — only active customers
+    const activeCustomers = await this.customerRepository.find({
+      where: { hashed_number: In(hashedPhones), status: 1 },
+      select: ['hashed_number'],
+    });
+
+    const activeHashSet = new Set(activeCustomers.map((c) => c.hashed_number));
+
+    // Step 4: Sum amounts only for phones belonging to active customers
+    let unclaimedCount = 0;
+    let totalAmount = 0;
+    for (const row of phoneRows) {
+      const hash = phoneToHash.get(row.phone);
+      if (hash && activeHashSet.has(hash)) {
+        unclaimedCount += Number(row.invoiceCount);
+        totalAmount += Number(row.totalAmount || 0);
+      }
+    }
+
+    return {
+      unclaimedCount,
+      totalAmount: parseFloat(totalAmount.toFixed(2)),
+      estimatedPoints: Math.round(totalAmount * pointsPerSar),
+      pointsPerSar,
+    };
   }
 
   async getCouponAnalytics(

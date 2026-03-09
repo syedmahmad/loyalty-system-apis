@@ -78,6 +78,21 @@ export class LoyaltyAnalyticsController {
 
   @UseGuards(AnalyticAccessGuard)
   @ANALYTICSAccess()
+  @Get('non-claimed-points')
+  getNonClaimedPoints(
+    @Req() req: any,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    return this.loyaltyAnalyticsService.getNonClaimedPoints(
+      req.permission,
+      startDate,
+      endDate,
+    );
+  }
+
+  @UseGuards(AnalyticAccessGuard)
+  @ANALYTICSAccess()
   @Get('coupon/:client_id')
   getCouponAnalytics(
     @Param('client_id') client_id: number,

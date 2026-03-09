@@ -15,6 +15,13 @@ import {
 @Index('idx_resty_invoices_invoice_date', ['invoice_date'])
 @Index('idx_resty_invoices_invoice_no', ['invoice_no'])
 @Index('idx_resty_invoices_phone', ['phone'])
+@Index('idx_resty_invoices_non_claimed_points', [
+  'is_claimed',
+  'should_assign_points_after_migration',
+  'already_processed_invoice',
+  // 'loyalty_customer',
+  // 'missing_invoice_or_phone',
+])
 @Index('idx_resty_invoices_claimed_status', [
   'phone',
   'is_claimed',

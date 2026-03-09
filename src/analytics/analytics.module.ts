@@ -11,6 +11,9 @@ import { Tenant } from 'src/tenants/entities/tenant.entity';
 import { User } from 'src/users/entities/user.entity';
 import { UserCoupon } from 'src/wallet/entities/user-coupon.entity';
 import { CouponUsage } from 'src/coupons/entities/coupon-usages.entity';
+import { RestyInvoicesInfo } from 'src/petromin-it/resty/entities/resty_invoices_info.entity';
+import { Rule } from 'src/rules/entities/rules.entity';
+import { Customer } from 'src/customers/entities/customer.entity';
 
 @Module({
   imports: [
@@ -23,7 +26,10 @@ import { CouponUsage } from 'src/coupons/entities/coupon-usages.entity';
       BusinessUnit,
       User,
       UserCoupon,
-      CouponUsage
+      CouponUsage,
+      RestyInvoicesInfo,
+      Rule,
+      Customer,
     ]),
   ],
   controllers: [LoyaltyAnalyticsController],
