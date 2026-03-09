@@ -2,8 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Wallet } from 'src/wallet/entities/wallet.entity';
 import { WalletTransaction } from 'src/wallet/entities/wallet-transaction.entity';
-import { WalletOrder } from 'src/wallet/entities/wallet-order.entity';
-import { Between, IsNull, Not, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
 import { Coupon } from 'src/coupons/entities/coupon.entity';
 import { UserCoupon } from 'src/wallet/entities/user-coupon.entity';
 import { CouponUsage } from 'src/coupons/entities/coupon-usages.entity';
@@ -16,9 +15,6 @@ export class LoyaltyAnalyticsService {
 
     @InjectRepository(WalletTransaction)
     private readonly walletTransactionRepository: Repository<WalletTransaction>,
-
-    @InjectRepository(WalletOrder)
-    private readonly walletOrderRepository: Repository<WalletOrder>,
 
     @InjectRepository(Coupon)
     private readonly couponRepository: Repository<Coupon>,
@@ -211,39 +207,29 @@ export class LoyaltyAnalyticsService {
   }
 
   private async getItemUsage(startDate?: string, endDate?: string) {
-    const where: any = {
-      items: Not(IsNull()),
-    };
+    const qb = this.walletTransactionRepository
+      .createQueryBuilder('tx')
+      .select('tx.source_type', 'sourceType')
+      .addSelect('COUNT(*)', 'transactionCount')
+      .addSelect('SUM(tx.point_balance)', 'totalPoints')
+      .addSelect('SUM(tx.amount)', 'totalAmount')
+      .where('tx.type = :type', { type: 'earn' })
+      .andWhere('tx.status = :status', { status: 'active' });
 
     if (startDate && endDate) {
-      where.order_date = Between(new Date(startDate), new Date(endDate));
+      qb.andWhere('tx.created_at BETWEEN :start AND :end', {
+        start: startDate,
+        end: endDate,
+      });
     }
 
-    const orders = await this.walletOrderRepository.find({ where });
+    const rows = await qb.groupBy('tx.source_type').getRawMany();
 
-    const itemMap = new Map<string, number>();
-    for (const order of orders) {
-      const items = Array.isArray(order.items)
-        ? order.items
-        : JSON.parse(order.items || '[]');
-      const seen = new Set();
-
-      for (const item of items) {
-        if (item?.name && !seen.has(item.name)) {
-          seen.add(item.name);
-          itemMap.set(item.name, (itemMap.get(item.name) || 0) + 1);
-        }
-      }
-    }
-
-    const totalOrders = orders.length;
-
-    return Array.from(itemMap.entries()).map(([itemName, count]) => ({
-      itemName,
-      invoiceCount: count,
-      percentage: totalOrders
-        ? `${((count / totalOrders) * 100).toFixed(2)}%`
-        : '0.00%',
+    return rows.map((r) => ({
+      sourceType: r.sourceType,
+      transactionCount: Number(r.transactionCount),
+      totalPoints: Number(r.totalPoints || 0),
+      totalAmount: r.totalAmount != null ? Number(r.totalAmount) : null,
     }));
   }
 
