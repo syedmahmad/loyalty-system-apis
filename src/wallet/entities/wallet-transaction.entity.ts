@@ -56,6 +56,11 @@ export enum WalletTransactionStatus {
   'status',
   'expires_at',
 ])
+@Index('idx_wallet_transactions_type_status_created_at', [
+  'type',
+  'status',
+  'created_at',
+])
 export class WalletTransaction {
   @PrimaryGeneratedColumn()
   id: number;
