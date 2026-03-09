@@ -136,15 +136,32 @@ export class LoyaltyAnalyticsService {
   }
 
   private async getPointSummary(startDate?: string, endDate?: string) {
-    // Total earned points: from wallet table (cumulative, not date-scoped per business logic)
-    const earnedResult = await this.walletRepository
+    // Total earned points: from wallet_transaction, filtered by created_at
+    const earnQb = this.walletTransactionRepository
+      .createQueryBuilder('tx')
+      .select('SUM(tx.point_balance)', 'totalEarned')
+      .where('tx.type = :type', { type: 'earn' })
+      .andWhere('tx.status = :status', { status: 'active' });
+
+    if (startDate && endDate) {
+      earnQb.andWhere('tx.created_at BETWEEN :start AND :end', {
+        start: startDate,
+        end: endDate,
+      });
+    }
+
+    const earnedResult = await earnQb.getRawOne();
+    const totalEarned = parseFloat(earnedResult?.totalEarned || 0);
+
+    // Total remaining: current live balance snapshot from wallet (not date-scoped by design)
+    // remaining balance
+    // is a point-in-time snapshot and can't meaningfully be reconstructed for a historical date range.
+    const remainingResult = await this.walletRepository
       .createQueryBuilder('wallet')
-      .select('SUM(wallet.total_earned_points)', 'totalEarned')
-      .addSelect('SUM(wallet.available_balance)', 'totalRemaining')
+      .select('SUM(wallet.available_balance)', 'totalRemaining')
       .getRawOne();
 
-    const totalEarned = parseFloat(earnedResult?.totalEarned || 0);
-    const totalRemaining = parseFloat(earnedResult?.totalRemaining || 0);
+    const totalRemaining = parseFloat(remainingResult?.totalRemaining || 0);
 
     // Total burnt points (active): from wallet_transaction, filtered by created_at
     // SELECT SUM(point_balance) FROM wallet_transaction WHERE status='active' AND type='burn' [AND created_at BETWEEN ...]
