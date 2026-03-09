@@ -331,11 +331,18 @@ export class LoyaltyAnalyticsService {
     return this.getUnclaimedPointsSummary(startDate, endDate);
   }
 
+  /**
+   * Aggregates unclaimed points summary for invoice data (one row per unique phone).
+   * Returns the number of unclaimed invoices, total unclaimed amount, estimated points,
+   * and points-per-SAR (Saudi Riyal) rate for active customers only.
+   *
+   * NOTE: this will pick invoices only for active customers, all other invoices amount, not calculate here.
+   */
   private async getUnclaimedPointsSummary(
     startDate?: string,
     endDate?: string,
   ) {
-    // Same earning rule lookup as getPendingPointsForCustomer in resty.service
+    // 1. Get earning rule (same as in getPendingPointsForCustomer in resty.service)
     const businessUnitId = Number(process.env.NCMC_PETROMIN_BU);
     const earnRule = await this.rulesRepository.findOne({
       where: {
@@ -345,12 +352,14 @@ export class LoyaltyAnalyticsService {
       },
     });
 
+    // Earning rule: minimum amount to spend for a reward, and reward points per 'step'
     const minAmountSpent = Number(earnRule?.min_amount_spent) || 1;
     const rewardPoints = earnRule?.reward_points || 0;
+    // Compute conversion rate for points earned per SAR spent
     const pointsPerSar = rewardPoints / minAmountSpent;
 
-    // Step 1: Aggregate invoices by phone in DB — one row per unique phone,
-    // not per invoice. Same filters as getPendingPointsForCustomer (minus phone).
+    // 2. Aggregate RESTY invoices by phone (where points should be assigned, not claimed, and not already processed)
+    //    Only include invoices tied to a non-null phone value.
     const qb = this.restyInvoicesRepository
       .createQueryBuilder('inv')
       .select('inv.phone', 'phone')
@@ -363,6 +372,7 @@ export class LoyaltyAnalyticsService {
       .andWhere('inv.already_processed_invoice = :ap', { ap: false })
       .andWhere('inv.phone IS NOT NULL');
 
+    // 3. Optionally filter by creation date, if both range values are provided
     if (startDate && endDate) {
       qb.andWhere('inv.created_at BETWEEN :start AND :end', {
         start: startDate,
@@ -370,12 +380,14 @@ export class LoyaltyAnalyticsService {
       });
     }
 
+    // 4. Get the result as an array of {phone, invoiceCount, totalAmount}
     const phoneRows: {
       phone: string;
       invoiceCount: string;
       totalAmount: string;
     }[] = await qb.groupBy('inv.phone').getRawMany();
 
+    // Return zeroes if there are no matching invoice rows
     if (!phoneRows.length) {
       return {
         unclaimedCount: 0,
@@ -385,16 +397,17 @@ export class LoyaltyAnalyticsService {
       };
     }
 
-    // Step 2: Encrypt unique phones to match against hashed_number
+    // 5. Encrypt each unique phone (to match with hashed_number field of customers)
     const phoneToHash = new Map<string, string>();
     for (const row of phoneRows) {
       try {
         phoneToHash.set(row.phone, encrypt(row.phone));
       } catch {
-        // skip phones that fail encryption
+        // skip phones that fail encryption (invalid, etc)
       }
     }
 
+    // 6. Only proceed if there are phones that could be encrypted
     const hashedPhones = [...phoneToHash.values()];
     if (!hashedPhones.length) {
       return {
@@ -405,15 +418,17 @@ export class LoyaltyAnalyticsService {
       };
     }
 
-    // Step 3: TypeORM indexed find() on hashed_number — only active customers
+    // 7. Find active customer records (status 1) whose hashed_number matches encrypted phone
     const activeCustomers = await this.customerRepository.find({
       where: { hashed_number: In(hashedPhones), status: 1 },
       select: ['hashed_number'],
     });
 
+    // Store the set of hashes for active customers for fast lookup
     const activeHashSet = new Set(activeCustomers.map((c) => c.hashed_number));
 
-    // Step 4: Sum amounts only for phones belonging to active customers
+    // 8. For each phone in aggregation, if phone's encrypted hash is an active customer:
+    //    - include their invoice count and total amount in stats
     let unclaimedCount = 0;
     let totalAmount = 0;
     for (const row of phoneRows) {
@@ -424,10 +439,11 @@ export class LoyaltyAnalyticsService {
       }
     }
 
+    // 9. Package summary result
     return {
       unclaimedCount,
-      totalAmount: parseFloat(totalAmount.toFixed(2)),
-      estimatedPoints: Math.round(totalAmount * pointsPerSar),
+      totalAmount: parseFloat(totalAmount.toFixed(2)), // round to two decimals
+      estimatedPoints: Math.round(totalAmount * pointsPerSar), // estimate points earned
       pointsPerSar,
     };
   }
