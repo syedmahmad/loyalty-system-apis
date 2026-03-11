@@ -10,6 +10,7 @@ import { RestyInvoicesInfo } from 'src/petromin-it/resty/entities/resty_invoices
 import { Rule } from 'src/rules/entities/rules.entity';
 import { Customer } from 'src/customers/entities/customer.entity';
 import { encrypt } from 'src/helpers/encryption';
+import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
 
 @Injectable()
 export class LoyaltyAnalyticsService {
@@ -37,6 +38,9 @@ export class LoyaltyAnalyticsService {
 
     @InjectRepository(Customer)
     private readonly customerRepository: Repository<Customer>,
+
+    @InjectRepository(BusinessUnit)
+    private readonly businessUnitRepository: Repository<BusinessUnit>,
   ) {}
 
   async pointsSplit(permission: any, startDate?: string, endDate?: string) {
@@ -407,9 +411,10 @@ export class LoyaltyAnalyticsService {
     const businessUnitId = Number(process.env.NCMC_PETROMIN_BU);
 
     // This data only applies to the NCMC tenant. Return zeros for any other tenant.
-    const ncmcBu = await this.rulesRepository.manager
-      .getRepository('business_unit')
-      .findOne({ where: { id: businessUnitId }, select: ['tenant_id'] });
+    const ncmcBu = await this.businessUnitRepository.findOne({
+      where: { id: businessUnitId },
+      select: ['tenant_id'],
+    });
     if (!ncmcBu || ncmcBu.tenant_id !== tenantId) {
       return {
         unclaimedCount: 0,
