@@ -179,12 +179,7 @@ export class WalletTransaction {
   @JoinColumn({ name: 'customer_id' })
   customer: Customer;
 
-  // PHASE 1: @Column with default:2 ensures all existing rows get tenant_id=2 (NCMC) on deploy
-  // PHASE 2: after confirming backfill, remove the @Column line below and keep only @ManyToOne
-  @Column({ type: 'int', default: 2 })
-  tenant_id: number;
-
-  @ManyToOne(() => Tenant)
+  @ManyToOne(() => Tenant, { nullable: true })
   @JoinColumn({ name: 'tenant_id' })
   tenant: Tenant;
 }

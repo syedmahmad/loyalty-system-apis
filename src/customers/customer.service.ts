@@ -2189,6 +2189,7 @@ export class CustomerService {
       wallet: wallet,
       orders: walletOrderResponse,
       business_unit: wallet.business_unit,
+      tenant: { id: wallet.business_unit.tenant_id } as any,
       type: WalletTransactionType.EARN,
       source_type: sourceType, //TODO: need to update it with rule event triggerer
       amount,

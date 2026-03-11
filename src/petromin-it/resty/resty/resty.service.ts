@@ -1047,6 +1047,7 @@ export class RestyService {
         const transactionPayload = {
           wallet: { id: customer?.wallet?.id },
           business_unit: { id: Number(process.env.NCMC_PETROMIN_BU) },
+          tenant: { id: Number(process.env.NCMC_PETROMIN_TENANT) },
           type: WalletTransactionType.EARN,
           status: WalletTransactionStatus.ACTIVE,
           amount: invoice.invoice_amount,
@@ -1448,6 +1449,7 @@ export class RestyService {
         const transaction = this.walletTransactionRepo.create({
           wallet: { id: customer.wallet.id },
           business_unit: { id: businessUnitId },
+          tenant: { id: tenantId },
           type: WalletTransactionType.EARN,
           status: WalletTransactionStatus.ACTIVE,
           amount: invoice.invoice_amount,

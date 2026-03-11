@@ -162,6 +162,7 @@ export class WalletService {
       ...dto,
       customer: { id: wallet.customer.id } as any,
       business_unit: { id: dto.business_unit_id } as any,
+      tenant: { id: wallet.business_unit.tenant_id } as any,
       point_balance: dto.points_balance,
       wallet: { id: dto.wallet_id } as any,
       unlock_date: unlockDate,
