@@ -384,7 +384,11 @@ export class LoyaltyAnalyticsService {
         "You don't have permission to access analytics",
       );
     }
-    return this.getUnclaimedPointsSummary(startDate, endDate);
+    return this.getUnclaimedPointsSummary(
+      permission.tenantId,
+      startDate,
+      endDate,
+    );
   }
 
   /**
@@ -395,11 +399,25 @@ export class LoyaltyAnalyticsService {
    * NOTE: this will pick invoices only for active customers, all other invoices amount, not calculate here.
    */
   private async getUnclaimedPointsSummary(
+    tenantId: number,
     startDate?: string,
     endDate?: string,
   ) {
     // 1. Get earning rule (same as in getPendingPointsForCustomer in resty.service)
     const businessUnitId = Number(process.env.NCMC_PETROMIN_BU);
+
+    // This data only applies to the NCMC tenant. Return zeros for any other tenant.
+    const ncmcBu = await this.rulesRepository.manager
+      .getRepository('business_unit')
+      .findOne({ where: { id: businessUnitId }, select: ['tenant_id'] });
+    if (!ncmcBu || ncmcBu.tenant_id !== tenantId) {
+      return {
+        unclaimedCount: 0,
+        totalAmount: 0,
+        estimatedPoints: 0,
+        pointsPerSar: 0,
+      };
+    }
     const earnRule = await this.rulesRepository.findOne({
       where: {
         business_unit: { id: businessUnitId },
