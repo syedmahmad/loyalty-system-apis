@@ -47,7 +47,11 @@ export class LoyaltyAnalyticsService {
     }
     // Fetch each analytic serially to prevent Out Of Memory (OOM) errors.
     // Note: This mitigates memory spikes, but may increase response time since metrics are not loaded in parallel.
-    const pointSplits = await this.getPointsSplit(startDate, endDate);
+    const pointSplits = await this.getPointsSplit(
+      permission.tenantId,
+      startDate,
+      endDate,
+    );
     return {
       pointSplits,
     };
@@ -59,7 +63,9 @@ export class LoyaltyAnalyticsService {
         "You don't have permission to access analytics",
       );
     }
-    const customerByPoints = await this.getCustomerPointDistribution();
+    const customerByPoints = await this.getCustomerPointDistribution(
+      permission.tenantId,
+    );
     return {
       customerByPoints,
     };
@@ -71,7 +77,11 @@ export class LoyaltyAnalyticsService {
         "You don't have permission to access analytics",
       );
     }
-    const summary = await this.getPointSummary(startDate, endDate);
+    const summary = await this.getPointSummary(
+      permission.tenantId,
+      startDate,
+      endDate,
+    );
     return {
       summary,
     };
@@ -83,7 +93,11 @@ export class LoyaltyAnalyticsService {
         "You don't have permission to access analytics",
       );
     }
-    const itemUsage = await this.getItemUsage(startDate, endDate);
+    const itemUsage = await this.getItemUsage(
+      permission.tenantId,
+      startDate,
+      endDate,
+    );
     return {
       itemUsage,
     };
@@ -95,19 +109,28 @@ export class LoyaltyAnalyticsService {
         "You don't have permission to access analytics",
       );
     }
-    const barChart = await this.getBarChartData(startDate, endDate);
+    const barChart = await this.getBarChartData(
+      permission.tenantId,
+      startDate,
+      endDate,
+    );
     return {
       barChart,
     };
   }
 
-  private async getPointsSplit(startDate?: string, endDate?: string) {
+  private async getPointsSplit(
+    tenantId: number,
+    startDate?: string,
+    endDate?: string,
+  ) {
     const qb = this.walletTransactionRepository
       .createQueryBuilder('tx')
       .select('tx.source_type', 'sourceType')
       .addSelect('SUM(tx.point_balance)', 'totalPoints')
       .where('tx.type IN (:...types)', { types: ['earn', 'adjustment'] })
-      .andWhere('tx.status = :status', { status: 'active' });
+      .andWhere('tx.status = :status', { status: 'active' })
+      .andWhere('tx.tenant = :tenantId', { tenantId });
 
     if (startDate && endDate) {
       qb.andWhere('tx.created_at BETWEEN :start AND :end', {
@@ -119,24 +142,39 @@ export class LoyaltyAnalyticsService {
     return qb.groupBy('tx.source_type').getRawMany();
   }
 
-  private async getCustomerPointDistribution() {
+  private async getCustomerPointDistribution(tenantId: number) {
     const { total } = await this.walletRepository
       .createQueryBuilder('wallet')
       .select('COUNT(*)', 'total')
+      .where('wallet.tenant = :tenantId', { tenantId })
       .getRawOne();
 
-    const ranges = await this.walletRepository.query(`
-      SELECT 
+    const ranges = await this.walletRepository
+      .createQueryBuilder('wallet')
+      .select(
+        `
         CASE
-          WHEN total_balance BETWEEN 0 AND 1000 THEN '0-1,000'
-          WHEN total_balance BETWEEN 1001 AND 2000 THEN '1,001-2,000'
-          WHEN total_balance BETWEEN 2001 AND 5000 THEN '2,001-5,000'
+          WHEN wallet.total_balance BETWEEN 0 AND 1000 THEN '0-1,000'
+          WHEN wallet.total_balance BETWEEN 1001 AND 2000 THEN '1,001-2,000'
+          WHEN wallet.total_balance BETWEEN 2001 AND 5000 THEN '2,001-5,000'
           ELSE '5,001+'
-        END AS \`range\`,
-        COUNT(*) AS count
-      FROM wallet
-      GROUP BY \`range\`
-    `);
+        END
+      `,
+        'range',
+      )
+      .addSelect('COUNT(*)', 'count')
+      .where('wallet.tenant = :tenantId', { tenantId })
+      .groupBy(
+        `
+        CASE
+          WHEN wallet.total_balance BETWEEN 0 AND 1000 THEN '0-1,000'
+          WHEN wallet.total_balance BETWEEN 1001 AND 2000 THEN '1,001-2,000'
+          WHEN wallet.total_balance BETWEEN 2001 AND 5000 THEN '2,001-5,000'
+          ELSE '5,001+'
+        END
+      `,
+      )
+      .getRawMany();
 
     return ranges.map((r: any) => ({
       ...r,
@@ -144,24 +182,31 @@ export class LoyaltyAnalyticsService {
     }));
   }
 
-  private async getPointSummary(startDate?: string, endDate?: string) {
+  private async getPointSummary(
+    tenantId: number,
+    startDate?: string,
+    endDate?: string,
+  ) {
     const earnQb = this.walletTransactionRepository
       .createQueryBuilder('tx')
       .select('SUM(tx.point_balance)', 'totalEarned')
       .where('tx.type = :type', { type: 'earn' })
-      .andWhere('tx.status = :status', { status: 'active' });
+      .andWhere('tx.status = :status', { status: 'active' })
+      .andWhere('tx.tenant = :tenantId', { tenantId });
 
     const activeBurnQb = this.walletTransactionRepository
       .createQueryBuilder('tx')
       .select('SUM(tx.point_balance)', 'totalBurnt')
       .where('tx.type = :type', { type: 'burn' })
-      .andWhere('tx.status = :status', { status: 'active' });
+      .andWhere('tx.status = :status', { status: 'active' })
+      .andWhere('tx.tenant = :tenantId', { tenantId });
 
     const notConfirmedBurnQb = this.walletTransactionRepository
       .createQueryBuilder('tx')
       .select('SUM(tx.point_balance)', 'totalNotConfirmedBurnt')
       .where('tx.type = :type', { type: 'burn' })
-      .andWhere('tx.status = :status', { status: 'not_confirmed' });
+      .andWhere('tx.status = :status', { status: 'not_confirmed' })
+      .andWhere('tx.tenant = :tenantId', { tenantId });
 
     if (startDate && endDate) {
       earnQb.andWhere('tx.created_at BETWEEN :start AND :end', {
@@ -188,6 +233,7 @@ export class LoyaltyAnalyticsService {
       this.walletRepository
         .createQueryBuilder('wallet')
         .select('SUM(wallet.available_balance)', 'totalRemaining')
+        .where('wallet.tenant = :tenantId', { tenantId })
         .getRawOne(),
       activeBurnQb.getRawOne(),
       notConfirmedBurnQb.getRawOne(),
@@ -209,7 +255,11 @@ export class LoyaltyAnalyticsService {
     };
   }
 
-  private async getItemUsage(startDate?: string, endDate?: string) {
+  private async getItemUsage(
+    tenantId: number,
+    startDate?: string,
+    endDate?: string,
+  ) {
     const qb = this.walletTransactionRepository
       .createQueryBuilder('tx')
       .select('tx.source_type', 'sourceType')
@@ -217,7 +267,8 @@ export class LoyaltyAnalyticsService {
       .addSelect('SUM(tx.point_balance)', 'totalPoints')
       .addSelect('SUM(tx.amount)', 'totalAmount')
       .where('tx.type IN (:...types)', { types: ['earn', 'adjustment'] })
-      .andWhere('tx.status = :status', { status: 'active' });
+      .andWhere('tx.status = :status', { status: 'active' })
+      .andWhere('tx.tenant = :tenantId', { tenantId });
 
     if (startDate && endDate) {
       qb.andWhere('tx.created_at BETWEEN :start AND :end', {
@@ -236,7 +287,11 @@ export class LoyaltyAnalyticsService {
     }));
   }
 
-  private async getBarChartData(startDate?: string, endDate?: string) {
+  private async getBarChartData(
+    tenantId: number,
+    startDate?: string,
+    endDate?: string,
+  ) {
     /*
     const whereClause: any = {};
     if (startDate && endDate) {
@@ -298,7 +353,8 @@ export class LoyaltyAnalyticsService {
   `,
         'burnt',
       )
-      .where('tx.status = :status', { status: 'active' });
+      .where('tx.status = :status', { status: 'active' })
+      .andWhere('tx.tenant = :tenantId', { tenantId });
 
     if (startDate && endDate) {
       query.andWhere('tx.created_at BETWEEN :start AND :end', {

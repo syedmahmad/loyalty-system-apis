@@ -184,6 +184,7 @@ export class AnalyticAccessGuard implements CanActivate {
     // 1) Global Analytic permissions, or
     // 2) Specific tenant/BU access
     request.permission = {
+      tenantId: client_id,
       allowedTenantIds,
       allowedBusinessUnitIds,
       allowAllTenants,
