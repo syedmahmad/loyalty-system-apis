@@ -12,6 +12,7 @@ import { Wallet } from './wallet.entity';
 import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
 import { WalletOrder } from './wallet-order.entity';
 import { Customer } from 'src/customers/entities/customer.entity';
+import { Tenant } from 'src/tenants/entities/tenant.entity';
 // import { v4 as uuidv4 } from 'uuid';
 
 export enum WalletTransactionType {
@@ -40,6 +41,7 @@ export enum WalletTransactionStatus {
 @Index('idx_wallet_transactions_expiry_date', ['expiry_date'])
 @Index('idx_wallet_transactions_expires_at', ['expires_at'])
 @Index('idx_wallet_transactions_customer', ['customer'])
+@Index('idx_wallet_transactions_tenant', ['tenant'])
 @Index('idx_wallet_transactions_invoice_no', ['invoice_no'])
 @Index('idx_wallet_transactions_type_wallet_type_created_at', [
   'wallet',
@@ -176,4 +178,13 @@ export class WalletTransaction {
   @ManyToOne(() => Customer, { nullable: true })
   @JoinColumn({ name: 'customer_id' })
   customer: Customer;
+
+  // PHASE 1: @Column with default:2 ensures all existing rows get tenant_id=2 (NCMC) on deploy
+  // PHASE 2: after confirming backfill, remove the @Column line below and keep only @ManyToOne
+  @Column({ type: 'int', default: 2 })
+  tenant_id: number;
+
+  @ManyToOne(() => Tenant)
+  @JoinColumn({ name: 'tenant_id' })
+  tenant: Tenant;
 }
