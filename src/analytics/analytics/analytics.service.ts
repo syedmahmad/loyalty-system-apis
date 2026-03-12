@@ -15,28 +15,28 @@ import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
 @Injectable()
 export class LoyaltyAnalyticsService {
   constructor(
-    @InjectRepository(Wallet, 'slave')
+    @InjectRepository(Wallet)
     private readonly walletRepository: Repository<Wallet>,
 
-    @InjectRepository(WalletTransaction, 'slave')
+    @InjectRepository(WalletTransaction)
     private readonly walletTransactionRepository: Repository<WalletTransaction>,
 
-    @InjectRepository(Coupon, 'slave')
+    @InjectRepository(Coupon)
     private readonly couponRepository: Repository<Coupon>,
 
-    @InjectRepository(UserCoupon, 'slave')
+    @InjectRepository(UserCoupon)
     private userCouponRepository: Repository<UserCoupon>,
 
-    @InjectRepository(CouponUsage, 'slave')
+    @InjectRepository(CouponUsage)
     private couponUsageRepo: Repository<CouponUsage>,
 
-    @InjectRepository(RestyInvoicesInfo, 'slave')
+    @InjectRepository(RestyInvoicesInfo)
     private readonly restyInvoicesRepository: Repository<RestyInvoicesInfo>,
 
-    @InjectRepository(Rule, 'slave')
+    @InjectRepository(Rule)
     private readonly rulesRepository: Repository<Rule>,
 
-    @InjectRepository(Customer, 'slave')
+    @InjectRepository(Customer)
     private readonly customerRepository: Repository<Customer>,
 
     @InjectRepository(BusinessUnit)

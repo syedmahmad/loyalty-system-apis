@@ -17,23 +17,20 @@ import { Customer } from 'src/customers/entities/customer.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature(
-      [
-        Wallet,
-        WalletTransaction,
-        WalletOrder,
-        Coupon,
-        Tenant,
-        BusinessUnit,
-        User,
-        UserCoupon,
-        CouponUsage,
-        RestyInvoicesInfo,
-        Rule,
-        Customer,
-      ],
-      'slave',
-    ),
+    TypeOrmModule.forFeature([
+      Wallet,
+      WalletTransaction,
+      WalletOrder,
+      Coupon,
+      Tenant,
+      BusinessUnit,
+      User,
+      UserCoupon,
+      CouponUsage,
+      RestyInvoicesInfo,
+      Rule,
+      Customer,
+    ]),
   ],
   controllers: [LoyaltyAnalyticsController],
   providers: [LoyaltyAnalyticsService],
