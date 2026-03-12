@@ -6,10 +6,13 @@ import * as crypto from 'crypto';
  */
 export function encrypt(data: string): string {
   // Create a cipher object using the AES-256-CBC algorithm, key, and IV
+  const ENCRYPTION_KEY =
+    '4d700263f55bb8c5579b5129a4f078446fcfb1e773b4e8a83c44f3b35cd58178';
+  const ENCRYPTION_IV = 'bac3efee727dad69267a30ddf3014615';
   const cipher = crypto.createCipheriv(
     'aes-256-cbc',
-    Buffer.from(process.env.ENCRYPTION_KEY, 'hex'), // Convert the key from hex string to Buffer
-    Buffer.from(process.env.ENCRYPTION_IV, 'hex'), // Convert the IV from hex string to Buffer
+    Buffer.from(ENCRYPTION_KEY, 'hex'), // Convert the key from hex string to Buffer
+    Buffer.from(ENCRYPTION_IV, 'hex'), // Convert the IV from hex string to Buffer
   );
 
   // Encrypt the data: update processes the input, final completes encryption
@@ -28,13 +31,16 @@ export function encrypt(data: string): string {
  * @returns The decrypted plaintext string.
  */
 export function decrypt(encryptedData: string): string {
+  const ENCRYPTION_KEY =
+    '4d700263f55bb8c5579b5129a4f078446fcfb1e773b4e8a83c44f3b35cd58178';
+  const ENCRYPTION_IV = 'bac3efee727dad69267a30ddf3014615';
   try {
     // Create a decipher object using the AES-256-CBC algorithm, key, and IV
     // This will be used to reverse the encryption process
     const decipher = crypto.createDecipheriv(
       'aes-256-cbc',
-      Buffer.from(process.env.ENCRYPTION_KEY, 'hex'), // Convert the key from hex string to Buffer
-      Buffer.from(process.env.ENCRYPTION_IV, 'hex'), // Convert the IV from hex string to Buffer
+      Buffer.from(ENCRYPTION_KEY, 'hex'), // Convert the key from hex string to Buffer
+      Buffer.from(ENCRYPTION_IV, 'hex'), // Convert the IV from hex string to Buffer
     );
 
     // Decrypt the data:

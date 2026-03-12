@@ -83,6 +83,37 @@ import { MasterModule } from './master/master.module';
         };
       },
     }),
+    TypeOrmModule.forRootAsync({
+      name: 'slave',
+      inject: [],
+      useFactory: async () => {
+        const slaveHostEnc =
+          process.env.DB_SLAVE_HOST || process.env.DB_HOST || '';
+        const host = await decrypt(slaveHostEnc);
+        const port = parseInt(await decrypt(process.env.DB_PORT || ''), 10);
+        const username = await decrypt(process.env.DB_USERNAME || '');
+        const password = await decrypt(process.env.DB_PASSWORD || '');
+        const database = await decrypt(process.env.DB_NAME || '');
+
+        return {
+          type: 'mysql',
+          name: 'slave',
+          host,
+          port,
+          username,
+          password,
+          database,
+          autoLoadEntities: true,
+          synchronize: false,
+
+          extra: {
+            connectionLimit: 10,
+            waitForConnections: true,
+            queueLimit: 0,
+          },
+        };
+      },
+    }),
     ScheduleModule.forRoot(),
     UsersModule,
     CampaignModule,
