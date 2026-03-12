@@ -48,6 +48,9 @@ import { RestyInvoicesInfoModule } from 'src/petromin-it/resty/resty.module';
 import { GvrTransactionModule } from './gvr/gvr.module';
 import { OffersModule } from './offers/offers.module';
 import { MasterModule } from './master/master.module';
+import { PartnersModule } from './partners/partners.module';
+import { TenantIntegrationsModule } from './tenant-integrations/tenant-integrations.module';
+import { TenantPartnerTerminalsModule } from './tenant-partner-terminals/tenant-partner-terminals.module';
 
 @Module({
   imports: [
@@ -123,6 +126,9 @@ import { MasterModule } from './master/master.module';
     NotificationModule,
     OffersModule,
     MasterModule,
+    PartnersModule,
+    TenantIntegrationsModule,
+    TenantPartnerTerminalsModule,
   ],
   controllers: [AppController],
   providers: [AppService, AxiosLoggerInterceptor, NewrelicLoggerService],
