@@ -49,18 +49,25 @@ export class TenantPartnerIntegration {
 
   /**
    * All partner-specific config stored as a JSON object.
-   * Contents differ per partner type:
+   * Contents differ per partner type — see interfaces/ for typed shapes.
    *
-   * QITAF keys: environment, apiBaseUrl, branchId, terminalId,
-   *             timeoutSeconds, otpValidityMinutes, pointToAmountRatio,
-   *             refundPeriodDays, certificateUrl, testMsisdn, simCardSerial
+   * QITAF keys:
+   *   secretToken        — X-Secret-Token header value (provided by STC)
+   *   authUsername       — Basic Auth username (provided by STC)
+   *   authPassword       — Basic Auth password (provided by STC)
+   *   apiBaseUrl         — STC Qitaf web service base URL
+   *   pointToAmountRatio — SAR-to-point ratio agreed with STC
+   *   refundPeriodDays   — Days before points are posted (refund window)
+   *
+   * Note: SSL/mTLS certs live at the infrastructure level (env vars), not here.
+   * Redemption timeout (60 s) and OTP validity (3 min) are STC-mandated constants
+   * hardcoded in the Qitaf service — not stored here.
    *
    * AL_FURSAN keys: environment, apiBaseUrl, partnerId, apiKey,
    *                 pointToMileRatio, timeoutSeconds
    *
    * Future partner keys: add new schema on frontend without DB changes.
-   * When branches/tellers table is added later, those specific fields
-   * will move to the dedicated table; remaining config stays here.
+   * Branch/terminal mappings live in tenant_partner_terminals table.
    */
   @Column({ type: 'json', nullable: true })
   configuration: Record<string, any>;
