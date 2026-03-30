@@ -3,4 +3,5 @@ export class CreateBusinessUnitDto {
   name: string;
   description?: string;
   location?: string;
+  type?: string; // 'points' | 'otp'
 }
