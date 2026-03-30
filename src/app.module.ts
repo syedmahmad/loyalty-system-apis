@@ -51,6 +51,7 @@ import { MasterModule } from './master/master.module';
 import { PartnersModule } from './partners/partners.module';
 import { TenantIntegrationsModule } from './tenant-integrations/tenant-integrations.module';
 import { TenantPartnerTerminalsModule } from './tenant-partner-terminals/tenant-partner-terminals.module';
+import { QitafModule } from './qitaf/qitaf.module';
 
 @Module({
   imports: [
@@ -129,6 +130,7 @@ import { TenantPartnerTerminalsModule } from './tenant-partner-terminals/tenant-
     PartnersModule,
     TenantIntegrationsModule,
     TenantPartnerTerminalsModule,
+    QitafModule,
   ],
   controllers: [AppController],
   providers: [AppService, AxiosLoggerInterceptor, NewrelicLoggerService],

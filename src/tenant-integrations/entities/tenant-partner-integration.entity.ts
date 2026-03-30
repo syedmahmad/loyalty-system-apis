@@ -72,6 +72,13 @@ export class TenantPartnerIntegration {
   @Column({ type: 'json', nullable: true })
   configuration: Record<string, any>;
 
+  /**
+   * Long-lived JWT issued to the POS system for calling /qitaf/* endpoints.
+   * Generated from the admin panel. No expiry — can be regenerated any time.
+   */
+  @Column({ type: 'text', nullable: true, default: null })
+  pos_api_token: string | null;
+
   @Column()
   created_by: number;
 

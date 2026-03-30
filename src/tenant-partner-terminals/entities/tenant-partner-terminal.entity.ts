@@ -13,7 +13,11 @@ import {
 import { TenantPartnerIntegration } from 'src/tenant-integrations/entities/tenant-partner-integration.entity';
 
 @Entity('tenant_partner_terminals')
-@Index('idx_tpt_int_branch_terminal', ['tenant_partner_integration_id', 'branch_id', 'terminal_id'], { unique: true })
+@Index(
+  'idx_tpt_int_branch_terminal',
+  ['tenant_partner_integration_id', 'branch_id', 'terminal_id'],
+  { unique: true },
+)
 export class TenantPartnerTerminal {
   @PrimaryGeneratedColumn()
   id: number;
