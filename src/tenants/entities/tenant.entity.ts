@@ -58,6 +58,9 @@ export class Tenant {
   @UpdateDateColumn()
   updated_at: Date;
 
+  @Column({ type: 'text', nullable: true, default: null })
+  api_token: string | null;
+
   @Column({ type: 'int', default: 1 })
   status: number; // 1 = active, 0 = inactive
 
