@@ -166,7 +166,9 @@ export class QitafService {
   // 1. REQUEST OTP
   // Asks STC to send a 4-digit PIN via SMS to the customer's mobile number.
   // This PIN is required in the next step (Redeem) to confirm the transaction.
-  // PIN is valid for 3 minutes.
+  // PIN is valid for 5 minutes.
+  // Along with PIN, user will also get equivalent qitaf balance in SAR but this both
+  // info, we will not get in API response.
   // ═══════════════════════════════════════════════════════════════════════════
   async requestOtp(tenantId: number, partnerId: number, dto: RedemptionOtpDto) {
     const { config } = await this.loadIntegration(tenantId, partnerId);
@@ -387,6 +389,74 @@ export class QitafService {
       dto.Msisdn,
       dto.RefRequestId,
       dto.RefRequestDate,
+    );
+
+    return { ...result, message: 'Redemption reversed successfully' };
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 3b. REVERSE BY MSISDN  (Cashier-friendly reverse — no UUID needed)
+  //
+  // Problem this solves:
+  //   The manual reverse endpoint requires RefRequestId (a UUID) and
+  //   RefRequestDate — values the cashier has no way of knowing.
+  //
+  // How it works:
+  //   1. Cashier only provides the customer's phone (Msisdn), BranchId,
+  //      TerminalId — things they already have at the counter.
+  //   2. We look up our own qitaf_transactions table to find the most recent
+  //      successful redeem for that Msisdn under this tenant.
+  //   3. We pull global_id and request_date from that row and use them as
+  //      RefRequestId and RefRequestDate for the STC reverse call.
+  //   4. The actual STC reverse call is identical to the manual reverse.
+  // ═══════════════════════════════════════════════════════════════════════════
+  async reverseRedeemByMsisdn(
+    tenantId: number,
+    partnerId: number,
+    msisdn: number,
+    branchId: string,
+    terminalId: string,
+  ) {
+    const { config } = await this.loadIntegration(tenantId, partnerId);
+    await this.validateTerminal(tenantId, partnerId, branchId, terminalId);
+
+    // Look up the last successful redeem for this customer under this tenant.
+    // We order by created_at DESC so we always get the most recent one.
+    const lastRedeem = await this.transactionRepo.findOne({
+      where: {
+        tenant_id: tenantId,
+        msisdn: msisdn as any,
+        transaction_type: 'redeem',
+        status: 'success',
+      },
+      order: { created_at: 'DESC' },
+    });
+
+    // If no successful redeem exists for this customer, there is nothing to reverse.
+    if (!lastRedeem) {
+      throw new BadRequestException(
+        `No successful redemption found for Msisdn ${msisdn} on this tenant. Nothing to reverse.`,
+      );
+    }
+
+    this.logger.log(
+      `[Qitaf] reverseRedeemByMsisdn — found last redeem ` +
+        `globalId=${lastRedeem.global_id} date=${lastRedeem.request_date} ` +
+        `for Msisdn=${msisdn}`,
+    );
+
+    // Delegate to the same executeReverse used by the manual reverse endpoint.
+    // global_id  → becomes RefRequestId  (STC uses this to identify the original transaction)
+    // request_date → becomes RefRequestDate (STC requires the original request timestamp)
+    const result = await this.executeReverse(
+      config,
+      tenantId,
+      partnerId,
+      branchId,
+      terminalId,
+      msisdn,
+      lastRedeem.global_id,
+      lastRedeem.request_date,
     );
 
     return { ...result, message: 'Redemption reversed successfully' };

@@ -22,6 +22,7 @@ import {
   RedemptionOtpDto,
   RedemptionRedeemDto,
   RedemptionReverseDto,
+  ReversalByMsisdnDto,
   EarnRewardDto,
   EarnRewardIncentiveDto,
   EarnUpdateDto,
@@ -130,6 +131,43 @@ export class QitafController {
       req.qitafTenantId,
       req.qitafPartnerId,
       dto,
+    );
+  }
+
+  /**
+   * PUT /qitaf/redemption/reverse-by-msisdn
+   *
+   * Cashier-friendly reverse — no UUID or date required.
+   *
+   * The standard reverse endpoint (/redemption/reverse) requires RefRequestId
+   * (the UUID we sent to STC) and RefRequestDate — values the cashier cannot
+   * realistically know. This endpoint solves that problem.
+   *
+   * The cashier only provides what they already have at the counter:
+   *   - Msisdn    → customer's Saudi mobile number
+   *   - BranchId  → their store's STC branch code
+   *   - TerminalId → their POS terminal code
+   *
+   * We then look up our own qitaf_transactions table to find the most recent
+   * successful redemption for that Msisdn and automatically fill in the
+   * RefRequestId and RefRequestDate before calling STC.
+   *
+   * Errors:
+   *   - 400 if no successful redemption exists for the given Msisdn
+   *   - Any STC error is forwarded as-is
+   */
+  @UseGuards(QitafAuthGuard)
+  @Put('redemption/reverse-by-msisdn')
+  async reverseRedeemByMsisdn(
+    @Req() req,
+    @Body(new ValidationPipe({ whitelist: true })) dto: ReversalByMsisdnDto,
+  ) {
+    return this.qitafService.reverseRedeemByMsisdn(
+      req.qitafTenantId,
+      req.qitafPartnerId,
+      dto.Msisdn,
+      dto.BranchId,
+      dto.TerminalId,
     );
   }
 

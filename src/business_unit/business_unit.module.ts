@@ -7,17 +7,31 @@ import { BusinessUnitBootstrapService } from './startup/business-unit-bootstrap.
 import { Tenant } from 'src/tenants/entities/tenant.entity';
 import { User } from 'src/users/entities/user.entity';
 import { BusinessUnitMiddleware } from './middleware/business_unit.middleware';
-import { LoyaltyProgramsController } from './business_unit/loyalty-programs.controller';
+import { LoyaltyController } from './business_unit/loyalty-programs.controller';
 import { Wallet } from 'src/wallet/entities/wallet.entity';
 import { Customer } from 'src/customers/entities/customer.entity';
+import { WalletTransaction } from 'src/wallet/entities/wallet-transaction.entity';
+import { Rule } from 'src/rules/entities/rules.entity';
+import { CheckoutService } from 'src/business_unit/checkout.service';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([BusinessUnit, Tenant, User, Wallet, Customer])],
-  controllers: [BusinessUnitsController, LoyaltyProgramsController],
+  imports: [
+    TypeOrmModule.forFeature([
+      BusinessUnit,
+      Tenant,
+      User,
+      Wallet,
+      Customer,
+      WalletTransaction,
+      Rule,
+    ]),
+  ],
+  controllers: [BusinessUnitsController, LoyaltyController],
   providers: [
     BusinessUnitsService,
     BusinessUnitBootstrapService,
     BusinessUnitMiddleware,
+    CheckoutService,
   ],
 })
 export class BusinessUnitsModule {}

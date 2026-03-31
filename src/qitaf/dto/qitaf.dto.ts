@@ -99,6 +99,28 @@ export class RedemptionReverseDto extends QitafBaseDto {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// 3b. REVERSE BY MSISDN  — PUT /qitaf/redemption/reverse-by-msisdn
+//
+// Cashier-friendly alternative to the manual reverse endpoint above.
+// The cashier only needs the customer's phone number — no UUID or date needed.
+// The system looks up our DB to find the last successful redeem for that phone
+// and fills in RefRequestId + RefRequestDate automatically.
+// ─────────────────────────────────────────────────────────────────────────────
+export class ReversalByMsisdnDto {
+  @IsNumber()
+  @IsPositive()
+  Msisdn: number; // Customer's Saudi mobile number, e.g. 500000000
+
+  @IsString()
+  @IsNotEmpty()
+  BranchId: string; // STC-provided branch/store identifier
+
+  @IsString()
+  @IsNotEmpty()
+  TerminalId: string; // STC-provided POS terminal identifier
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // 4. EARN REWARD  — POST /qitaf/earn/reward
 // ─────────────────────────────────────────────────────────────────────────────
 export class EarnRewardDto extends QitafBaseDto {
