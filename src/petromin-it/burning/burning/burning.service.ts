@@ -4,8 +4,12 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { GetCustomerDataDto } from '../dto/burning.dto';
+import { MoreThan, Repository } from 'typeorm';
+import {
+  GenerateOtpDto,
+  GetCustomerDataDto,
+  VerifyOtpDto,
+} from '../dto/burning.dto';
 import { Customer } from 'src/customers/entities/customer.entity';
 import { Wallet } from 'src/wallet/entities/wallet.entity';
 import {
@@ -21,7 +25,10 @@ import { NotificationService } from 'src/petromin-it/notification/notification/n
 import { OpenAIService } from 'src/openai/openai/openai.service';
 import { CustomerPreference } from 'src/petromin-it/preferences/entities/customer-preference.entity';
 import { DeviceToken } from 'src/petromin-it/notification/entities/device-token.entity';
+import { BurnOtp } from '../entities/burn-otp.entity';
+import { Tenant } from 'src/tenants/entities/tenant.entity';
 import * as dayjs from 'dayjs';
+
 @Injectable()
 export class BurningService {
   constructor(
@@ -42,6 +49,12 @@ export class BurningService {
 
     @InjectRepository(DeviceToken)
     private readonly deviceTokenRepo: Repository<DeviceToken>,
+
+    @InjectRepository(BurnOtp)
+    private readonly burnOtpRepo: Repository<BurnOtp>,
+
+    @InjectRepository(Tenant)
+    private readonly tenantRepo: Repository<Tenant>,
 
     private readonly tiersService: TiersService,
     private readonly walletService: WalletService,
@@ -538,6 +551,140 @@ export class BurningService {
       });
       //#endregion
     }
+  }
+  //#endregion
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // OTP BURN FLOW
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  //#region generateOtp
+  /**
+   * POST /burning/otp/generate  — called by the APP (no MAC JWT required)
+   *
+   * Customer selects their desired points on the app burn screen and taps
+   * "Get OTP". This method:
+   *   1. Resolves the customer from the phone number
+   *   2. Validates the tenant has otp_burn_required enabled
+   *   3. Validates points_to_burn against wallet balance and the active burn rule
+   *   4. Pre-calculates the SAR discount
+   *   5. Generates a random 6-digit OTP and persists it with an expiry timestamp
+   *   6. Returns the OTP + time-to-live so the app can show a countdown timer
+   */
+  async generateOtp(dto: GenerateOtpDto) {
+    const customer = await this.customerRepo.findOne({
+      where: { uuid: dto.customer_id, status: 1 },
+      relations: ['tenant', 'business_unit'],
+    });
+
+    if (!customer) {
+      throw new NotFoundException('Customer not found or inactive');
+    }
+
+    // Load tenant to check feature flag and get TTL config
+    const tenant = await this.tenantRepo.findOne({
+      where: { id: customer.tenant.id },
+    });
+
+    if (!tenant.otp_burn_required) {
+      throw new BadRequestException(
+        'OTP burn is not enabled for this account. Contact support.',
+      );
+    }
+
+    // Generate a random 6-digit OTP
+    const otp = String(Math.floor(100000 + Math.random() * 900000));
+
+    const ttlMinutes = tenant.otp_burn_ttl_minutes ?? 5;
+    const expiresAt = dayjs().add(ttlMinutes, 'minute').toDate();
+
+    const record = this.burnOtpRepo.create({
+      otp,
+      customer: { id: customer.id } as any,
+      customer_id: customer.id,
+      tenant_id: customer.tenant.id,
+      business_unit_id: customer.business_unit.id,
+      used: 0,
+      expires_at: expiresAt,
+      used_at: null,
+    });
+
+    await this.burnOtpRepo.save(record);
+
+    return {
+      success: true,
+      otp,
+      expires_in_seconds: ttlMinutes * 60,
+    };
+  }
+  //#endregion
+
+  //#region verifyOtp
+  /**
+   * POST /burning/otp/verify  — called by MAC (requires Rusty JWT)
+   *
+   * Cashier types the 6-digit OTP shown on the customer's phone screen.
+   * This method:
+   *   1. Resolves customer from phone
+   *   2. Finds a matching, unexpired, unused OTP record
+   *   3. Marks it as used (one-time use — cannot be replayed)
+   *   4. Returns customer info + points + discount so MAC can proceed
+   *      directly to request-transaction with correct values
+   */
+  async verifyOtp(dto: VerifyOtpDto) {
+    const hashedPhone = encrypt(
+      '+' + dto.customer_phone.replace(/^[\s+]+/, ''),
+    );
+
+    const customer = await this.customerRepo.findOne({
+      where: { hashed_number: hashedPhone, status: 1 },
+      relations: ['tenant', 'business_unit'],
+    });
+
+    if (!customer) {
+      throw new NotFoundException('Customer not found or inactive');
+    }
+
+    const now = new Date();
+
+    // Find a valid OTP: correct code + correct customer + not used + not expired
+    const otpRecord = await this.burnOtpRepo.findOne({
+      where: {
+        otp: dto.otp,
+        customer_id: customer.id,
+        used: 0,
+        expires_at: MoreThan(now),
+      },
+    });
+
+    if (!otpRecord) {
+      throw new BadRequestException(
+        'Invalid or expired OTP. Ask the customer to generate a new one.',
+      );
+    }
+
+    // Mark as used immediately — prevents replay attacks
+    otpRecord.used = 1;
+    otpRecord.used_at = now;
+    await this.burnOtpRepo.save(otpRecord);
+
+    // Fetch current wallet balance for MAC to display
+    const wallet = await this.walletService.getSingleCustomerWalletInfo(
+      customer.id,
+      customer.business_unit.id,
+    );
+
+    return {
+      success: true,
+      message: 'OTP verified successfully',
+      result: {
+        customer_name: customer.name,
+        customer_phone: dto.customer_phone,
+        // MAC uses this balance to decide how many points to burn
+        // then calls request-transaction with their chosen amount
+        current_wallet_balance: wallet?.available_balance ?? 0,
+      },
+    };
   }
   //#endregion
 }

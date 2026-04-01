@@ -18,6 +18,7 @@ import { NotificationModule } from '../notification/notification.module';
 import { OpenaiModule } from 'src/openai/openai.module';
 import { CustomerPreference } from '../preferences/entities/customer-preference.entity';
 import { DeviceToken } from 'src/petromin-it/notification/entities/device-token.entity';
+import { BurnOtp } from './entities/burn-otp.entity';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { DeviceToken } from 'src/petromin-it/notification/entities/device-token.
       Rule,
       CustomerPreference,
       DeviceToken,
+      BurnOtp,
     ]),
     OciModule,
     WalletModule,

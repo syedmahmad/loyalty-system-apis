@@ -213,6 +213,8 @@ export class TenantsService {
 
       tenant.name = dto.name ?? tenant.name;
       tenant.domain = dto.domain ?? tenant.domain;
+      if (dto.otp_burn_required !== undefined) tenant.otp_burn_required = dto.otp_burn_required;
+      if (dto.otp_burn_ttl_minutes !== undefined) tenant.otp_burn_ttl_minutes = dto.otp_burn_ttl_minutes;
 
       if (dto.country_id) {
         const country = await queryRunner.manager.findOne(CountryEntity, {

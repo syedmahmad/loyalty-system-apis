@@ -2,6 +2,7 @@ import {
   IsNumber,
   IsNotEmpty,
   IsOptional,
+  IsPositive,
   IsString,
   IsUUID,
   IsInt,
@@ -68,4 +69,39 @@ export class ConfirmBurnDto {
   @IsOptional()
   @IsString()
   coupon_code?: string;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// OTP BURN FLOW
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * POST /burning/otp/generate  (App → Loyalty API)
+ *
+ * Customer taps "Get OTP" on the burn screen.
+ * Returns a 6-digit OTP + expiry shown with a countdown timer.
+ * No points selection needed here — MAC reads the wallet balance after
+ * verifying the OTP and handles point selection as normal.
+ */
+export class GenerateOtpDto {
+  @IsNotEmpty()
+  @IsString()
+  customer_id: string; // customer UUID (same field used by notifications, preferences, etc.)
+}
+
+/**
+ * POST /burning/otp/verify  (MAC → Loyalty API)
+ *
+ * Cashier types the OTP shown on the customer's phone screen.
+ * Returns customer info + authorised points + discount amount.
+ * MAC then calls request-transaction with these values.
+ */
+export class VerifyOtpDto {
+  @IsNotEmpty()
+  @IsString()
+  otp: string; // 6-digit code from customer's screen
+
+  @IsNotEmpty()
+  @IsString()
+  customer_phone: string; // customer's mobile number (cashier reads it from screen or types it)
 }
