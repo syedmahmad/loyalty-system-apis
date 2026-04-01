@@ -592,10 +592,32 @@ export class BurningService {
       );
     }
 
-    // Generate a random 6-digit OTP
-    const otp = String(Math.floor(100000 + Math.random() * 900000));
-
     const ttlMinutes = tenant.otp_burn_ttl_minutes ?? 5;
+    const now = new Date();
+
+    // If a valid OTP already exists for this customer, return it as-is.
+    // Prevents duplicate OTPs being generated before the first one expires.
+    const existing = await this.burnOtpRepo.findOne({
+      where: {
+        customer_id: customer.id,
+        used: 0,
+        expires_at: MoreThan(now),
+      },
+    });
+
+    if (existing) {
+      const secondsLeft = Math.floor(
+        (existing.expires_at.getTime() - now.getTime()) / 1000,
+      );
+      return {
+        success: true,
+        otp: existing.otp,
+        expires_in_seconds: secondsLeft,
+      };
+    }
+
+    // No active OTP — generate a fresh one
+    const otp = String(Math.floor(100000 + Math.random() * 900000));
     const expiresAt = dayjs().add(ttlMinutes, 'minute').toDate();
 
     const record = this.burnOtpRepo.create({
