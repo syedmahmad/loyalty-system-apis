@@ -61,6 +61,14 @@ export class Tenant {
   @Column({ type: 'text', nullable: true, default: null })
   api_token: string | null;
 
+  // OTP burn feature — configurable per tenant
+  // When enabled, MAC must call /burning/otp/verify before request-transaction
+  @Column({ type: 'tinyint', default: 0 })
+  otp_burn_required: number; // 0 = disabled, 1 = enabled
+
+  @Column({ type: 'int', default: 5 })
+  otp_burn_ttl_minutes: number; // how long the generated OTP stays valid
+
   @Column({ type: 'int', default: 1 })
   status: number; // 1 = active, 0 = inactive
 
