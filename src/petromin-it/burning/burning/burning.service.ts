@@ -28,6 +28,7 @@ import { DeviceToken } from 'src/petromin-it/notification/entities/device-token.
 import { BurnOtp } from '../entities/burn-otp.entity';
 import { Tenant } from 'src/tenants/entities/tenant.entity';
 import * as dayjs from 'dayjs';
+import { randomInt } from 'crypto';
 
 @Injectable()
 export class BurningService {
@@ -616,8 +617,26 @@ export class BurningService {
       };
     }
 
-    // No active OTP — generate a fresh one
-    const otp = String(Math.floor(100000 + Math.random() * 900000));
+    // No active OTP — generate a fresh unique one.
+    // crypto.randomInt is cryptographically secure (unlike Math.random).
+    // We loop until we find a code not already active in the DB — in practice
+    // this almost never needs more than one iteration (900,000 possible values).
+    let otp: string;
+    let attempts = 0;
+    do {
+      otp = String(randomInt(100000, 1000000)); // 100000–999999 inclusive
+      attempts++;
+      if (attempts > 10) {
+        throw new BadRequestException(
+          'Could not generate a unique OTP. Please try again.',
+        );
+      }
+      const collision = await this.burnOtpRepo.findOne({
+        where: { otp, used: 0, expires_at: MoreThan(now) },
+      });
+      if (!collision) break;
+    } while (true);
+
     const expiresAt = dayjs().add(ttlMinutes, 'minute').toDate();
 
     const record = this.burnOtpRepo.create({
@@ -654,9 +673,16 @@ export class BurningService {
    *      directly to request-transaction with correct values
    */
   async verifyOtp(dto: VerifyOtpDto) {
-    const hashedPhone = encrypt(
-      '+' + dto.customer_phone.replace(/^[\s+]+/, ''),
-    );
+    // ── Normalise phone ───────────────────────────────────────────────────
+    // Strip everything that is not a digit, then prepend exactly one +
+    // so it matches how hashed_number is stored.
+    // Handles all of:
+    //   "+966 501 234 567"  →  "+966501234567"
+    //   "966-501-234-567"   →  "+966501234567"
+    //   " +966501234567 "   →  "+966501234567"
+    //   "+966501234567"     →  "+966501234567"  (already correct)
+    const digitsOnly = dto.customer_phone.replace(/\D/g, '');
+    const hashedPhone = encrypt('+' + digitsOnly);
 
     const customer = await this.customerRepo.findOne({
       where: { hashed_number: hashedPhone, status: 1 },
@@ -667,12 +693,21 @@ export class BurningService {
       throw new NotFoundException('Customer not found or inactive');
     }
 
+    // ── Normalise OTP ─────────────────────────────────────────────────────
+    // Trim whitespace and keep only digits in case the cashier's input
+    // added stray characters (e.g. "382 910" → "382910", " 123456 " → "123456")
+    const normalizedOtp = dto.otp.trim().replace(/\D/g, '');
+
+    if (normalizedOtp.length !== 6) {
+      throw new BadRequestException('OTP must be a 6-digit number');
+    }
+
     const now = new Date();
 
     // Find a valid OTP: correct code + correct customer + not used + not expired
     const otpRecord = await this.burnOtpRepo.findOne({
       where: {
-        otp: dto.otp,
+        otp: normalizedOtp,
         customer_id: customer.id,
         used: 0,
         expires_at: MoreThan(now),
@@ -690,11 +725,43 @@ export class BurningService {
     otpRecord.used_at = now;
     await this.burnOtpRepo.save(otpRecord);
 
-    // Fetch current wallet balance for MAC to display
-    const wallet = await this.walletService.getSingleCustomerWalletInfo(
-      customer.id,
-      customer.business_unit.id,
-    );
+    // Fetch wallet and burn rule in parallel
+    const [wallet, rule] = await Promise.all([
+      this.walletService.getSingleCustomerWalletInfo(
+        customer.id,
+        customer.business_unit.id,
+      ),
+      this.ruleRepo.findOne({
+        where: {
+          rule_type: 'burn',
+          tenant_id: customer.tenant.id,
+          business_unit_id: customer.business_unit.id,
+          status: 1,
+        },
+      }),
+    ]);
+
+    const availablePoints = wallet?.available_balance ?? 0;
+
+    // Calculate the SAR equivalent of the customer's full available balance.
+    // We don't have a transaction_amount here yet (that comes at request-transaction),
+    // so we can't apply the invoice % cap — MAC uses these values to show the
+    // cashier what the customer has and the per-point value before entering the invoice.
+    let equivalentAmount = 0;
+    let pointsConversionFactor = 0;
+    let maxRedeemablePoints = availablePoints;
+
+    if (rule) {
+      pointsConversionFactor = rule.points_conversion_factor;
+      // Cap by the rule's hard per-transaction point limit
+      maxRedeemablePoints = Math.min(
+        availablePoints,
+        rule.max_redeemption_points_limit,
+      );
+      equivalentAmount = +(
+        maxRedeemablePoints * pointsConversionFactor
+      ).toFixed(2);
+    }
 
     return {
       success: true,
@@ -702,9 +769,15 @@ export class BurningService {
       result: {
         customer_name: customer.name,
         customer_phone: dto.customer_phone,
-        // MAC uses this balance to decide how many points to burn
-        // then calls request-transaction with their chosen amount
-        current_wallet_balance: wallet?.available_balance ?? 0,
+        // Points currently in the wallet
+        available_points: availablePoints,
+        // Max points allowed by the burn rule per transaction
+        max_redeemable_points: maxRedeemablePoints,
+        // SAR value of max_redeemable_points (before invoice % cap)
+        equivalent_amount_sar: equivalentAmount,
+        // How much 1 point is worth in SAR — MAC can use this to recalculate
+        // the exact discount once the cashier enters the invoice amount
+        points_conversion_factor: pointsConversionFactor,
       },
     };
   }
