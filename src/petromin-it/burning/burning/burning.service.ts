@@ -358,8 +358,7 @@ export class BurningService {
                     customer_mobile: decrypt(customer.hashed_number),
                     dynamic_fields: {
                       otp,
-                      transaction_amount: transaction_amount.toString(),
-                      expires_in_minutes: ttlMinutes.toString(),
+                      ttlMinutes: ttlMinutes.toString(),
                     },
                   },
                 ],
