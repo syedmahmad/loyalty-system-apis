@@ -69,6 +69,14 @@ export class ConfirmBurnDto {
   @IsOptional()
   @IsString()
   coupon_code?: string;
+
+  /**
+   * Required when the tenant has otp_burn_required = 1.
+   * The customer receives this OTP via push notification after request-transaction.
+   */
+  @IsOptional()
+  @IsString()
+  otp?: string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -76,32 +84,31 @@ export class ConfirmBurnDto {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * POST /burning/otp/generate  (App → Loyalty API)
+ * @deprecated The standalone OTP generate/verify flow has been replaced.
+ * OTP is now generated automatically inside request-transaction and delivered
+ * via push notification. The customer shares the OTP with the cashier who
+ * includes it in confirm-transaction. These endpoints remain available but
+ * are no longer part of the active integration flow.
  *
- * Customer taps "Get OTP" on the burn screen.
- * Returns a 6-digit OTP + expiry shown with a countdown timer.
- * No points selection needed here — MAC reads the wallet balance after
- * verifying the OTP and handles point selection as normal.
+ * POST /burning/otp/generate  (App → Loyalty API)
  */
 export class GenerateOtpDto {
   @IsNotEmpty()
   @IsString()
-  customer_id: string; // customer UUID (same field used by notifications, preferences, etc.)
+  customer_id: string;
 }
 
 /**
- * POST /burning/otp/verify  (MAC → Loyalty API)
+ * @deprecated See GenerateOtpDto deprecation note above.
  *
- * Cashier types the OTP shown on the customer's phone screen.
- * Returns customer info + authorised points + discount amount.
- * MAC then calls request-transaction with these values.
+ * POST /burning/otp/verify  (MAC → Loyalty API)
  */
 export class VerifyOtpDto {
   @IsNotEmpty()
   @IsString()
-  otp: string; // 6-digit code from customer's screen
+  otp: string;
 
   @IsNotEmpty()
   @IsString()
-  customer_phone: string; // customer's mobile number (cashier reads it from screen or types it)
+  customer_phone: string;
 }

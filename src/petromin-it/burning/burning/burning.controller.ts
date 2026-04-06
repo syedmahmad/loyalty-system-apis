@@ -48,34 +48,43 @@ export class BurningController {
   }
   //#endregion
 
-  // ── OTP Burn Flow ─────────────────────────────────────────────────────────
+  // ── Deprecated OTP Endpoints ──────────────────────────────────────────────
+  // These routes are no longer part of the active burn flow.
+  // OTP is now generated inside POST /burning/request-transaction and sent to
+  // the customer via push notification. The customer shares the OTP with the
+  // cashier who includes it in POST /burning/confirm-transaction as { otp: "..." }.
 
   /**
-   * POST /burning/otp/generate  (App-facing — no MAC JWT required)
-   *
-   * Customer selects points on the app burn screen and taps "Get OTP".
-   * Returns a 6-digit OTP + expiry shown with a countdown timer on screen.
-   * Only works when otp_burn_required = 1 on the tenant.
+   * @deprecated Use POST /burning/request-transaction — it now generates and
+   * pushes the OTP automatically when otp_burn_required = 1 on the tenant.
    */
   @Post('otp/generate')
   async generateOtp(
     @Body(new ValidationPipe({ whitelist: true })) dto: GenerateOtpDto,
   ) {
-    return this.burningService.generateOtp(dto);
+    const result = await this.burningService.generateOtp(dto);
+    return {
+      ...result,
+      deprecated: true,
+      deprecation_notice:
+        'This endpoint is deprecated. OTP is now generated automatically inside request-transaction and delivered via push notification.',
+    };
   }
 
   /**
-   * POST /burning/otp/verify  (MAC-facing — requires Rusty JWT)
-   *
-   * Cashier types the OTP from the customer's screen.
-   * Returns points_to_burn + discount_amount so MAC can proceed to
-   * request-transaction with the exact authorised values.
-   * OTP is marked used immediately — cannot be replayed.
+   * @deprecated OTP verification is now handled inside POST /burning/confirm-transaction.
+   * Pass { transaction_id, burn_point, otp } to confirm-transaction instead.
    */
   @Post('otp/verify')
   async verifyOtp(
     @Body(new ValidationPipe({ whitelist: true })) dto: VerifyOtpDto,
   ) {
-    return this.burningService.verifyOtp(dto);
+    const result = await this.burningService.verifyOtp(dto);
+    return {
+      ...result,
+      deprecated: true,
+      deprecation_notice:
+        'This endpoint is deprecated. Include the OTP in confirm-transaction as { transaction_id, burn_point, otp } instead.',
+    };
   }
 }

@@ -51,6 +51,11 @@ export class BurnOtp {
   @CreateDateColumn()
   created_at: Date;
 
+  // Scopes this OTP to a specific pending transaction (wallet_transaction.uuid).
+  // Prevents a valid OTP from being replayed on a different transaction.
+  @Column({ type: 'char', length: 36, nullable: true, default: null })
+  transaction_uuid: string | null;
+
   // Filled when MAC successfully verifies — audit trail
   @Column({ type: 'datetime', nullable: true })
   used_at: Date | null;
