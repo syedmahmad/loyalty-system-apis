@@ -333,6 +333,7 @@ export class BurningService {
           // Prevents duplicate OTP records when cashier calls request-transaction
           // multiple times for the same customer.
           existingOtp.transaction_uuid = tx.uuid;
+          existingOtp.cashier_request_count += 1;
           await this.burnOtpRepo.save(existingOtp);
         } else {
           // Path B: no pre-generated OTP — create one and push to customer's device.
@@ -364,6 +365,8 @@ export class BurningService {
             used: 0,
             expires_at: expiresAt,
             used_at: null,
+            app_generate_count: 0,
+            cashier_request_count: 1,
           });
           await this.burnOtpRepo.save(otpRecord);
 
@@ -762,6 +765,10 @@ export class BurningService {
     });
 
     if (existing) {
+      // Customer tapped the button again while OTP is still active — increment counter.
+      existing.app_generate_count += 1;
+      await this.burnOtpRepo.save(existing);
+
       const secondsLeft = Math.floor(
         (existing.expires_at.getTime() - now.getTime()) / 1000,
       );
@@ -840,6 +847,8 @@ export class BurningService {
       used: 0,
       expires_at: expiresAt,
       used_at: null,
+      app_generate_count: 1,
+      cashier_request_count: 0,
     });
 
     await this.burnOtpRepo.save(record);

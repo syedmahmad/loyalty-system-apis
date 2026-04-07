@@ -56,6 +56,17 @@ export class BurnOtp {
   @Column({ type: 'char', length: 36, nullable: true, default: null })
   transaction_uuid: string | null;
 
+  // How many times the customer tapped "Generate Redemption Code" on the app
+  // during this session. > 1 typically indicates notification delivery issues.
+  @Column({ type: 'int', default: 0 })
+  app_generate_count: number;
+
+  // How many times the cashier called request-transaction and touched this OTP
+  // (linked or re-linked). > 1 typically indicates POS retrying or cashier
+  // clicking multiple times.
+  @Column({ type: 'int', default: 0 })
+  cashier_request_count: number;
+
   // Filled when MAC successfully verifies — audit trail
   @Column({ type: 'datetime', nullable: true })
   used_at: Date | null;
