@@ -4,7 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { MoreThan, Repository } from 'typeorm';
+import { IsNull, MoreThan, Repository } from 'typeorm';
 import {
   GenerateOtpDto,
   GetCustomerDataDto,
@@ -301,80 +301,107 @@ export class BurningService {
       );
       //#endregion
 
-      //#region Step 7: OTP generation + push notification (otp_burn_required tenants only)
+      //#region Step 7: OTP linking or generation (otp_burn_required tenants only)
+      //
+      // Hybrid flow:
+      //   Path A — Customer pre-generated OTP on app before coming to cashier:
+      //     → find the unlinked active OTP, attach it to this transaction, done.
+      //     → no notification fired (OTP is already visible on customer's screen).
+      //   Path B — Customer did not pre-generate:
+      //     → generate a fresh OTP, link it to this transaction, push notification.
+      //
+      // Both paths converge at confirm-transaction with no changes needed there.
       if (customer.tenant.otp_burn_required) {
         const ttlMinutes = customer.tenant.otp_burn_ttl_minutes ?? 5;
         const now = new Date();
 
-        // Generate a cryptographically secure unique 6-digit OTP
-        let otp: string;
-        let attempts = 0;
-        do {
-          otp = String(randomInt(100000, 1000000));
-          attempts++;
-          if (attempts > 10) {
-            throw new BadRequestException(
-              'Could not generate a unique OTP. Please try again.',
-            );
-          }
-          const collision = await this.burnOtpRepo.findOne({
-            where: { otp, used: 0, expires_at: MoreThan(now) },
+        // Look for an OTP the customer already generated on the app.
+        // Only match unlinked records (transaction_uuid IS NULL) — a record that is
+        // already linked belongs to a different pending transaction.
+        const existingOtp = await this.burnOtpRepo.findOne({
+          where: {
+            customer_id: customer.id,
+            used: 0,
+            expires_at: MoreThan(now),
+            transaction_uuid: IsNull(),
+          },
+        });
+
+        if (existingOtp) {
+          // Path A: link the pre-generated OTP to this transaction.
+          existingOtp.transaction_uuid = tx.uuid;
+          await this.burnOtpRepo.save(existingOtp);
+        } else {
+          // Path B: no pre-generated OTP — create one and push to customer's device.
+          let otp: string;
+          let attempts = 0;
+          do {
+            otp = String(randomInt(100000, 1000000));
+            attempts++;
+            if (attempts > 10) {
+              throw new BadRequestException(
+                'Could not generate a unique OTP. Please try again.',
+              );
+            }
+            const collision = await this.burnOtpRepo.findOne({
+              where: { otp, used: 0, expires_at: MoreThan(now) },
+            });
+            if (!collision) break;
+          } while (true);
+
+          const expiresAt = dayjs().add(ttlMinutes, 'minute').toDate();
+
+          const otpRecord = this.burnOtpRepo.create({
+            otp,
+            customer: { id: customer.id } as any,
+            customer_id: customer.id,
+            tenant_id: customer.tenant.id,
+            business_unit_id: customer.business_unit.id,
+            transaction_uuid: tx.uuid,
+            used: 0,
+            expires_at: expiresAt,
+            used_at: null,
           });
-          if (!collision) break;
-        } while (true);
+          await this.burnOtpRepo.save(otpRecord);
 
-        const expiresAt = dayjs().add(ttlMinutes, 'minute').toDate();
+          // Fire push notification so customer sees OTP on their phone
+          const deviceTokens = await this.deviceTokenRepo.find({
+            where: { customer: { id: customer.id } },
+            order: { createdAt: 'DESC' },
+          });
 
-        const otpRecord = this.burnOtpRepo.create({
-          otp,
-          customer: { id: customer.id } as any,
-          customer_id: customer.id,
-          tenant_id: customer.tenant.id,
-          business_unit_id: customer.business_unit.id,
-          transaction_uuid: tx.uuid,
-          used: 0,
-          expires_at: expiresAt,
-          used_at: null,
-        });
-        await this.burnOtpRepo.save(otpRecord);
-
-        // Fire push notification so customer sees OTP on their phone
-        const deviceTokens = await this.deviceTokenRepo.find({
-          where: { customer: { id: customer.id } },
-          order: { createdAt: 'DESC' },
-        });
-
-        if (deviceTokens.length) {
-          const tokensString = deviceTokens.map((t) => t.token).join(',');
-          try {
-            await this.notificationService.sendToUser(
-              {
-                template_id: process.env.OTP_BURN_TEMPLATE_ID,
-                language_code: 'en',
-                business_name: 'PETROMINit',
-                to: [
-                  {
-                    user_device_token: tokensString,
-                    customer_mobile: decrypt(customer.hashed_number),
-                    dynamic_fields: {
-                      otp,
-                      ttlMinutes: ttlMinutes.toString(),
+          if (deviceTokens.length) {
+            const tokensString = deviceTokens.map((t) => t.token).join(',');
+            try {
+              await this.notificationService.sendToUser(
+                {
+                  template_id: process.env.OTP_BURN_TEMPLATE_ID,
+                  language_code: 'en',
+                  business_name: 'PETROMINit',
+                  to: [
+                    {
+                      user_device_token: tokensString,
+                      customer_mobile: decrypt(customer.hashed_number),
+                      dynamic_fields: {
+                        otp,
+                        ttlMinutes: ttlMinutes.toString(),
+                      },
                     },
-                  },
-                ],
-              },
-              {
-                title: 'Redemption OTP',
-                body: `Your redemption OTP is ${otp}. Share it with the cashier. Expires in ${ttlMinutes} minutes.`,
-                customer_id: customer.id,
-              },
-            );
-          } catch (err) {
-            console.error(
-              'Failed to send OTP notification:',
-              err.response?.data || err.message,
-            );
-            // Non-fatal — transaction is already created; log and continue
+                  ],
+                },
+                {
+                  title: 'Redemption OTP',
+                  body: `Your redemption OTP is ${otp}. Share it with the cashier. Expires in ${ttlMinutes} minutes.`,
+                  customer_id: customer.id,
+                },
+              );
+            } catch (err) {
+              console.error(
+                'Failed to send OTP notification:',
+                err.response?.data || err.message,
+              );
+              // Non-fatal — transaction is already created; log and continue
+            }
           }
         }
       }
@@ -674,26 +701,29 @@ export class BurningService {
   //#endregion
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // DEPRECATED OTP ENDPOINTS
-  // These endpoints are no longer part of the active integration flow.
-  // OTP is now generated automatically inside burnTransaction() and delivered
-  // to the customer via push notification. The customer shares the OTP with
-  // the cashier who includes it in confirmBurnTransaction().
+  // APP-FACING OTP ENDPOINTS
   // ═══════════════════════════════════════════════════════════════════════════
 
-  //#region generateOtp (deprecated)
+  //#region generateOtp
   /**
-   * @deprecated OTP is now generated automatically inside request-transaction
-   * and pushed directly to the customer's device. This endpoint remains
-   * available for backwards compatibility but is not part of the current flow.
-   *
    * POST /burning/otp/generate  — called by the APP (no MAC JWT required)
-   *   1. Resolves the customer from the phone number
-   *   2. Validates the tenant has otp_burn_required enabled
-   *   3. Validates points_to_burn against wallet balance and the active burn rule
-   *   4. Pre-calculates the SAR discount
-   *   5. Generates a random 6-digit OTP and persists it with an expiry timestamp
-   *   6. Returns the OTP + time-to-live so the app can show a countdown timer
+   *
+   * Customer taps "Generate Redemption Code" on the app screen.
+   *
+   * Three cases handled:
+   *   1. Active OTP already exists (not expired, not used) → return it as-is
+   *      with remaining TTL. Covers both:
+   *        a. Customer pre-generated before cashier acted (transaction_uuid = null)
+   *        b. Cashier already called request-transaction and linked this OTP
+   *           (transaction_uuid set) — customer sees same code cashier is holding
+   *
+   *   2. No active OTP + pending burn transaction exists → cashier already called
+   *      request-transaction but the OTP expired. Generate new OTP and link it
+   *      directly to the pending transaction so cashier can confirm without
+   *      re-initiating request-transaction.
+   *
+   *   3. No active OTP + no pending transaction → fresh generate, saved unlinked
+   *      (transaction_uuid = null). request-transaction will claim it later.
    */
   async generateOtp(dto: GenerateOtpDto) {
     const customer = await this.customerRepo.findOne({
@@ -705,7 +735,6 @@ export class BurningService {
       throw new NotFoundException('Customer not found or inactive');
     }
 
-    // Load tenant to check feature flag and get TTL config
     const tenant = await this.tenantRepo.findOne({
       where: { id: customer.tenant.id },
     });
@@ -719,8 +748,8 @@ export class BurningService {
     const ttlMinutes = tenant.otp_burn_ttl_minutes ?? 5;
     const now = new Date();
 
-    // If a valid OTP already exists for this customer, return it as-is.
-    // Prevents duplicate OTPs being generated before the first one expires.
+    // Case 1: active OTP already exists — return it with remaining time.
+    // Covers pre-generated (unlinked) and already-linked (cashier initiated) OTPs.
     const existing = await this.burnOtpRepo.findOne({
       where: {
         customer_id: customer.id,
@@ -741,13 +770,10 @@ export class BurningService {
     }
 
     // No active OTP — generate a fresh unique one.
-    // crypto.randomInt is cryptographically secure (unlike Math.random).
-    // We loop until we find a code not already active in the DB — in practice
-    // this almost never needs more than one iteration (900,000 possible values).
     let otp: string;
     let attempts = 0;
     do {
-      otp = String(randomInt(100000, 1000000)); // 100000–999999 inclusive
+      otp = String(randomInt(100000, 1000000));
       attempts++;
       if (attempts > 10) {
         throw new BadRequestException(
@@ -762,12 +788,27 @@ export class BurningService {
 
     const expiresAt = dayjs().add(ttlMinutes, 'minute').toDate();
 
+    // Case 2: check if cashier already initiated a pending transaction whose
+    // OTP expired. Link the new OTP directly to it — cashier does not need to
+    // re-call request-transaction.
+    // Case 3: no pending transaction — save unlinked; request-transaction will
+    // claim it when the cashier initiates.
+    const pendingTx = await this.walletTxnRepo.findOne({
+      where: {
+        customer: { id: customer.id },
+        status: WalletTransactionStatus.NOT_CONFIRMED,
+        type: WalletTransactionType.BURN,
+      },
+      order: { created_at: 'DESC' },
+    });
+
     const record = this.burnOtpRepo.create({
       otp,
       customer: { id: customer.id } as any,
       customer_id: customer.id,
       tenant_id: customer.tenant.id,
       business_unit_id: customer.business_unit.id,
+      transaction_uuid: pendingTx?.uuid ?? null,
       used: 0,
       expires_at: expiresAt,
       used_at: null,
@@ -783,12 +824,11 @@ export class BurningService {
   }
   //#endregion
 
-  //#region verifyOtp (deprecated)
+  //#region verifyOtp
   /**
-   * @deprecated OTP verification is now handled inside confirmBurnTransaction().
-   * This endpoint remains available for backwards compatibility only.
-   *
    * POST /burning/otp/verify  — called by MAC (requires Rusty JWT)
+   * Legacy standalone verify — kept for backwards compatibility.
+   * In the current flow, OTP verification is handled inside confirmBurnTransaction().
    *
    * Cashier types the 6-digit OTP shown on the customer's phone screen.
    * This method:

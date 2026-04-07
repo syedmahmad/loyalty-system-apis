@@ -48,43 +48,36 @@ export class BurningController {
   }
   //#endregion
 
-  // ── Deprecated OTP Endpoints ──────────────────────────────────────────────
-  // These routes are no longer part of the active burn flow.
-  // OTP is now generated inside POST /burning/request-transaction and sent to
-  // the customer via push notification. The customer shares the OTP with the
-  // cashier who includes it in POST /burning/confirm-transaction as { otp: "..." }.
+  // ── OTP Burn Flow ─────────────────────────────────────────────────────────
 
   /**
-   * @deprecated Use POST /burning/request-transaction — it now generates and
-   * pushes the OTP automatically when otp_burn_required = 1 on the tenant.
+   * POST /burning/otp/generate  (App-facing — no MAC JWT required)
+   *
+   * Customer taps "Generate Redemption Code" on the app screen.
+   * Returns a 6-digit OTP saved as unlinked (transaction_uuid = null).
+   * When the cashier later calls request-transaction, the system detects
+   * this pre-generated OTP and links it to the transaction automatically —
+   * no new OTP is created and no push notification is fired.
+   * If the customer did not pre-generate, request-transaction generates
+   * a fresh OTP and delivers it via push notification instead.
    */
   @Post('otp/generate')
   async generateOtp(
     @Body(new ValidationPipe({ whitelist: true })) dto: GenerateOtpDto,
   ) {
-    const result = await this.burningService.generateOtp(dto);
-    return {
-      ...result,
-      deprecated: true,
-      deprecation_notice:
-        'This endpoint is deprecated. OTP is now generated automatically inside request-transaction and delivered via push notification.',
-    };
+    return this.burningService.generateOtp(dto);
   }
 
   /**
-   * @deprecated OTP verification is now handled inside POST /burning/confirm-transaction.
-   * Pass { transaction_id, burn_point, otp } to confirm-transaction instead.
+   * POST /burning/otp/verify  (MAC-facing — requires Rusty JWT)
+   *
+   * Legacy standalone verify endpoint — kept for backwards compatibility.
+   * In the current flow, OTP verification is handled inside confirm-transaction.
    */
   @Post('otp/verify')
   async verifyOtp(
     @Body(new ValidationPipe({ whitelist: true })) dto: VerifyOtpDto,
   ) {
-    const result = await this.burningService.verifyOtp(dto);
-    return {
-      ...result,
-      deprecated: true,
-      deprecation_notice:
-        'This endpoint is deprecated. Include the OTP in confirm-transaction as { transaction_id, burn_point, otp } instead.',
-    };
+    return this.burningService.verifyOtp(dto);
   }
 }

@@ -84,13 +84,12 @@ export class ConfirmBurnDto {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * @deprecated The standalone OTP generate/verify flow has been replaced.
- * OTP is now generated automatically inside request-transaction and delivered
- * via push notification. The customer shares the OTP with the cashier who
- * includes it in confirm-transaction. These endpoints remain available but
- * are no longer part of the active integration flow.
- *
  * POST /burning/otp/generate  (App → Loyalty API)
+ *
+ * Customer taps "Generate Redemption Code" on the app screen.
+ * Saves an unlinked OTP (transaction_uuid = null). When the cashier later
+ * calls request-transaction, the system links this OTP to the transaction
+ * automatically — no new code generated, no push notification fired.
  */
 export class GenerateOtpDto {
   @IsNotEmpty()
@@ -99,9 +98,10 @@ export class GenerateOtpDto {
 }
 
 /**
- * @deprecated See GenerateOtpDto deprecation note above.
- *
  * POST /burning/otp/verify  (MAC → Loyalty API)
+ *
+ * Legacy standalone verify — kept for backwards compatibility.
+ * In the current flow, OTP verification is handled inside confirm-transaction.
  */
 export class VerifyOtpDto {
   @IsNotEmpty()
