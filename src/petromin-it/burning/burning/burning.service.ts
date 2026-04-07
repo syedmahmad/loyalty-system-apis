@@ -304,10 +304,12 @@ export class BurningService {
       //#region Step 7: OTP linking or generation (otp_burn_required tenants only)
       //
       // Hybrid flow:
-      //   Path A — Customer pre-generated OTP on app before coming to cashier:
-      //     → find the unlinked active OTP, attach it to this transaction, done.
-      //     → no notification fired (OTP is already visible on customer's screen).
-      //   Path B — Customer did not pre-generate:
+      //   Path A — An active OTP already exists for this customer (unlinked or
+      //     linked to a previous tx from a duplicate cashier call):
+      //     → re-link it to the current transaction, no notification fired.
+      //     → handles both: customer pre-generated on app (null) and cashier
+      //       calling request-transaction multiple times (already linked).
+      //   Path B — No active OTP exists at all:
       //     → generate a fresh OTP, link it to this transaction, push notification.
       //
       // Both paths converge at confirm-transaction with no changes needed there.
@@ -315,20 +317,21 @@ export class BurningService {
         const ttlMinutes = customer.tenant.otp_burn_ttl_minutes ?? 5;
         const now = new Date();
 
-        // Look for an OTP the customer already generated on the app.
-        // Only match unlinked records (transaction_uuid IS NULL) — a record that is
-        // already linked belongs to a different pending transaction.
+        // Look for ANY active OTP for this customer — unlinked (pre-generated on app)
+        // or already linked to a previous transaction (duplicate cashier call).
+        // Re-linking to the current tx ensures only one valid OTP exists at a time.
         const existingOtp = await this.burnOtpRepo.findOne({
           where: {
             customer_id: customer.id,
             used: 0,
             expires_at: MoreThan(now),
-            transaction_uuid: IsNull(),
           },
         });
 
         if (existingOtp) {
-          // Path A: link the pre-generated OTP to this transaction.
+          // Path A: link (or re-link) to the current transaction.
+          // Prevents duplicate OTP records when cashier calls request-transaction
+          // multiple times for the same customer.
           existingOtp.transaction_uuid = tx.uuid;
           await this.burnOtpRepo.save(existingOtp);
         } else {
@@ -788,19 +791,44 @@ export class BurningService {
 
     const expiresAt = dayjs().add(ttlMinutes, 'minute').toDate();
 
-    // Case 2: check if cashier already initiated a pending transaction whose
-    // OTP expired. Link the new OTP directly to it — cashier does not need to
-    // re-call request-transaction.
-    // Case 3: no pending transaction — save unlinked; request-transaction will
-    // claim it when the cashier initiates.
-    const pendingTx = await this.walletTxnRepo.findOne({
+    // Case 2 vs Case 3 — determine whether to link to an existing pending transaction.
+    //
+    // We only link if there is PROOF the cashier already called request-transaction:
+    // an expired BurnOtp record that was linked to a transaction_uuid. This record
+    // being expired (not just missing) is the evidence.
+    //
+    // We do NOT blindly query wallet_transactions for any NOT_CONFIRMED record —
+    // that would incorrectly link a fresh app-generated OTP to old abandoned
+    // transactions sitting in the DB from previous sessions.
+    const expiredLinkedOtp = await this.burnOtpRepo.findOne({
       where: {
-        customer: { id: customer.id },
-        status: WalletTransactionStatus.NOT_CONFIRMED,
-        type: WalletTransactionType.BURN,
+        customer_id: customer.id,
+        used: 0,
+        // expires_at <= now means it expired — intentionally no MoreThan filter here
       },
-      order: { created_at: 'DESC' },
+      order: { expires_at: 'DESC' }, // most recently expired first
     });
+
+    let linkedTransactionUuid: string | null = null;
+
+    if (expiredLinkedOtp?.transaction_uuid) {
+      // Verify the linked transaction is still pending (cashier hasn't abandoned it)
+      const pendingTx = await this.walletTxnRepo.findOne({
+        where: {
+          uuid: expiredLinkedOtp.transaction_uuid,
+          status: WalletTransactionStatus.NOT_CONFIRMED,
+        },
+      });
+      if (pendingTx) {
+        // Case 2: cashier's OTP expired — link new OTP to the same pending tx.
+        // Cashier doesn't need to re-call request-transaction.
+        linkedTransactionUuid = pendingTx.uuid;
+      }
+      // If pendingTx not found: transaction was already confirmed or doesn't exist.
+      // Fall through to Case 3 (save unlinked).
+    }
+    // Case 3: no expired linked OTP found — customer is pre-generating before
+    // the cashier acts. Save unlinked; request-transaction will claim it later.
 
     const record = this.burnOtpRepo.create({
       otp,
@@ -808,7 +836,7 @@ export class BurningService {
       customer_id: customer.id,
       tenant_id: customer.tenant.id,
       business_unit_id: customer.business_unit.id,
-      transaction_uuid: pendingTx?.uuid ?? null,
+      transaction_uuid: linkedTransactionUuid,
       used: 0,
       expires_at: expiresAt,
       used_at: null,
