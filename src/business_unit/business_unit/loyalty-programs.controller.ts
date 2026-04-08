@@ -95,13 +95,14 @@ export class LoyaltyController {
             };
           }
 
-          // Points-type programs — fetch wallet balance if customer resolved
+          // Points-type programs — fetch wallet balance if customer resolved.
+          // Wallet is tenant-scoped, not BU-scoped, so look up by tenant_id.
           let points: number | null = null;
           if (customerId) {
             const wallet = await this.walletRepo.findOne({
               where: {
                 customer: { id: customerId },
-                business_unit: { id: bu.id },
+                tenant: { id: tenantId },
               },
             });
             points = wallet?.available_balance ?? null;

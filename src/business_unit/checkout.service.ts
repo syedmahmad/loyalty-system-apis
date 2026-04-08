@@ -87,21 +87,29 @@ export class CheckoutService {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // SHARED HELPER — resolve wallet for a specific customer + business unit
+  // SHARED HELPER — resolve wallet for a customer scoped to a tenant
+  //
+  // Wallets are tenant-scoped, not BU-scoped. A customer has one wallet per
+  // tenant regardless of which business unit (program) they are redeeming
+  // against. Looking up by BU would fail for tenants like GVR/NCMC whose
+  // wallets are created without a specific BU assignment.
+  //
+  // OTP-type programs never reach this method — all callers guard with
+  // bu.type === 'otp' early returns before calling resolveWallet.
   // ─────────────────────────────────────────────────────────────────────────
   private async resolveWallet(
     customerId: number,
-    buId: number,
+    tenantId: number,
   ): Promise<Wallet> {
     const wallet = await this.walletRepo.findOne({
       where: {
         customer: { id: customerId },
-        business_unit: { id: buId },
+        tenant: { id: tenantId },
       },
     });
     if (!wallet) {
       throw new NotFoundException(
-        'Wallet not found for this customer and program',
+        'Wallet not found for this customer and tenant',
       );
     }
     return wallet;
@@ -117,10 +125,7 @@ export class CheckoutService {
   //   - min_amount_spent             : minimum invoice amount for rule to activate
   //   - frequency                    : AnyTime | once | daily | yearly
   // ─────────────────────────────────────────────────────────────────────────
-  private async resolveBurnRule(
-    tenantId: number,
-    buId: number,
-  ): Promise<Rule> {
+  private async resolveBurnRule(tenantId: number, buId: number): Promise<Rule> {
     const rule = await this.ruleRepo.findOne({
       where: {
         rule_type: 'burn',
@@ -197,7 +202,8 @@ export class CheckoutService {
     if (bu.type === 'otp') {
       return {
         program: { id: bu.id, uuid: bu.uuid, name: bu.name, type: 'otp' },
-        message: 'This program uses OTP-based redemption. No burn rule applies.',
+        message:
+          'This program uses OTP-based redemption. No burn rule applies.',
         burn_rule: null,
         customer: null,
         simulation: null,
@@ -205,7 +211,7 @@ export class CheckoutService {
     }
 
     const customer = await this.resolveCustomer(dto.customer_phone);
-    const wallet = await this.resolveWallet(customer.id, bu.id);
+    const wallet = await this.resolveWallet(customer.id, tenantId);
     const rule = await this.resolveBurnRule(tenantId, bu.id);
 
     const response: any = {
@@ -242,7 +248,9 @@ export class CheckoutService {
           eligible: true,
           max_points_can_burn: pointsToBurn,
           max_discount_sar: +discountAmount.toFixed(2),
-          min_amount_to_pay: +(dto.transaction_amount - discountAmount).toFixed(2),
+          min_amount_to_pay: +(dto.transaction_amount - discountAmount).toFixed(
+            2,
+          ),
         };
       }
     }
@@ -269,37 +277,18 @@ export class CheckoutService {
     const bu = await this.resolveBu(dto.program_uuid, tenantId);
     const customer = await this.resolveCustomer(dto.customer_phone);
 
-    // ── OTP program — just log the amount, no wallet interaction ──────────
+    // ── OTP program — not supported here ─────────────────────────────────
     if (bu.type === 'otp') {
-      const tx = this.txnRepo.create({
-        type: WalletTransactionType.BURN,
-        status: WalletTransactionStatus.NOT_CONFIRMED,
-        customer: { id: customer.id } as any,
-        business_unit: { id: bu.id } as any,
-        tenant: { id: tenantId } as any,
-        amount: dto.transaction_amount,
-        point_balance: 0,
-        source_type: 'checkout',
-        invoice_id: dto.invoice_id ?? null,
-        invoice_no: dto.invoice_id ?? null,
-        transaction_reference: dto.from_app ?? null,
-        created_at: new Date(),
-        description: dto.remarks
-          ? `OTP checkout: ${dto.remarks}`
-          : `OTP checkout: SAR ${dto.transaction_amount} transaction logged`,
-      });
-      const saved = await this.txnRepo.save(tx);
-
-      return {
-        transaction_id: saved.uuid,
-        program_type: 'otp',
-        transaction_amount: dto.transaction_amount,
-        note: 'OTP program — no points reserved. Complete OTP redemption via the Qitaf flow, then call confirm-transaction.',
-      };
+      throw new BadRequestException(
+        'This program uses OTP-based redemption and is not compatible with ' +
+          'request-transaction / confirm-transaction. ' +
+          'Please use the dedicated OTP redemption APIs to complete checkout, ' +
+          'or contact your administrator for integration guidance.',
+      );
     }
 
     // ── Points program — validate wallet + burn rule ───────────────────────
-    const wallet = await this.resolveWallet(customer.id, bu.id);
+    const wallet = await this.resolveWallet(customer.id, tenantId);
     const rule = await this.resolveBurnRule(tenantId, bu.id);
 
     if (dto.transaction_amount < rule.min_amount_spent) {
@@ -325,10 +314,10 @@ export class CheckoutService {
       business_unit: { id: bu.id } as any,
       tenant: { id: tenantId } as any,
       amount: dto.transaction_amount,
-      point_balance: 0,             // set on confirm-transaction
+      point_balance: 0, // set on confirm-transaction
       prev_available_points: wallet.available_balance,
       source_type: 'checkout',
-      source_id: rule.id,           // stored so confirm-transaction can re-fetch the rule
+      source_id: rule.id, // stored so confirm-transaction can re-fetch the rule
       invoice_id: dto.invoice_id ?? null,
       invoice_no: dto.invoice_id ?? null,
       transaction_reference: dto.from_app ?? null,
@@ -378,30 +367,32 @@ export class CheckoutService {
     }
 
     if (tx.tenant?.id !== tenantId) {
-      throw new BadRequestException('Transaction does not belong to this tenant');
+      throw new BadRequestException(
+        'Transaction does not belong to this tenant',
+      );
     }
 
-    // ── OTP program — just activate, no wallet touch ───────────────────────
+    // ── OTP program — not supported here ─────────────────────────────────
     if (tx.business_unit?.type === 'otp') {
-      tx.status = WalletTransactionStatus.ACTIVE;
-      tx.description = `OTP checkout confirmed: SAR ${tx.amount} transaction`;
-      await this.txnRepo.save(tx);
-
-      return {
-        transaction_id: tx.uuid,
-        program_type: 'otp',
-        points_burned: 0,
-        message: 'OTP transaction confirmed. No points were deducted.',
-      };
+      throw new BadRequestException(
+        'This transaction belongs to an OTP-based program and cannot be ' +
+          'confirmed here. ' +
+          'Please use the dedicated OTP redemption APIs to complete checkout, ' +
+          'or contact your administrator for integration guidance.',
+      );
     }
 
     // ── Points program — deduct wallet ────────────────────────────────────
     const rule = await this.ruleRepo.findOne({ where: { id: tx.source_id } });
     if (!rule) {
-      throw new NotFoundException('Burn rule no longer found. Contact support.');
+      throw new NotFoundException(
+        'Burn rule no longer found. Contact support.',
+      );
     }
 
-    const wallet = await this.walletRepo.findOne({ where: { id: tx.wallet.id } });
+    const wallet = await this.walletRepo.findOne({
+      where: { id: tx.wallet.id },
+    });
 
     // Cap by current available balance as a safety net (balance may have changed)
     const pointsToBurn = Math.min(dto.points_to_burn, wallet.available_balance);
@@ -470,56 +461,53 @@ export class CheckoutService {
       );
     }
 
-    const isOtp = tx.business_unit?.type === 'otp';
+    // ── OTP program — not supported here ─────────────────────────────────
+    if (tx.business_unit?.type === 'otp') {
+      throw new BadRequestException(
+        'This transaction belongs to an OTP-based program and cannot be ' +
+          'refunded here. ' +
+          'Please use the dedicated OTP redemption APIs, ' +
+          'or contact your administrator for integration guidance.',
+      );
+    }
+
     const pointsToReturn = tx.point_balance ?? 0;
 
-    // Create an ADJUSTMENT record to document the refund regardless of type
     const refundTx = this.txnRepo.create({
       type: WalletTransactionType.ADJUSTMENT,
       status: WalletTransactionStatus.ACTIVE,
-      wallet: isOtp ? null : ({ id: tx.wallet.id } as any),
+      wallet: { id: tx.wallet.id } as any,
       customer: { id: tx.customer.id } as any,
       business_unit: { id: tx.business_unit.id } as any,
       tenant: { id: tenantId } as any,
       amount: tx.amount,
       point_balance: pointsToReturn,
       source_type: 'checkout_refund',
-      source_id: tx.id,          // link back to the original burn transaction
-      invoice_id: tx.invoice_id, // carry over from original transaction
-      invoice_no: tx.invoice_no, // carry over from original transaction
+      source_id: tx.id,
+      invoice_id: tx.invoice_id,
+      invoice_no: tx.invoice_no,
       created_at: new Date(),
-      description: isOtp
-        ? `Refund: OTP transaction ${tx.uuid}`
-        : `Refund: returned ${pointsToReturn} points from transaction ${tx.uuid}`,
+      description: `Refund: returned ${pointsToReturn} points from transaction ${tx.uuid}`,
     });
 
     await this.txnRepo.save(refundTx);
 
-    // For points programs — add the points back to the wallet
-    if (!isOtp && pointsToReturn > 0) {
-      const wallet = await this.walletRepo.findOne({ where: { id: tx.wallet.id } });
-      wallet.available_balance += pointsToReturn;
-      wallet.total_burned_points = Math.max(
-        0,
-        wallet.total_burned_points - pointsToReturn,
-      );
-      await this.walletRepo.save(wallet);
-
-      return {
-        refund_transaction_id: refundTx.uuid,
-        original_transaction_id: tx.uuid,
-        program_type: 'points',
-        points_returned: pointsToReturn,
-        new_available_points: wallet.available_balance,
-      };
-    }
+    const wallet = await this.walletRepo.findOne({
+      where: { id: tx.wallet.id },
+    });
+    wallet.available_balance += pointsToReturn;
+    wallet.total_burned_points = Math.max(
+      0,
+      wallet.total_burned_points - pointsToReturn,
+    );
+    await this.walletRepo.save(wallet);
 
     return {
       refund_transaction_id: refundTx.uuid,
       original_transaction_id: tx.uuid,
-      program_type: 'otp',
-      points_returned: 0,
-      message: 'OTP transaction refunded. No points were involved.',
+      program_type: 'points',
+      points_returned: pointsToReturn,
+      new_available_points: wallet.available_balance,
     };
   }
 }
