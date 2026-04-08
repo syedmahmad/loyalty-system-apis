@@ -6,7 +6,6 @@ import {
   IsString,
   Min,
 } from 'class-validator';
-import { Type } from 'class-transformer';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SHARED BASE
@@ -32,39 +31,6 @@ class QitafBaseDto {
   @IsString()
   @IsNotEmpty()
   TerminalId: string; // STC-provided POS terminal identifier
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// TOKEN GENERATION  — POST /qitaf/auth/token  (admin only)
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Admin calls this to generate a long-lived Bearer token for the POS system.
- * partner_id identifies which partner integration to issue the token for.
- */
-export class GenerateQitafTokenDto {
-  @IsInt()
-  @Min(1)
-  tenant_id: number;
-
-  @IsInt()
-  @Min(1)
-  partner_id: number;
-}
-
-/**
- * Query params for retrieving the stored POS API token.
- */
-export class GetQitafTokenDto {
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  tenant_id: number;
-
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  partner_id: number;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

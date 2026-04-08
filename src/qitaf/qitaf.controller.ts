@@ -10,15 +10,11 @@ import {
   ParseIntPipe,
   UseGuards,
   ValidationPipe,
-  Headers,
-  BadRequestException,
 } from '@nestjs/common';
 import { AuthTokenGuard } from 'src/users/guards/authTokenGuard';
-import { QitafAuthGuard } from './qitaf-auth.guard';
+import { TenantApiTokenGuard } from 'src/tenants/guards/tenant-api-token.guard';
 import { QitafService } from './qitaf.service';
 import {
-  GenerateQitafTokenDto,
-  GetQitafTokenDto,
   RedemptionOtpDto,
   RedemptionRedeemDto,
   RedemptionReverseDto,
@@ -32,106 +28,45 @@ import {
 /**
  * QitafController — Base route: /qitaf
  *
- * Two groups of endpoints:
+ * POS endpoints use the standard tenant API token (same JWT used across the
+ * loyalty API) — no separate Qitaf token needed.
  *
- * 1. /qitaf/auth/*  (admin only — uses AuthTokenGuard)
- *    Admin generates a Bearer token for the POS system.
- *    Token is saved to the DB and shown in the admin UI for copy-paste.
- *    Token contains tenantId + partnerId — no hardcoding on POS side.
- *
- * 2. /qitaf/redemption/* and /qitaf/earn/*  (POS system — uses QitafAuthGuard)
- *    POS includes "Authorization: Bearer <token>" on every request.
+ * Authorization: Bearer <tenant-api-token>  on every /qitaf/redemption/* and /qitaf/earn/* request.
  */
 @Controller('qitaf')
 export class QitafController {
   constructor(private readonly qitafService: QitafService) {}
 
   // ──────────────────────────────────────────────────────────────────────────
-  // TOKEN MANAGEMENT  (Admin panel only)
-  // ──────────────────────────────────────────────────────────────────────────
-
-  /**
-   * POST /qitaf/auth/token
-   *
-   * Generate (or regenerate) a POS API token for a tenant+partner integration.
-   * Token is saved to the DB and returned for display in the admin UI.
-   * No expiry — regenerate from admin panel if compromised.
-   *
-   * Body: { tenant_id: 1, partner_id: 1 }
-   */
-  @UseGuards(AuthTokenGuard)
-  @Post('auth/token')
-  async generateToken(
-    @Body(new ValidationPipe({ whitelist: true })) dto: GenerateQitafTokenDto,
-    @Headers('user-secret') userSecret: string,
-  ) {
-    if (!userSecret) {
-      throw new BadRequestException('user-secret header is required');
-    }
-    return this.qitafService.generateToken(dto);
-  }
-
-  /**
-   * GET /qitaf/auth/token?tenant_id=1&partner_id=1
-   *
-   * Retrieve the currently stored POS API token for a tenant+partner.
-   * Returns { token: string | null } — null if not yet generated.
-   */
-  @UseGuards(AuthTokenGuard)
-  @Get('auth/token')
-  async getToken(
-    @Query(new ValidationPipe({ whitelist: true, transform: true }))
-    dto: GetQitafTokenDto,
-    @Headers('user-secret') userSecret: string,
-  ) {
-    if (!userSecret) {
-      throw new BadRequestException('user-secret header is required');
-    }
-    return this.qitafService.getToken(dto);
-  }
-
-  // ──────────────────────────────────────────────────────────────────────────
   // REDEMPTION FLOW  (POS system — requires Bearer token)
   // Step 1: Request OTP  →  Step 2: Redeem  →  Step 3: Reverse (if needed)
   // ──────────────────────────────────────────────────────────────────────────
 
-  @UseGuards(QitafAuthGuard)
+  @UseGuards(TenantApiTokenGuard)
   @Post('redemption/otp')
   async requestOtp(
     @Req() req,
     @Body(new ValidationPipe({ whitelist: true })) dto: RedemptionOtpDto,
   ) {
-    return this.qitafService.requestOtp(
-      req.qitafTenantId,
-      req.qitafPartnerId,
-      dto,
-    );
+    return this.qitafService.requestOtp(req.loyaltyTenantId, dto);
   }
 
-  @UseGuards(QitafAuthGuard)
+  @UseGuards(TenantApiTokenGuard)
   @Post('redemption/redeem')
   async redeemPoints(
     @Req() req,
     @Body(new ValidationPipe({ whitelist: true })) dto: RedemptionRedeemDto,
   ) {
-    return this.qitafService.redeemPoints(
-      req.qitafTenantId,
-      req.qitafPartnerId,
-      dto,
-    );
+    return this.qitafService.redeemPoints(req.loyaltyTenantId, dto);
   }
 
-  @UseGuards(QitafAuthGuard)
+  @UseGuards(TenantApiTokenGuard)
   @Put('redemption/reverse')
   async reverseRedeem(
     @Req() req,
     @Body(new ValidationPipe({ whitelist: true })) dto: RedemptionReverseDto,
   ) {
-    return this.qitafService.reverseRedeem(
-      req.qitafTenantId,
-      req.qitafPartnerId,
-      dto,
-    );
+    return this.qitafService.reverseRedeem(req.loyaltyTenantId, dto);
   }
 
   /**
@@ -156,15 +91,14 @@ export class QitafController {
    *   - 400 if no successful redemption exists for the given Msisdn
    *   - Any STC error is forwarded as-is
    */
-  @UseGuards(QitafAuthGuard)
+  @UseGuards(TenantApiTokenGuard)
   @Put('redemption/reverse-by-msisdn')
   async reverseRedeemByMsisdn(
     @Req() req,
     @Body(new ValidationPipe({ whitelist: true })) dto: ReversalByMsisdnDto,
   ) {
     return this.qitafService.reverseRedeemByMsisdn(
-      req.qitafTenantId,
-      req.qitafPartnerId,
+      req.loyaltyTenantId,
       dto.Msisdn,
       dto.BranchId,
       dto.TerminalId,
@@ -175,56 +109,40 @@ export class QitafController {
   // EARN FLOW  (POS system — requires Bearer token)
   // ──────────────────────────────────────────────────────────────────────────
 
-  @UseGuards(QitafAuthGuard)
+  @UseGuards(TenantApiTokenGuard)
   @Post('earn/reward')
   async earnReward(
     @Req() req,
     @Body(new ValidationPipe({ whitelist: true })) dto: EarnRewardDto,
   ) {
-    return this.qitafService.earnReward(
-      req.qitafTenantId,
-      req.qitafPartnerId,
-      dto,
-    );
+    return this.qitafService.earnReward(req.loyaltyTenantId, dto);
   }
 
-  @UseGuards(QitafAuthGuard)
+  @UseGuards(TenantApiTokenGuard)
   @Post('earn/reward-incentive')
   async earnRewardIncentive(
     @Req() req,
     @Body(new ValidationPipe({ whitelist: true })) dto: EarnRewardIncentiveDto,
   ) {
-    return this.qitafService.earnRewardIncentive(
-      req.qitafTenantId,
-      req.qitafPartnerId,
-      dto,
-    );
+    return this.qitafService.earnRewardIncentive(req.loyaltyTenantId, dto);
   }
 
-  @UseGuards(QitafAuthGuard)
+  @UseGuards(TenantApiTokenGuard)
   @Put('earn/update')
   async updateReward(
     @Req() req,
     @Body(new ValidationPipe({ whitelist: true })) dto: EarnUpdateDto,
   ) {
-    return this.qitafService.updateReward(
-      req.qitafTenantId,
-      req.qitafPartnerId,
-      dto,
-    );
+    return this.qitafService.updateReward(req.loyaltyTenantId, dto);
   }
 
-  @UseGuards(QitafAuthGuard)
+  @UseGuards(TenantApiTokenGuard)
   @Post('earn/reward/status')
   async rewardStatus(
     @Req() req,
     @Body(new ValidationPipe({ whitelist: true })) dto: EarnRewardStatusDto,
   ) {
-    return this.qitafService.rewardStatus(
-      req.qitafTenantId,
-      req.qitafPartnerId,
-      dto,
-    );
+    return this.qitafService.rewardStatus(req.loyaltyTenantId, dto);
   }
 
   // ──────────────────────────────────────────────────────────────────────────

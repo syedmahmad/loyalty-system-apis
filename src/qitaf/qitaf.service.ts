@@ -11,7 +11,6 @@ import axios from 'axios';
 import * as https from 'https';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
 import * as dayjs from 'dayjs';
 import * as utc from 'dayjs/plugin/utc';
@@ -27,8 +26,6 @@ import {
 } from './entities/qitaf-transaction.entity';
 import { decrypt } from 'src/helpers/encryption';
 import {
-  GenerateQitafTokenDto,
-  GetQitafTokenDto,
   RedemptionOtpDto,
   RedemptionRedeemDto,
   RedemptionReverseDto,
@@ -114,55 +111,6 @@ export class QitafService {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // TOKEN GENERATION
-  // Admin generates this from the admin panel once per tenant+partner.
-  // The token is saved to the DB and displayed in the admin UI for copy-paste.
-  // POS system uses it as "Authorization: Bearer <token>" on every request.
-  // Token has NO expiry — it can be regenerated from the admin panel any time.
-  // ═══════════════════════════════════════════════════════════════════════════
-  async generateToken(dto: GenerateQitafTokenDto): Promise<{ token: string }> {
-    const integration = await this.integrationRepo.findOne({
-      where: { tenant_id: dto.tenant_id, partner_id: dto.partner_id },
-    });
-
-    if (!integration) {
-      throw new BadRequestException(
-        `No integration found for tenant #${dto.tenant_id} / partner #${dto.partner_id}. ` +
-          `Create one in the admin panel first.`,
-      );
-    }
-
-    // JWT payload includes both tenantId and partnerId so POS calls need no hardcoding
-    const token = jwt.sign(
-      { tenantId: dto.tenant_id, partnerId: dto.partner_id },
-      process.env.JWT_SECRET,
-      // No expiresIn — this is a long-lived API key; regenerate from admin panel if needed
-    );
-
-    // Persist token so admin UI can display it for copy-paste
-    await this.integrationRepo.update(integration.id, { pos_api_token: token });
-
-    this.logger.log(
-      `[Qitaf] Token generated for tenant #${dto.tenant_id} / partner #${dto.partner_id}`,
-    );
-    return { token };
-  }
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // GET STORED TOKEN
-  // Returns the currently stored POS API token for a tenant+partner.
-  // Used by the admin UI to display the token for copy-paste.
-  // ═══════════════════════════════════════════════════════════════════════════
-  async getToken(dto: GetQitafTokenDto): Promise<{ token: string | null }> {
-    const integration = await this.integrationRepo.findOne({
-      where: { tenant_id: dto.tenant_id, partner_id: dto.partner_id },
-      select: ['pos_api_token'],
-    });
-
-    return { token: integration?.pos_api_token ?? null };
-  }
-
-  // ═══════════════════════════════════════════════════════════════════════════
   // 1. REQUEST OTP
   // Asks STC to send a 4-digit PIN via SMS to the customer's mobile number.
   // This PIN is required in the next step (Redeem) to confirm the transaction.
@@ -170,14 +118,10 @@ export class QitafService {
   // Along with PIN, user will also get equivalent qitaf balance in SAR but this both
   // info, we will not get in API response.
   // ═══════════════════════════════════════════════════════════════════════════
-  async requestOtp(tenantId: number, partnerId: number, dto: RedemptionOtpDto) {
-    const { config } = await this.loadIntegration(tenantId, partnerId);
-    await this.validateTerminal(
-      tenantId,
-      partnerId,
-      dto.BranchId,
-      dto.TerminalId,
-    );
+  async requestOtp(tenantId: number, dto: RedemptionOtpDto) {
+    const { integration, config } = await this.loadIntegration(tenantId);
+    const partnerId = integration.partner_id;
+    await this.validateTerminal(tenantId, dto.BranchId, dto.TerminalId);
 
     const globalId = this.newGlobalId();
     const requestDate = this.ksaNow();
@@ -240,18 +184,10 @@ export class QitafService {
   //   If Reverse comes back with code 1040
   //     → STC already reversed it on their side — that's fine, no error
   // ═══════════════════════════════════════════════════════════════════════════
-  async redeemPoints(
-    tenantId: number,
-    partnerId: number,
-    dto: RedemptionRedeemDto,
-  ) {
-    const { config } = await this.loadIntegration(tenantId, partnerId);
-    await this.validateTerminal(
-      tenantId,
-      partnerId,
-      dto.BranchId,
-      dto.TerminalId,
-    );
+  async redeemPoints(tenantId: number, dto: RedemptionRedeemDto) {
+    const { integration, config } = await this.loadIntegration(tenantId);
+    const partnerId = integration.partner_id;
+    await this.validateTerminal(tenantId, dto.BranchId, dto.TerminalId);
 
     const globalId = this.newGlobalId();
     const requestDate = this.ksaNow();
@@ -367,18 +303,10 @@ export class QitafService {
   // Use when cashier or customer wants to undo a redemption.
   // Note: auto-reverse on error is handled internally inside redeemPoints().
   // ═══════════════════════════════════════════════════════════════════════════
-  async reverseRedeem(
-    tenantId: number,
-    partnerId: number,
-    dto: RedemptionReverseDto,
-  ) {
-    const { config } = await this.loadIntegration(tenantId, partnerId);
-    await this.validateTerminal(
-      tenantId,
-      partnerId,
-      dto.BranchId,
-      dto.TerminalId,
-    );
+  async reverseRedeem(tenantId: number, dto: RedemptionReverseDto) {
+    const { integration, config } = await this.loadIntegration(tenantId);
+    const partnerId = integration.partner_id;
+    await this.validateTerminal(tenantId, dto.BranchId, dto.TerminalId);
 
     const result = await this.executeReverse(
       config,
@@ -412,13 +340,13 @@ export class QitafService {
   // ═══════════════════════════════════════════════════════════════════════════
   async reverseRedeemByMsisdn(
     tenantId: number,
-    partnerId: number,
     msisdn: number,
     branchId: string,
     terminalId: string,
   ) {
-    const { config } = await this.loadIntegration(tenantId, partnerId);
-    await this.validateTerminal(tenantId, partnerId, branchId, terminalId);
+    const { integration, config } = await this.loadIntegration(tenantId);
+    const partnerId = integration.partner_id;
+    await this.validateTerminal(tenantId, branchId, terminalId);
 
     // Look up the last successful redeem for this customer under this tenant.
     // We order by created_at DESC so we always get the most recent one.
@@ -476,14 +404,10 @@ export class QitafService {
   //     - Min 3 hours between each resend
   //     - Only allowed 08:00 – 22:00 KSA time
   // ═══════════════════════════════════════════════════════════════════════════
-  async earnReward(tenantId: number, partnerId: number, dto: EarnRewardDto) {
-    const { config } = await this.loadIntegration(tenantId, partnerId);
-    await this.validateTerminal(
-      tenantId,
-      partnerId,
-      dto.BranchId,
-      dto.TerminalId,
-    );
+  async earnReward(tenantId: number, dto: EarnRewardDto) {
+    const { integration, config } = await this.loadIntegration(tenantId);
+    const partnerId = integration.partner_id;
+    await this.validateTerminal(tenantId, dto.BranchId, dto.TerminalId);
 
     const globalId = this.newGlobalId();
     const requestDate = this.ksaNow();
@@ -512,18 +436,10 @@ export class QitafService {
   // Same as earnReward but also sends CashierId for the cashier incentive program.
   // Same retry protocol as earnReward.
   // ═══════════════════════════════════════════════════════════════════════════
-  async earnRewardIncentive(
-    tenantId: number,
-    partnerId: number,
-    dto: EarnRewardIncentiveDto,
-  ) {
-    const { config } = await this.loadIntegration(tenantId, partnerId);
-    await this.validateTerminal(
-      tenantId,
-      partnerId,
-      dto.BranchId,
-      dto.TerminalId,
-    );
+  async earnRewardIncentive(tenantId: number, dto: EarnRewardIncentiveDto) {
+    const { integration, config } = await this.loadIntegration(tenantId);
+    const partnerId = integration.partner_id;
+    await this.validateTerminal(tenantId, dto.BranchId, dto.TerminalId);
 
     const globalId = this.newGlobalId();
     const requestDate = this.ksaNow();
@@ -558,14 +474,10 @@ export class QitafService {
   //   We cap at UPDATE_MAX_RETRIES (5) for safety
   //   Same GlobalId rules: timeout = same, 2311 = new
   // ═══════════════════════════════════════════════════════════════════════════
-  async updateReward(tenantId: number, partnerId: number, dto: EarnUpdateDto) {
-    const { config } = await this.loadIntegration(tenantId, partnerId);
-    await this.validateTerminal(
-      tenantId,
-      partnerId,
-      dto.BranchId,
-      dto.TerminalId,
-    );
+  async updateReward(tenantId: number, dto: EarnUpdateDto) {
+    const { integration, config } = await this.loadIntegration(tenantId);
+    const partnerId = integration.partner_id;
+    await this.validateTerminal(tenantId, dto.BranchId, dto.TerminalId);
 
     const requestDate = this.ksaNow();
     let currentGlobalId = this.newGlobalId();
@@ -701,12 +613,9 @@ export class QitafService {
   //   803 = Rejected — error during posting, points were NOT added
   //   804 = Cancelled — points were posted then manually reversed later
   // ═══════════════════════════════════════════════════════════════════════════
-  async rewardStatus(
-    tenantId: number,
-    partnerId: number,
-    dto: EarnRewardStatusDto,
-  ) {
-    const { config } = await this.loadIntegration(tenantId, partnerId);
+  async rewardStatus(tenantId: number, dto: EarnRewardStatusDto) {
+    const { integration, config } = await this.loadIntegration(tenantId);
+    const partnerId = integration.partner_id;
 
     const globalId = this.newGlobalId();
     const requestDate = this.ksaNow();
@@ -1144,19 +1053,17 @@ export class QitafService {
    */
   private async loadIntegration(
     tenantId: number,
-    partnerId: number,
   ): Promise<{ integration: TenantPartnerIntegration; config: QitafConfig }> {
     const integration = await this.integrationRepo.findOne({
       where: {
         tenant_id: tenantId,
-        partner_id: partnerId,
         is_enabled: 1,
       },
     });
 
     if (!integration) {
       throw new BadRequestException(
-        `No active integration for tenant #${tenantId} / partner #${partnerId}. Enable it in admin panel.`,
+        `No active Qitaf integration for tenant #${tenantId}. Enable it in admin panel.`,
       );
     }
 
@@ -1187,18 +1094,17 @@ export class QitafService {
    */
   private async validateTerminal(
     tenantId: number,
-    partnerId: number,
     branchId: string,
     terminalId: string,
   ): Promise<void> {
     const integration = await this.integrationRepo.findOne({
-      where: { tenant_id: tenantId, partner_id: partnerId },
+      where: { tenant_id: tenantId },
       select: ['id'],
     });
 
     if (!integration) {
       throw new BadRequestException(
-        `Integration not found for tenant #${tenantId} / partner #${partnerId}`,
+        `Integration not found for tenant #${tenantId}`,
       );
     }
 
