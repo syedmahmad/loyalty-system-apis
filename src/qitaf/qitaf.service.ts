@@ -10,6 +10,7 @@ import { Repository } from 'typeorm';
 import axios from 'axios';
 import * as https from 'https';
 import * as fs from 'fs';
+import * as tls from 'tls';
 import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import * as dayjs from 'dayjs';
@@ -100,10 +101,22 @@ export class QitafService {
     // we don't need to set this: QITAF_SSL_VERIFY in UAT/PROD.
     const sslVerify = process.env.QITAF_SSL_VERIFY !== 'false';
 
+    // Build the CA bundle:
+    //   - tls.rootCertificates: Node.js built-in root CAs (includes the CAs that
+    //     signed STC's *server* certificate — present on macOS via the system keychain
+    //     but NOT automatically available on Ubuntu/Linux servers, causing
+    //     UNABLE_TO_GET_ISSUER_CERT_LOCALLY on UAT/production).
+    //   - QITAF_SSL_CA file: STC's CA for mTLS client-certificate verification
+    //     (lets STC verify that OUR client cert is legitimate).
+    // Merging both ensures TLS server verification AND mTLS client auth both work
+    // on all environments without disabling certificate checking.
+    const stcCa = fs.readFileSync(caPath).toString();
+    const ca = [...tls.rootCertificates, stcCa];
+
     this.httpsAgent = new https.Agent({
       cert: fs.readFileSync(certPath), // Our cert — proves our identity to STC (mTLS)
       key: fs.readFileSync(keyPath), // Our private key — paired with cert above
-      ca: fs.readFileSync(caPath), // STC's CA bundle — used for mTLS client auth
+      ca, // Node root CAs (server cert chain) + STC CA (mTLS client auth)
       rejectUnauthorized: sslVerify, // false only when QITAF_SSL_VERIFY=false
     });
 
