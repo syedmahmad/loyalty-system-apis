@@ -31,8 +31,22 @@ export interface QitafConfig {
   /** STC Qitaf web service base URL */
   apiBaseUrl: string;
 
-  /** SAR-to-QitafPoint conversion ratio agreed with STC */
-  pointToAmountRatio: number;
+  /**
+   * SAR value of 1 Qitaf point at redemption (burn rate).
+   * Confirmed from live transaction: 500 points = 100 SAR → value = 0.2
+   * Used to show the customer their SAR equivalent before confirming redemption.
+   * Update if STC changes their redemption rate.
+   */
+  burnSarPerPoint: number;
+
+  /**
+   * Qitaf points earned per 1 SAR spent (earn rate).
+   * Confirmed from live SMS: SAR 65 purchase → 6 points → rate = 0.1 pts/SAR
+   * (65 × 0.1 = 6.5, STC rounds down to 6).
+   * Used for display only — STC calculates the actual points on their side.
+   * Update if STC changes their earn rate.
+   */
+  earnPointsPerSar: number;
 
   /**
    * Number of days after a transaction before points are posted.

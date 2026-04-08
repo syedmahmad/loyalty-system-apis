@@ -56,7 +56,8 @@ export class TenantPartnerIntegration {
    *   authUsername       — Basic Auth username (provided by STC)
    *   authPassword       — Basic Auth password (provided by STC)
    *   apiBaseUrl         — STC Qitaf web service base URL
-   *   pointToAmountRatio — SAR-to-point ratio agreed with STC
+   *   burnSarPerPoint    — SAR value of 1 point at redemption (confirmed: 0.2, i.e. 500 pts = 100 SAR)
+   *   earnPointsPerSar   — Points earned per 1 SAR spent (confirmed: 0.1, i.e. SAR 65 → 6 pts)
    *   refundPeriodDays   — Days before points are posted (refund window)
    *
    * Note: SSL/mTLS certs live at the infrastructure level (env vars), not here.

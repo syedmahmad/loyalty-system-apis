@@ -51,6 +51,9 @@ export class QitafController {
     return this.qitafService.requestOtp(req.loyaltyTenantId, dto);
   }
 
+  // Qitaf points redeemed at Gogo Motors Redeem amount: 500 points, 100 SAR Remaining
+  // balance: 9675 points Share your opinion about Qitaf and help us improve our
+  // services: https://staging.eqitaf.com.sa/l/fPpK3b9HtUCd
   @UseGuards(TenantApiTokenGuard)
   @Post('redemption/redeem')
   async redeemPoints(
@@ -60,6 +63,8 @@ export class QitafController {
     return this.qitafService.redeemPoints(req.loyaltyTenantId, dto);
   }
 
+  // Dear customer, 500 points have been refunded to your account due to the incorrect
+  // exchange transaction with GooGooMotor.
   @UseGuards(TenantApiTokenGuard)
   @Put('redemption/reverse')
   async reverseRedeem(
@@ -109,6 +114,14 @@ export class QitafController {
   // EARN FLOW  (POS system — requires Bearer token)
   // ──────────────────────────────────────────────────────────────────────────
 
+  // Dear Customer, We received your request to add Qitaf points for your purchase of SAR
+  // 65 from Gogo Motors on April 2, 2026. Six Qitaf points will be added after the 1-day
+  // return and exchange period. Share your feedback about Qitaf and help us improve our
+  // services: https://staging.eqitaf.com.sa/l/E-mlfCg180-3
+
+  // Dear Customer, Thank you for choosing Qitaf partner Gogo Motor Points added to your Gogo
+  // Motor balance: 6 points Current Qitaf balance: 10,181 points Share your opinion about Qiaf
+  // and help us improve our services: https://staging.eqitaf.com.sa/l/YCgIXgigwUKL
   @UseGuards(TenantApiTokenGuard)
   @Post('earn/reward')
   async earnReward(
@@ -118,6 +131,7 @@ export class QitafController {
     return this.qitafService.earnReward(req.loyaltyTenantId, dto);
   }
 
+  // STC team said, this is not used anymore.
   @UseGuards(TenantApiTokenGuard)
   @Post('earn/reward-incentive')
   async earnRewardIncentive(
@@ -127,6 +141,8 @@ export class QitafController {
     return this.qitafService.earnRewardIncentive(req.loyaltyTenantId, dto);
   }
 
+  // Dear Customer, The process for adding Qitaf points to the SAR 200 amount has been
+  // updated on 02/04/2026 at Gogo Motors. The new amount is SAR 150, and 15 points will be added after 1 day.
   @UseGuards(TenantApiTokenGuard)
   @Put('earn/update')
   async updateReward(
