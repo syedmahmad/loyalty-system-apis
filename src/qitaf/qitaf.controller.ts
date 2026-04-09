@@ -172,6 +172,29 @@ export class QitafController {
    * Decrypts the customer's hashed_number to resolve their Msisdn, then
    * queries qitaf_transactions by that Msisdn + tenant.
    */
+  /**
+   * GET /qitaf/transactions/all/:tenantId?page=1&limit=10&msisdn=966XXXXXXXXX
+   *
+   * Admin-only endpoint. Returns all Qitaf transactions for the tenant,
+   * optionally filtered by mobile number. msisdn is stripped from every row
+   * in the response — it is only used server-side for the optional search filter.
+   */
+  @UseGuards(AuthTokenGuard)
+  @Get('transactions/all/:tenantId')
+  async getAllTransactions(
+    @Param('tenantId', ParseIntPipe) tenantId: number,
+    @Query('msisdn') msisdn?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.qitafService.getAllTransactions(
+      tenantId,
+      msisdn,
+      page ? parseInt(page, 10) : 1,
+      limit ? parseInt(limit, 10) : 10,
+    );
+  }
+
   @UseGuards(AuthTokenGuard)
   @Get('transactions/by-customer/:customerId')
   async getCustomerTransactions(

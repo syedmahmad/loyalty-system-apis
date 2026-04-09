@@ -747,6 +747,59 @@ export class QitafService {
     return { data, total, page, totalPages: Math.ceil(total / limit) };
   }
 
+  /**
+   * GET /qitaf/transactions/all/:tenantId
+   *
+   * Returns ALL paginated Qitaf transactions for a tenant (admin panel).
+   * Accepts an optional rawMsisdn search param — strips country code and
+   * normalises to 9-digit Saudi local number before querying.
+   * The msisdn field is omitted from every row in the response to avoid
+   * exposing sensitive customer phone numbers.
+   */
+  async getAllTransactions(
+    tenantId: number,
+    rawMsisdn?: string,
+    page = 1,
+    limit = 10,
+  ): Promise<{
+    data: Omit<QitafTransaction, 'msisdn'>[];
+    total: number;
+    page: number;
+    totalPages: number;
+  }> {
+    let msisdnFilter: number | undefined;
+
+    if (rawMsisdn) {
+      const digits = rawMsisdn.replace(/\D/g, '');
+      if (digits.length >= 9) {
+        const parsed = Number(digits.slice(-9));
+        if (!isNaN(parsed) && parsed > 0) {
+          msisdnFilter = parsed;
+        }
+      }
+    }
+
+    const where: any = { tenant_id: tenantId };
+    if (msisdnFilter !== undefined) {
+      where.msisdn = msisdnFilter;
+    }
+
+    const safePage = Math.max(1, page);
+    const safeLimit = Math.min(Math.max(1, limit), 100);
+
+    const [rows, total] = await this.transactionRepo.findAndCount({
+      where,
+      order: { created_at: 'DESC' },
+      skip: (safePage - 1) * safeLimit,
+      take: safeLimit,
+    });
+
+    // Strip msisdn — never expose raw customer phone numbers via the admin API
+    const data = rows.map(({ msisdn: _msisdn, ...rest }) => rest);
+
+    return { data, total, page: safePage, totalPages: Math.ceil(total / safeLimit) };
+  }
+
   // ═══════════════════════════════════════════════════════════════════════════
   // PRIVATE HELPERS
   // ═══════════════════════════════════════════════════════════════════════════
