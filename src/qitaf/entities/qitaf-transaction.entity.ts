@@ -67,6 +67,10 @@ export class QitafTransaction {
   @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
   amount: number;
 
+  /** ERP invoice / order reference — set when transaction originates from checkout flow */
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  invoice_id: string;
+
   /** Cashier ID — only for earn_incentive transactions */
   @Column({ type: 'varchar', length: 100, nullable: true })
   cashier_id: string;

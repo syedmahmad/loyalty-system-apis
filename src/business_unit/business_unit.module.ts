@@ -13,6 +13,7 @@ import { Customer } from 'src/customers/entities/customer.entity';
 import { WalletTransaction } from 'src/wallet/entities/wallet-transaction.entity';
 import { Rule } from 'src/rules/entities/rules.entity';
 import { CheckoutService } from 'src/business_unit/checkout.service';
+import { QitafModule } from 'src/qitaf/qitaf.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { CheckoutService } from 'src/business_unit/checkout.service';
       WalletTransaction,
       Rule,
     ]),
+    QitafModule, // provides QitafService for OTP-based program routing
   ],
   controllers: [BusinessUnitsController, LoyaltyController],
   providers: [

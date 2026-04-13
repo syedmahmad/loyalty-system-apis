@@ -6,6 +6,7 @@ import {
   IsPositive,
   IsString,
   IsUUID,
+  Max,
   Min,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -87,6 +88,17 @@ export class RequestTransactionDto {
   @IsOptional()
   @IsString()
   from_app?: string; // which system/app is calling (e.g. "web-checkout", "pos-app")
+
+  // ── OTP programs only (e.g. Qitaf) ──────────────────────────────────────
+  // The ERP/POS machine knows its own STC-assigned branch and terminal IDs.
+  // These are required when program type is 'otp', ignored for 'points'.
+  @IsOptional()
+  @IsString()
+  branch_id?: string; // STC-assigned branch code for this store
+
+  @IsOptional()
+  @IsString()
+  terminal_id?: string; // STC-assigned terminal code for this POS machine
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -110,18 +122,42 @@ export class ConfirmTransactionDto {
   @IsInt()
   @Min(0)
   points_to_burn: number; // points to deduct from wallet (0 for OTP programs)
+
+  // ── OTP programs only (e.g. Qitaf) ──────────────────────────────────────
+  // otp: the 4-digit PIN the customer received via SMS — required for otp-type programs.
+  // redeem_amount: SAR amount to pay using Qitaf points. Defaults to the full
+  //   transaction_amount from request-transaction. If the customer only wants
+  //   to use Qitaf for part of the invoice, pass the partial amount here.
+  //   The difference (transaction_amount - redeem_amount) is auto-submitted
+  //   to STC as an earn reward for what the customer paid in cash/card.
+  @IsOptional()
+  @IsInt()
+  @Min(1000)
+  @Max(9999)
+  otp?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  redeem_amount?: number; // SAR to redeem via Qitaf (defaults to full invoice amount)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /loyalty/refund
 //
-// Full refund of a completed burn transaction.
-// Points are returned to the customer's wallet via a new ADJUSTMENT transaction.
-// Partial refund is NOT supported — always returns 100% of burned points.
-// For OTP-type programs, no wallet adjustment is made (no points were deducted).
+// Full refund using the ERP invoice/order reference.
+// Works for both program types — the system figures out the type automatically:
+//
+//   points — looks up the wallet_transaction by invoice_id, returns points
+//            to the customer's wallet via an ADJUSTMENT record.
+//
+//   otp    — looks up the Qitaf redemption by invoice_id, sends an exact
+//            reverse to STC using the stored global_id + request_date.
+//
+// Partial refund is NOT supported — always reverses 100%.
 // ─────────────────────────────────────────────────────────────────────────────
 export class RefundTransactionDto {
   @IsString()
   @IsNotEmpty()
-  transaction_id: string; // UUID of the original confirm-transaction call
+  invoice_id: string; // ERP invoice/order reference sent in request-transaction
 }

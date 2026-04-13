@@ -131,7 +131,11 @@ export class QitafService {
   // Along with PIN, user will also get equivalent qitaf balance in SAR but this both
   // info, we will not get in API response.
   // ═══════════════════════════════════════════════════════════════════════════
-  async requestOtp(tenantId: number, dto: RedemptionOtpDto) {
+  async requestOtp(
+    tenantId: number,
+    dto: RedemptionOtpDto,
+    context?: { invoiceId?: string; transactionAmount?: number },
+  ) {
     const { integration, config } = await this.loadIntegration(tenantId);
     const partnerId = integration.partner_id;
     await this.validateTerminal(tenantId, dto.BranchId, dto.TerminalId);
@@ -157,7 +161,8 @@ export class QitafService {
         payload,
       );
       console.log('[Qitaf] OTP ←', result);
-      this.logTransaction({
+      // Awaited — callers need the uuid to return as transaction_id
+      const qtx = await this.logTransaction({
         tenantId,
         partnerId,
         msisdn: dto.Msisdn,
@@ -165,13 +170,15 @@ export class QitafService {
         globalId,
         branchId: dto.BranchId,
         terminalId: dto.TerminalId,
+        amount: context?.transactionAmount,
         requestDate,
         status: 'success',
         stcResponse: result,
+        invoiceId: context?.invoiceId,
       });
-      return { ...result, globalId, requestDate };
+      return { ...result, globalId, requestDate, qitafTxUuid: qtx.uuid };
     } catch (err) {
-      this.logTransaction({
+      void this.logTransaction({
         tenantId,
         partnerId,
         msisdn: dto.Msisdn,
@@ -182,7 +189,10 @@ export class QitafService {
         requestDate,
         status: 'failed',
         stcError: err?.data ?? err,
-      });
+        invoiceId: context?.invoiceId,
+      }).catch((e) =>
+        this.logger.error('[Qitaf] Failed to log transaction', e?.message),
+      );
       this.throwForCaller(err, 'OTP');
     }
   }
@@ -197,7 +207,11 @@ export class QitafService {
   //   If Reverse comes back with code 1040
   //     → STC already reversed it on their side — that's fine, no error
   // ═══════════════════════════════════════════════════════════════════════════
-  async redeemPoints(tenantId: number, dto: RedemptionRedeemDto) {
+  async redeemPoints(
+    tenantId: number,
+    dto: RedemptionRedeemDto,
+    context?: { invoiceId?: string },
+  ) {
     const { integration, config } = await this.loadIntegration(tenantId);
     const partnerId = integration.partner_id;
     await this.validateTerminal(tenantId, dto.BranchId, dto.TerminalId);
@@ -229,7 +243,8 @@ export class QitafService {
         payload,
       );
       console.log('[Qitaf] Redeem ← SUCCESS', result);
-      this.logTransaction({
+      // Awaited — callers need the uuid to return as transaction_id
+      const qtx = await this.logTransaction({
         tenantId,
         partnerId,
         msisdn: dto.Msisdn,
@@ -242,8 +257,9 @@ export class QitafService {
         status: 'success',
         stcResponse: result,
         points: result?.PointsDeducted ?? result?.points ?? null,
+        invoiceId: context?.invoiceId,
       });
-      return { ...result, globalId, requestDate };
+      return { ...result, globalId, requestDate, qitafTxUuid: qtx.uuid };
     } catch (err) {
       const stcCode = this.extractStcCode(err);
       const mustReverse =
@@ -258,7 +274,7 @@ export class QitafService {
           `[Qitaf] Redeem failed (${reason}) — auto-reversing. OriginalGlobalId: ${globalId}`,
         );
 
-        this.logTransaction({
+        void this.logTransaction({
           tenantId,
           partnerId,
           msisdn: dto.Msisdn,
@@ -270,7 +286,10 @@ export class QitafService {
           requestDate,
           status: 'auto_reversed',
           stcError: err?.data ?? err,
-        });
+          invoiceId: context?.invoiceId,
+        }).catch((e) =>
+          this.logger.error('[Qitaf] Failed to log transaction', e?.message),
+        );
 
         // Pass originalGlobalId as RefRequestId so STC knows which transaction to cancel
         await this.executeReverse(
@@ -293,7 +312,7 @@ export class QitafService {
         );
       }
 
-      this.logTransaction({
+      void this.logTransaction({
         tenantId,
         partnerId,
         msisdn: dto.Msisdn,
@@ -305,7 +324,10 @@ export class QitafService {
         requestDate,
         status: 'failed',
         stcError: err?.data ?? err,
-      });
+        invoiceId: context?.invoiceId,
+      }).catch((e) =>
+        this.logger.error('[Qitaf] Failed to log transaction', e?.message),
+      );
       this.throwForCaller(err, 'Redeem');
     }
   }
@@ -527,7 +549,7 @@ export class QitafService {
           `[Qitaf] Update Reward ← SUCCESS on attempt ${attempt}`,
           result,
         );
-        this.logTransaction({
+        void this.logTransaction({
           tenantId,
           partnerId,
           msisdn: dto.Msisdn,
@@ -541,7 +563,9 @@ export class QitafService {
           requestDate,
           status: 'success',
           stcResponse: result,
-        });
+        }).catch((e) =>
+          this.logger.error('[Qitaf] Failed to log transaction', e?.message),
+        );
         return { ...result, globalId: currentGlobalId, requestDate };
       } catch (err) {
         const stcCode = this.extractStcCode(err);
@@ -550,7 +574,7 @@ export class QitafService {
 
         if (!isRetriable) {
           // Auth error, validation error, etc. — stop immediately, no point retrying
-          this.logTransaction({
+          void this.logTransaction({
             tenantId,
             partnerId,
             msisdn: dto.Msisdn,
@@ -564,7 +588,9 @@ export class QitafService {
             requestDate,
             status: 'failed',
             stcError: err?.data ?? err,
-          });
+          }).catch((e) =>
+            this.logger.error('[Qitaf] Failed to log transaction', e?.message),
+          );
           this.throwForCaller(err, 'Update Reward');
         }
 
@@ -592,7 +618,7 @@ export class QitafService {
       finalGlobalId: currentGlobalId,
       refRequestId: dto.RefRequestId,
     });
-    this.logTransaction({
+    void this.logTransaction({
       tenantId,
       partnerId,
       msisdn: dto.Msisdn,
@@ -606,7 +632,9 @@ export class QitafService {
       requestDate,
       status: 'failed',
       stcError: lastError?.data ?? lastError,
-    });
+    }).catch((e) =>
+      this.logger.error('[Qitaf] Failed to log transaction', e?.message),
+    );
     throw new HttpException(
       {
         message: `Update Reward failed after ${UPDATE_MAX_RETRIES} attempts. Contact STC integration team.`,
@@ -654,7 +682,7 @@ export class QitafService {
         payload,
       );
       console.log('[Qitaf] Reward Status ←', result);
-      this.logTransaction({
+      void this.logTransaction({
         tenantId,
         partnerId,
         msisdn: dto.Msisdn,
@@ -665,10 +693,12 @@ export class QitafService {
         requestDate,
         status: 'success',
         stcResponse: result,
-      });
+      }).catch((e) =>
+        this.logger.error('[Qitaf] Failed to log transaction', e?.message),
+      );
       return { ...result, globalId, requestDate };
     } catch (err) {
-      this.logTransaction({
+      void this.logTransaction({
         tenantId,
         partnerId,
         msisdn: dto.Msisdn,
@@ -679,7 +709,9 @@ export class QitafService {
         requestDate,
         status: 'failed',
         stcError: err?.data ?? err,
-      });
+      }).catch((e) =>
+        this.logger.error('[Qitaf] Failed to log transaction', e?.message),
+      );
       this.throwForCaller(err, 'Reward Status');
     }
   }
@@ -797,7 +829,70 @@ export class QitafService {
     // Strip msisdn — never expose raw customer phone numbers via the admin API
     const data = rows.map(({ msisdn: _msisdn, ...rest }) => rest);
 
-    return { data, total, page: safePage, totalPages: Math.ceil(total / safeLimit) };
+    return {
+      data,
+      total,
+      page: safePage,
+      totalPages: Math.ceil(total / safeLimit),
+    };
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // CHECKOUT HELPERS  (called by CheckoutService for unified /loyalty/* flow)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * Look up the qitaf_transaction saved when requestOtp was called from the
+   * checkout flow. Returns null if not found or tenant mismatch.
+   *
+   * Used by CheckoutService.confirmTransaction to get msisdn / branch / terminal
+   * stored at OTP-request time, so confirm does not need a customer DB lookup.
+   */
+  async getOtpTxByUuid(
+    uuid: string,
+    tenantId: number,
+  ): Promise<QitafTransaction | null> {
+    return this.transactionRepo.findOne({
+      where: { uuid, tenant_id: tenantId, transaction_type: 'otp' },
+    });
+  }
+
+  /**
+   * Look up the most recent successful Qitaf redeem transaction for a given
+   * invoice_id under this tenant. Used by CheckoutService.refund to recover
+   * the exact global_id + request_date needed for the STC reverse call.
+   *
+   * Returns null if no matching record found.
+   */
+  async getRedeemTxForRefund(
+    tenantId: number,
+    invoiceId: string,
+  ): Promise<{
+    global_id: string;
+    request_date: string;
+    msisdn: number;
+    branch_id: string;
+    terminal_id: string;
+    amount: number;
+  } | null> {
+    const tx = await this.transactionRepo.findOne({
+      where: {
+        tenant_id: tenantId,
+        invoice_id: invoiceId,
+        transaction_type: 'redeem',
+        status: 'success',
+      },
+      order: { created_at: 'DESC' },
+    });
+    if (!tx) return null;
+    return {
+      global_id: tx.global_id,
+      request_date: tx.request_date,
+      msisdn: tx.msisdn,
+      branch_id: tx.branch_id,
+      terminal_id: tx.terminal_id,
+      amount: tx.amount,
+    };
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -805,10 +900,15 @@ export class QitafService {
   // ═══════════════════════════════════════════════════════════════════════════
 
   /**
-   * Fire-and-forget transaction logger — never blocks the POS response.
-   * Logs every STC API attempt (success and failure) for audit and customer history.
+   * Persist a Qitaf transaction record.
+   *
+   * Callers that need the saved entity (requestOtp / redeemPoints success paths)
+   * should `await` this — the uuid is returned so confirm / refund can look it up.
+   *
+   * All other callers (error paths, earn reward) use fire-and-forget:
+   *   void this.logTransaction({...}).catch((e) => this.logger.error(...))
    */
-  private logTransaction(data: {
+  private async logTransaction(data: {
     tenantId: number;
     partnerId: number;
     msisdn: number;
@@ -826,30 +926,28 @@ export class QitafService {
     stcResponse?: any;
     stcError?: any;
     points?: number;
-  }): void {
-    this.transactionRepo
-      .save({
-        tenant_id: data.tenantId,
-        partner_id: data.partnerId,
-        msisdn: data.msisdn,
-        transaction_type: data.transactionType,
-        global_id: data.globalId,
-        ref_request_id: data.refRequestId,
-        ref_request_date: data.refRequestDate,
-        branch_id: data.branchId,
-        terminal_id: data.terminalId,
-        amount: data.amount,
-        cashier_id: data.cashierId,
-        reduction_amount: data.reductionAmount,
-        request_date: data.requestDate,
-        status: data.status,
-        stc_response: data.stcResponse,
-        stc_error: data.stcError,
-        points: data.points ?? data.stcResponse?.points ?? null,
-      })
-      .catch((err) =>
-        this.logger.error('[Qitaf] Failed to log transaction', err?.message),
-      );
+    invoiceId?: string;
+  }): Promise<QitafTransaction> {
+    return this.transactionRepo.save({
+      tenant_id: data.tenantId,
+      partner_id: data.partnerId,
+      msisdn: data.msisdn,
+      transaction_type: data.transactionType,
+      global_id: data.globalId,
+      ref_request_id: data.refRequestId,
+      ref_request_date: data.refRequestDate,
+      branch_id: data.branchId,
+      terminal_id: data.terminalId,
+      amount: data.amount,
+      cashier_id: data.cashierId,
+      reduction_amount: data.reductionAmount,
+      request_date: data.requestDate,
+      status: data.status,
+      stc_response: data.stcResponse,
+      stc_error: data.stcError,
+      points: data.points ?? data.stcResponse?.points ?? null,
+      invoice_id: data.invoiceId ?? null,
+    });
   }
 
   /**
@@ -888,7 +986,7 @@ export class QitafService {
       const headers = this.buildHeaders(config, globalId);
       const result = await this.callStc('POST', url, headers, payload);
       console.log('[Qitaf] Reward ← SUCCESS Attempt 1', result);
-      this.logTransaction({
+      void this.logTransaction({
         tenantId,
         partnerId,
         msisdn,
@@ -902,7 +1000,9 @@ export class QitafService {
         status: 'success',
         stcResponse: result,
         points: result?.PointsAwarded ?? result?.points ?? null,
-      });
+      }).catch((e) =>
+        this.logger.error('[Qitaf] Failed to log transaction', e?.message),
+      );
       return { ...result, globalId, requestDate };
     } catch (err1) {
       const code1 = this.extractStcCode(err1);
@@ -911,7 +1011,7 @@ export class QitafService {
 
       if (!isRetriable) {
         // Not a retryable error (e.g. 401 auth, 400 validation) — fail immediately
-        this.logTransaction({
+        void this.logTransaction({
           tenantId,
           partnerId,
           msisdn,
@@ -924,7 +1024,9 @@ export class QitafService {
           requestDate,
           status: 'failed',
           stcError: err1?.data ?? err1,
-        });
+        }).catch((e) =>
+          this.logger.error('[Qitaf] Failed to log transaction', e?.message),
+        );
         this.throwForCaller(err1, 'Earn Reward');
       }
 
@@ -946,7 +1048,7 @@ export class QitafService {
           payload,
         );
         console.log('[Qitaf] Reward ← SUCCESS Attempt 2', retryResult);
-        this.logTransaction({
+        void this.logTransaction({
           tenantId,
           partnerId,
           msisdn,
@@ -960,7 +1062,9 @@ export class QitafService {
           status: 'success',
           stcResponse: retryResult,
           points: retryResult?.PointsAwarded ?? retryResult?.points ?? null,
-        });
+        }).catch((e) =>
+          this.logger.error('[Qitaf] Failed to log transaction', e?.message),
+        );
         return { ...retryResult, globalId: retryGlobalId, requestDate };
       } catch (err2) {
         const code2 = this.extractStcCode(err2);
@@ -985,7 +1089,7 @@ export class QitafService {
           },
         );
 
-        this.logTransaction({
+        void this.logTransaction({
           tenantId,
           partnerId,
           msisdn,
@@ -998,7 +1102,9 @@ export class QitafService {
           requestDate,
           status: 'failed',
           stcError: err2?.data ?? err2,
-        });
+        }).catch((e) =>
+          this.logger.error('[Qitaf] Failed to log transaction', e?.message),
+        );
 
         throw new HttpException(
           {
@@ -1055,7 +1161,7 @@ export class QitafService {
         payload,
       );
       console.log('[Qitaf] Reverse ← SUCCESS', result);
-      this.logTransaction({
+      void this.logTransaction({
         tenantId,
         partnerId,
         msisdn,
@@ -1068,13 +1174,15 @@ export class QitafService {
         requestDate,
         status: 'success',
         stcResponse: result,
-      });
+      }).catch((e) =>
+        this.logger.error('[Qitaf] Failed to log transaction', e?.message),
+      );
       return { ...result, globalId, requestDate };
     } catch (err) {
       // Code 1040 = STC already reversed this on their side — not an error
       if (err?.isStcError && this.extractStcCode(err) === '1040') {
         console.log('[Qitaf] Reverse ← 1040 (STC already reversed it) — OK');
-        this.logTransaction({
+        void this.logTransaction({
           tenantId,
           partnerId,
           msisdn,
@@ -1087,7 +1195,9 @@ export class QitafService {
           requestDate,
           status: 'success',
           stcResponse: { code: 1040, description: 'Already reversed by STC' },
-        });
+        }).catch((e) =>
+          this.logger.error('[Qitaf] Failed to log transaction', e?.message),
+        );
         return { code: 1040, description: 'Already reversed by STC' };
       }
       // Log but don't crash — reverse is often a background/auto call
@@ -1095,7 +1205,7 @@ export class QitafService {
         refRequestId,
         error: err?.data ?? err,
       });
-      this.logTransaction({
+      void this.logTransaction({
         tenantId,
         partnerId,
         msisdn,
@@ -1108,7 +1218,9 @@ export class QitafService {
         requestDate,
         status: 'failed',
         stcError: err?.data ?? err,
-      });
+      }).catch((e) =>
+        this.logger.error('[Qitaf] Failed to log transaction', e?.message),
+      );
       return { error: true, details: err?.data ?? 'Reverse request failed' };
     }
   }

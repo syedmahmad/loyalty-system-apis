@@ -74,7 +74,7 @@ export class WalletTransaction {
   @JoinColumn({ name: 'wallet_order_id' })
   orders?: WalletOrder;
 
-  @ManyToOne(() => Wallet)
+  @ManyToOne(() => Wallet, { nullable: true })
   @JoinColumn({ name: 'wallet_id' })
   wallet: Wallet;
 

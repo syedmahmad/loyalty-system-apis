@@ -21,6 +21,7 @@ import {
   RefundTransactionDto,
   RequestTransactionDto,
 } from './dto/checkout.dto';
+import { QitafService } from 'src/qitaf/qitaf.service';
 
 @Injectable()
 export class CheckoutService {
@@ -39,6 +40,8 @@ export class CheckoutService {
 
     @InjectRepository(BusinessUnit)
     private readonly buRepo: Repository<BusinessUnit>,
+
+    private readonly qitafService: QitafService,
   ) {}
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -140,6 +143,21 @@ export class CheckoutService {
       );
     }
     return rule;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // SHARED HELPER — convert a raw phone string to a 9-digit Saudi Msisdn
+  // integer that STC Qitaf APIs expect.
+  //
+  // Input examples:  "966544696960"  |  "+966544696960"  |  " 966544696960"
+  // STC format:      544696960  (last 9 digits, no country code)
+  //
+  // Works directly from the phone string — no DB lookup required.
+  // This means non-loyalty customers (not in our DB) are fully supported.
+  // ─────────────────────────────────────────────────────────────────────────
+  private phoneToMsisdn(phone: string): number {
+    const digits = phone.replace(/\D/g, '');
+    return Number(digits.slice(-9));
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -275,19 +293,45 @@ export class CheckoutService {
   // ═══════════════════════════════════════════════════════════════════════════
   async requestTransaction(tenantId: number, dto: RequestTransactionDto) {
     const bu = await this.resolveBu(dto.program_uuid, tenantId);
-    const customer = await this.resolveCustomer(dto.customer_phone);
 
-    // ── OTP program — not supported here ─────────────────────────────────
+    // ── OTP program (e.g. Qitaf) ─────────────────────────────────────────
+    // Trigger STC OTP SMS to the customer. Non-loyalty customers (not in our
+    // DB) are fully supported — we only need their phone number.
+    // branch_id and terminal_id identify which POS machine is initiating.
     if (bu.type === 'otp') {
-      throw new BadRequestException(
-        'This program uses OTP-based redemption and is not compatible with ' +
-          'request-transaction / confirm-transaction. ' +
-          'Please use the dedicated OTP redemption APIs to complete checkout, ' +
-          'or contact your administrator for integration guidance.',
+      if (!dto.branch_id || !dto.terminal_id) {
+        throw new BadRequestException(
+          'branch_id and terminal_id are required for OTP-based programs',
+        );
+      }
+
+      const msisdn = this.phoneToMsisdn(dto.customer_phone);
+
+      // requestOtp returns qitafTxUuid — the uuid of the saved qitaf_transaction.
+      // This becomes the transaction_id the caller passes to confirm-transaction.
+      const otpResult = await this.qitafService.requestOtp(
+        tenantId,
+        {
+          Msisdn: msisdn,
+          BranchId: dto.branch_id,
+          TerminalId: dto.terminal_id,
+        },
+        {
+          invoiceId: dto.invoice_id,
+          transactionAmount: dto.transaction_amount,
+        },
       );
+
+      return {
+        transaction_id: otpResult.qitafTxUuid,
+        program_type: 'otp',
+        transaction_amount: dto.transaction_amount,
+        note: 'OTP sent to customer. Call confirm-transaction with otp to finalise redemption.',
+      };
     }
 
-    // ── Points program — validate wallet + burn rule ───────────────────────
+    // ── Points program — requires loyalty customer in our DB ──────────────
+    const customer = await this.resolveCustomer(dto.customer_phone);
     const wallet = await this.resolveWallet(customer.id, tenantId);
     const rule = await this.resolveBurnRule(tenantId, bu.id);
 
@@ -342,172 +386,209 @@ export class CheckoutService {
   // ═══════════════════════════════════════════════════════════════════════════
   // POST /loyalty/confirm-transaction
   //
-  // Finalises a pending burn transaction.
+  // Finalises a pending transaction. Works for both program types:
   //
-  //   points — deducts points_to_burn from wallet, marks transaction ACTIVE.
-  //            points_to_burn can be anywhere from 1 to the rule's max allowed.
+  //   points — transaction_id is a wallet_transaction uuid (status NOT_CONFIRMED).
+  //            Deducts points_to_burn from wallet and marks it ACTIVE.
   //
-  //   otp    — just marks the transaction ACTIVE. Pass points_to_burn = 0.
-  //            No wallet interaction since OTP programs don't use our wallet.
+  //   otp    — transaction_id is a qitaf_transaction uuid (type='otp').
+  //            Sends the PIN to STC, redeems Qitaf points, fires earn reward
+  //            for any remaining cash amount. No wallet interaction.
   // ═══════════════════════════════════════════════════════════════════════════
   async confirmTransaction(tenantId: number, dto: ConfirmTransactionDto) {
+    // ── Try points path first: look up wallet_transactions ────────────────
     const tx = await this.txnRepo.findOne({
       where: { uuid: dto.transaction_id },
       relations: ['customer', 'wallet', 'business_unit', 'tenant'],
     });
 
-    if (!tx) {
+    if (tx) {
+      if (tx.status !== WalletTransactionStatus.NOT_CONFIRMED) {
+        throw new BadRequestException(
+          `Transaction is already ${tx.status}. Cannot confirm again.`,
+        );
+      }
+      if (tx.tenant?.id !== tenantId) {
+        throw new BadRequestException(
+          'Transaction does not belong to this tenant',
+        );
+      }
+
+      // ── Points program — deduct wallet ──────────────────────────────────
+      const rule = await this.ruleRepo.findOne({ where: { id: tx.source_id } });
+      if (!rule) {
+        throw new NotFoundException(
+          'Burn rule no longer found. Contact support.',
+        );
+      }
+
+      const wallet = await this.walletRepo.findOne({
+        where: { id: tx.wallet.id },
+      });
+
+      const pointsToBurn = Math.min(
+        dto.points_to_burn,
+        wallet.available_balance,
+      );
+
+      if (pointsToBurn <= 0) {
+        throw new BadRequestException(
+          'points_to_burn must be greater than 0 for a points program',
+        );
+      }
+
+      const discountAmount = pointsToBurn * rule.points_conversion_factor;
+      const finalAmount = Math.max(0, tx.amount - discountAmount);
+
+      tx.point_balance = pointsToBurn;
+      tx.status = WalletTransactionStatus.ACTIVE;
+      tx.description = `Checkout confirmed: burned ${pointsToBurn} points for SAR ${discountAmount.toFixed(2)} discount`;
+      await this.txnRepo.save(tx);
+
+      wallet.available_balance -= pointsToBurn;
+      wallet.total_burned_points += pointsToBurn;
+      await this.walletRepo.save(wallet);
+
+      return {
+        transaction_id: tx.uuid,
+        program_type: 'points',
+        points_burned: pointsToBurn,
+        discount_amount: +discountAmount.toFixed(2),
+        final_amount: +finalAmount.toFixed(2),
+        remaining_points: wallet.available_balance,
+      };
+    }
+
+    // ── OTP program — look up qitaf_transactions by uuid ─────────────────
+    // transaction_id is the qitaf_transaction.uuid returned by requestOtp.
+    const otpTx = await this.qitafService.getOtpTxByUuid(
+      dto.transaction_id,
+      tenantId,
+    );
+    if (!otpTx) {
       throw new NotFoundException('Transaction not found');
     }
 
-    if (tx.status !== WalletTransactionStatus.NOT_CONFIRMED) {
+    if (!dto.otp) {
       throw new BadRequestException(
-        `Transaction is already ${tx.status}. Cannot confirm again.`,
+        'otp is required to confirm an OTP-based program transaction',
       );
     }
 
-    if (tx.tenant?.id !== tenantId) {
-      throw new BadRequestException(
-        'Transaction does not belong to this tenant',
-      );
-    }
+    // SAR amount to redeem via Qitaf. Defaults to full invoice amount.
+    const redeemAmount = Math.floor(dto.redeem_amount ?? otpTx.amount);
 
-    // ── OTP program — not supported here ─────────────────────────────────
-    if (tx.business_unit?.type === 'otp') {
-      throw new BadRequestException(
-        'This transaction belongs to an OTP-based program and cannot be ' +
-          'confirmed here. ' +
-          'Please use the dedicated OTP redemption APIs to complete checkout, ' +
-          'or contact your administrator for integration guidance.',
-      );
-    }
-
-    // ── Points program — deduct wallet ────────────────────────────────────
-    const rule = await this.ruleRepo.findOne({ where: { id: tx.source_id } });
-    if (!rule) {
-      throw new NotFoundException(
-        'Burn rule no longer found. Contact support.',
-      );
-    }
-
-    const wallet = await this.walletRepo.findOne({
-      where: { id: tx.wallet.id },
-    });
-
-    // Cap by current available balance as a safety net (balance may have changed)
-    const pointsToBurn = Math.min(dto.points_to_burn, wallet.available_balance);
-
-    if (pointsToBurn <= 0) {
-      throw new BadRequestException(
-        'points_to_burn must be greater than 0 for a points program',
-      );
-    }
-
-    const discountAmount = pointsToBurn * rule.points_conversion_factor;
-    const finalAmount = Math.max(0, tx.amount - discountAmount);
-
-    tx.point_balance = pointsToBurn;
-    tx.status = WalletTransactionStatus.ACTIVE;
-    tx.description = `Checkout confirmed: burned ${pointsToBurn} points for SAR ${discountAmount.toFixed(2)} discount`;
-    await this.txnRepo.save(tx);
-
-    wallet.available_balance -= pointsToBurn;
-    wallet.total_burned_points += pointsToBurn;
-    await this.walletRepo.save(wallet);
+    // Call STC — will auto-reverse internally on critical STC errors
+    const redeemResult = await this.qitafService.redeemPoints(
+      tenantId,
+      {
+        Msisdn: otpTx.msisdn,
+        BranchId: otpTx.branch_id,
+        TerminalId: otpTx.terminal_id,
+        PIN: dto.otp,
+        Amount: redeemAmount,
+      },
+      { invoiceId: otpTx.invoice_id },
+    );
 
     return {
-      transaction_id: tx.uuid,
-      program_type: 'points',
-      points_burned: pointsToBurn,
-      discount_amount: +discountAmount.toFixed(2),
-      final_amount: +finalAmount.toFixed(2),
-      remaining_points: wallet.available_balance,
+      transaction_id: redeemResult.qitafTxUuid,
+      program_type: 'otp',
+      redeemed_sar: redeemAmount,
+      remaining_amount: Math.floor(otpTx.amount ?? 0) - redeemAmount,
     };
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
   // POST /loyalty/refund
   //
-  // Full refund of a completed burn transaction.
+  // Full refund by invoice_id. Works for both program types — the system
+  // auto-detects: checks wallet_transactions first (points), then
+  // qitaf_transactions (OTP). Caller does not need to know the type.
   //
-  //   points — creates a new ADJUSTMENT transaction, returns points to wallet.
-  //            Original records are never modified — full audit trail preserved.
-  //
-  //   otp    — creates an ADJUSTMENT record for audit trail only.
-  //            No wallet change since no points were ever deducted.
-  //
-  // Partial refund is NOT supported — always refunds 100% of burned points.
+  // Partial refund is NOT supported — always reverses 100%.
   // ═══════════════════════════════════════════════════════════════════════════
   async refund(tenantId: number, dto: RefundTransactionDto) {
+    // ── Try points path first: look up wallet_transaction by invoice_id ───
     const tx = await this.txnRepo.findOne({
       where: {
-        uuid: dto.transaction_id,
+        invoice_id: dto.invoice_id,
         type: WalletTransactionType.BURN,
         status: WalletTransactionStatus.ACTIVE,
+        tenant: { id: tenantId },
       },
       relations: ['customer', 'wallet', 'business_unit', 'tenant'],
     });
 
-    if (!tx) {
-      throw new NotFoundException(
-        'Transaction not found, or it is not in a refundable state. ' +
-          'Only confirmed (ACTIVE) burn transactions can be refunded.',
+    if (tx) {
+      const pointsToReturn = tx.point_balance ?? 0;
+
+      const refundTx = this.txnRepo.create({
+        type: WalletTransactionType.ADJUSTMENT,
+        status: WalletTransactionStatus.ACTIVE,
+        wallet: { id: tx.wallet.id } as any,
+        customer: { id: tx.customer.id } as any,
+        business_unit: { id: tx.business_unit.id } as any,
+        tenant: { id: tenantId } as any,
+        amount: tx.amount,
+        point_balance: pointsToReturn,
+        source_type: 'checkout_refund',
+        source_id: tx.id,
+        invoice_id: tx.invoice_id,
+        invoice_no: tx.invoice_no,
+        created_at: new Date(),
+        description: `Refund: returned ${pointsToReturn} points from invoice ${dto.invoice_id}`,
+      });
+
+      await this.txnRepo.save(refundTx);
+
+      const wallet = await this.walletRepo.findOne({
+        where: { id: tx.wallet.id },
+      });
+      wallet.available_balance += pointsToReturn;
+      wallet.total_burned_points = Math.max(
+        0,
+        wallet.total_burned_points - pointsToReturn,
       );
+      await this.walletRepo.save(wallet);
+
+      return {
+        program_type: 'points',
+        invoice_id: dto.invoice_id,
+        points_returned: pointsToReturn,
+        new_available_points: wallet.available_balance,
+      };
     }
 
-    if (tx.tenant?.id !== tenantId) {
-      throw new BadRequestException(
-        'Transaction does not belong to this tenant',
-      );
-    }
-
-    // ── OTP program — not supported here ─────────────────────────────────
-    if (tx.business_unit?.type === 'otp') {
-      throw new BadRequestException(
-        'This transaction belongs to an OTP-based program and cannot be ' +
-          'refunded here. ' +
-          'Please use the dedicated OTP redemption APIs, ' +
-          'or contact your administrator for integration guidance.',
-      );
-    }
-
-    const pointsToReturn = tx.point_balance ?? 0;
-
-    const refundTx = this.txnRepo.create({
-      type: WalletTransactionType.ADJUSTMENT,
-      status: WalletTransactionStatus.ACTIVE,
-      wallet: { id: tx.wallet.id } as any,
-      customer: { id: tx.customer.id } as any,
-      business_unit: { id: tx.business_unit.id } as any,
-      tenant: { id: tenantId } as any,
-      amount: tx.amount,
-      point_balance: pointsToReturn,
-      source_type: 'checkout_refund',
-      source_id: tx.id,
-      invoice_id: tx.invoice_id,
-      invoice_no: tx.invoice_no,
-      created_at: new Date(),
-      description: `Refund: returned ${pointsToReturn} points from transaction ${tx.uuid}`,
-    });
-
-    await this.txnRepo.save(refundTx);
-
-    const wallet = await this.walletRepo.findOne({
-      where: { id: tx.wallet.id },
-    });
-    wallet.available_balance += pointsToReturn;
-    wallet.total_burned_points = Math.max(
-      0,
-      wallet.total_burned_points - pointsToReturn,
+    // ── Try OTP path: look up qitaf redeem by invoice_id ─────────────────
+    const redeemTx = await this.qitafService.getRedeemTxForRefund(
+      tenantId,
+      dto.invoice_id,
     );
-    await this.walletRepo.save(wallet);
 
-    return {
-      refund_transaction_id: refundTx.uuid,
-      original_transaction_id: tx.uuid,
-      program_type: 'points',
-      points_returned: pointsToReturn,
-      new_available_points: wallet.available_balance,
-    };
+    if (redeemTx) {
+      // Exact reverse using stored global_id + request_date from the original
+      // redeem — STC matches it precisely, no ambiguity.
+      const reverseResult = await this.qitafService.reverseRedeem(tenantId, {
+        Msisdn: redeemTx.msisdn,
+        BranchId: redeemTx.branch_id,
+        TerminalId: redeemTx.terminal_id,
+        RefRequestId: redeemTx.global_id,
+        RefRequestDate: redeemTx.request_date,
+      });
+
+      return {
+        program_type: 'otp',
+        invoice_id: dto.invoice_id,
+        reversed_amount: redeemTx.amount,
+        stc_global_id: reverseResult?.globalId ?? null,
+        message:
+          'Qitaf redemption reversed. Points returned to customer by STC.',
+      };
+    }
+
+    throw new NotFoundException(
+      `No refundable transaction found for invoice_id "${dto.invoice_id}"`,
+    );
   }
 }
