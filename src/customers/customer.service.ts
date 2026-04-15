@@ -3718,6 +3718,7 @@ export class CustomerService {
       const rules = await this.ruleRepo.find({
         where: {
           rule_type: 'burn',
+          status: 1,
           tenant: { id: customer.tenant.id },
         },
       });
