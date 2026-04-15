@@ -43,6 +43,7 @@ export enum WalletTransactionStatus {
 @Index('idx_wallet_transactions_customer', ['customer'])
 @Index('idx_wallet_transactions_tenant', ['tenant'])
 @Index('idx_wallet_transactions_invoice_no', ['invoice_no'])
+@Index('idx_wallet_transactions_invoice_id', ['invoice_id'])
 @Index('idx_wallet_transactions_type_wallet_type_created_at', [
   'wallet',
   'type',
