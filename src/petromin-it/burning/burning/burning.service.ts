@@ -211,6 +211,7 @@ export class BurningService {
         .leftJoinAndSelect('rule.locales', 'locale') // join locales
         .leftJoinAndSelect('locale.language', 'language') // join language table
         .where('rule.rule_type = :ruleType', { ruleType: 'burn' })
+        .andWhere('rule.status = :status', { status: 1 })
         .andWhere('rule.tenant_id = :tenantId', {
           tenantId: customer.tenant.id,
         })

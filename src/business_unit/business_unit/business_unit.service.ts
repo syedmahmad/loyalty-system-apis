@@ -118,7 +118,6 @@ export class BusinessUnitsService {
     if (hasGlobalBusinessUnitAccess || isSuperAdmin) {
       return await this.repo.find({
         where: {
-          status: 1,
           tenant_id: client_id,
           ...optionalWhereClause,
         },
@@ -138,7 +137,6 @@ export class BusinessUnitsService {
       // if user has access to multiple tenants, return business units across those tenants
       return await this.repo.find({
         where: {
-          status: 1,
           tenant_id: In(tenantIds),
           ...optionalWhereClause,
         },
@@ -161,7 +159,6 @@ export class BusinessUnitsService {
 
     return await this.repo.find({
       where: {
-        status: 1,
         tenant_id: client_id,
         name: In(accessibleBusinessUnitNames),
         ...optionalWhereClause,

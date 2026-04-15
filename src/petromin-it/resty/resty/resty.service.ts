@@ -675,6 +675,7 @@ export class RestyService {
           business_unit: { id: businessUnitId },
           rule_type: 'spend and earn',
           reward_condition: 'perAmount',
+          status: 1,
         },
         relations: ['tiers'],
       });
@@ -1226,6 +1227,7 @@ export class RestyService {
           business_unit: { id: businessUnitId },
           rule_type: 'spend and earn',
           reward_condition: 'perAmount',
+          status: 1,
         },
         relations: ['tiers'],
       });
@@ -1362,6 +1364,7 @@ export class RestyService {
         business_unit: { id: businessUnitId },
         rule_type: 'spend and earn',
         reward_condition: 'perAmount',
+        status: 1,
       },
       relations: ['tiers'],
     });

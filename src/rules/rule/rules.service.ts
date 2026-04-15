@@ -267,7 +267,6 @@ export class RulesService extends BaseService {
 
     const queryBuilder = this.ruleRepository
       .createQueryBuilder('rules')
-      .where('rules.status = :status', { status: 1 })
       .orderBy('rules.created_at', 'DESC');
 
     if (client_id) {
@@ -433,6 +432,7 @@ export class RulesService extends BaseService {
       rule.frequency = dto.frequency ?? rule.frequency;
       rule.burn_type = dto.burn_type ?? null;
       rule.reward_condition = dto.reward_condition ?? rule.reward_condition;
+      rule.status = dto.status ?? rule.status;
       // rule.dynamic_conditions = dto.dynamic_conditions || null;
       rule.dynamic_conditions = this.normalizeDynamicConditions(
         dto.dynamic_conditions,
