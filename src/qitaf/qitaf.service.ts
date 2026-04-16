@@ -929,6 +929,7 @@ export class QitafService {
     invoiceId?: string;
   }): Promise<QitafTransaction> {
     return this.transactionRepo.save({
+      uuid: uuidv4(),
       tenant_id: data.tenantId,
       partner_id: data.partnerId,
       msisdn: data.msisdn,

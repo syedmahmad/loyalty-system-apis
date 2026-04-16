@@ -482,7 +482,7 @@ export class CheckoutService {
     const redeemResult = await this.qitafService.redeemPoints(
       tenantId,
       {
-        Msisdn: otpTx.msisdn,
+        Msisdn: Number(otpTx.msisdn), // bigint columns return as string in MySQL
         BranchId: otpTx.branch_id,
         TerminalId: otpTx.terminal_id,
         PIN: dto.otp,
@@ -570,7 +570,7 @@ export class CheckoutService {
       // Exact reverse using stored global_id + request_date from the original
       // redeem — STC matches it precisely, no ambiguity.
       const reverseResult = await this.qitafService.reverseRedeem(tenantId, {
-        Msisdn: redeemTx.msisdn,
+        Msisdn: Number(redeemTx.msisdn), // bigint columns return as string in MySQL
         BranchId: redeemTx.branch_id,
         TerminalId: redeemTx.terminal_id,
         RefRequestId: redeemTx.global_id,
