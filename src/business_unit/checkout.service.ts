@@ -4,7 +4,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { MoreThan, Repository } from 'typeorm';
+import { randomInt } from 'crypto';
 import { Customer } from 'src/customers/entities/customer.entity';
 import { Wallet } from 'src/wallet/entities/wallet.entity';
 import {
@@ -14,6 +15,8 @@ import {
 } from 'src/wallet/entities/wallet-transaction.entity';
 import { Rule } from 'src/rules/entities/rules.entity';
 import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
+import { Tenant } from 'src/tenants/entities/tenant.entity';
+import { BurnOtp } from 'src/petromin-it/burning/entities/burn-otp.entity';
 import { encrypt } from 'src/helpers/encryption';
 import {
   ConfirmTransactionDto,
@@ -40,6 +43,12 @@ export class CheckoutService {
 
     @InjectRepository(BusinessUnit)
     private readonly buRepo: Repository<BusinessUnit>,
+
+    @InjectRepository(Tenant)
+    private readonly tenantRepo: Repository<Tenant>,
+
+    @InjectRepository(BurnOtp)
+    private readonly burnOtpRepo: Repository<BurnOtp>,
 
     private readonly qitafService: QitafService,
   ) {}
@@ -199,6 +208,65 @@ export class CheckoutService {
     }
 
     return { pointsToBurn, discountAmount };
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // SHARED HELPER — fetch tenant and check OTP burn requirement
+  // ─────────────────────────────────────────────────────────────────────────
+  private async resolveTenant(tenantId: number): Promise<Tenant> {
+    const tenant = await this.tenantRepo.findOne({ where: { id: tenantId } });
+    if (!tenant) throw new NotFoundException(`Tenant #${tenantId} not found`);
+    return tenant;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // SHARED HELPER — generate a 6-digit OTP and save it to burn_otps
+  //
+  // Mirrors the logic in BurningService.burnTransaction (Path B).
+  // Collision-checked against active (unused + non-expired) records.
+  // Returns the plain 6-digit code so the caller can include it in a
+  // push notification if desired.
+  // ─────────────────────────────────────────────────────────────────────────
+  private async generateAndSaveBurnOtp(
+    tenantId: number,
+    txUuid: string,
+    customerId: number,
+    buId: number,
+    ttlMinutes: number,
+  ): Promise<string> {
+    const now = new Date();
+    let otp: string;
+    let attempts = 0;
+
+    do {
+      otp = String(randomInt(100000, 1000000));
+      attempts++;
+      if (attempts > 10) {
+        throw new BadRequestException(
+          'Could not generate a unique OTP. Please try again.',
+        );
+      }
+      const collision = await this.burnOtpRepo.findOne({
+        where: { otp, used: 0, expires_at: MoreThan(now) },
+      });
+      if (!collision) break;
+    } while (true);
+
+    const expiresAt = new Date(now.getTime() + ttlMinutes * 60 * 1000);
+
+    await this.burnOtpRepo.save({
+      otp,
+      customer_id: customerId,
+      tenant_id: tenantId,
+      business_unit_id: buId,
+      used: 0,
+      expires_at: expiresAt,
+      transaction_uuid: txUuid,
+      app_generate_count: 0,
+      cashier_request_count: 1,
+    });
+
+    return otp;
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -373,13 +441,30 @@ export class CheckoutService {
 
     const saved = await this.txnRepo.save(tx);
 
+    // ── OTP burn required — generate code and link it to this transaction ──
+    // When enabled, the customer must provide a 6-digit code from the Petromin
+    // App to confirm the transaction. The code is saved to burn_otps and the
+    // customer retrieves it (or regenerates it if expired) via the app's
+    // POST /burning/otp/generate endpoint.
+    const tenant = await this.resolveTenant(tenantId);
+    const otpBurnRequired = tenant.otp_burn_required === 1;
+    if (otpBurnRequired) {
+      await this.generateAndSaveBurnOtp(
+        tenantId,
+        saved.uuid,
+        customer.id,
+        bu.id,
+        tenant.otp_burn_ttl_minutes ?? 5,
+      );
+    }
+
     return {
       transaction_id: saved.uuid,
       program_type: 'points',
       transaction_amount: dto.transaction_amount,
       max_points_can_burn: maxAllowed,
       max_discount_sar: +maxDiscount.toFixed(2),
-      note: 'Points not deducted yet. Call confirm-transaction with points_to_burn to finalise.',
+      otp_required: otpBurnRequired,
     };
   }
 
@@ -412,6 +497,38 @@ export class CheckoutService {
         throw new BadRequestException(
           'Transaction does not belong to this tenant',
         );
+      }
+
+      // ── OTP burn verification (when tenant has otp_burn_required = 1) ────
+      // Must happen before any wallet interaction so we don't deduct points
+      // on an invalid or expired OTP.
+      const tenant = await this.resolveTenant(tenantId);
+      if (tenant.otp_burn_required === 1) {
+        if (!dto.otp) {
+          throw new BadRequestException(
+            'otp is required to confirm this transaction. Ask the customer to open the Petromin App.',
+          );
+        }
+        const normalized = String(dto.otp).trim().replace(/\D/g, '');
+        const now = new Date();
+        const otpRecord = await this.burnOtpRepo.findOne({
+          where: {
+            otp: normalized,
+            transaction_uuid: tx.uuid,
+            customer_id: tx.customer.id,
+            used: 0,
+            expires_at: MoreThan(now),
+          },
+        });
+        if (!otpRecord) {
+          throw new BadRequestException(
+            'Invalid or expired OTP. Ask the customer to regenerate from the Petromin App.',
+          );
+        }
+        // Mark consumed immediately — one-time use
+        otpRecord.used = 1;
+        otpRecord.used_at = now;
+        await this.burnOtpRepo.save(otpRecord);
       }
 
       // ── Points program — deduct wallet ──────────────────────────────────
@@ -485,7 +602,7 @@ export class CheckoutService {
         Msisdn: Number(otpTx.msisdn), // bigint columns return as string in MySQL
         BranchId: otpTx.branch_id,
         TerminalId: otpTx.terminal_id,
-        PIN: dto.otp,
+        PIN: Number(dto.otp), // otp is now a string field; STC expects a number
         Amount: redeemAmount,
       },
       { invoiceId: otpTx.invoice_id },

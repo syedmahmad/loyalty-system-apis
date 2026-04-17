@@ -14,6 +14,7 @@ import { WalletTransaction } from 'src/wallet/entities/wallet-transaction.entity
 import { Rule } from 'src/rules/entities/rules.entity';
 import { CheckoutService } from 'src/business_unit/checkout.service';
 import { QitafModule } from 'src/qitaf/qitaf.module';
+import { BurnOtp } from 'src/petromin-it/burning/entities/burn-otp.entity';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { QitafModule } from 'src/qitaf/qitaf.module';
       Customer,
       WalletTransaction,
       Rule,
+      BurnOtp,
     ]),
     QitafModule, // provides QitafService for OTP-based program routing
   ],

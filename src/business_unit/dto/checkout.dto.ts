@@ -6,7 +6,6 @@ import {
   IsPositive,
   IsString,
   IsUUID,
-  Max,
   Min,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -110,6 +109,8 @@ export class RequestTransactionDto {
 //   points — deducts points_to_burn from wallet, marks transaction ACTIVE.
 //            points_to_burn can be <= what the burn-rule allows (customer may
 //            decide to use fewer points than the maximum).
+//            If tenant.otp_burn_required = 1, also pass burn_otp (6-digit code
+//            the customer generates from the Petromin App).
 //
 //   otp    — just marks the transaction ACTIVE. No wallet interaction.
 //            Pass points_to_burn = 0 for OTP-type programs.
@@ -123,18 +124,13 @@ export class ConfirmTransactionDto {
   @Min(0)
   points_to_burn: number; // points to deduct from wallet (0 for OTP programs)
 
-  // ── OTP programs only (e.g. Qitaf) ──────────────────────────────────────
-  // otp: the 4-digit PIN the customer received via SMS — required for otp-type programs.
-  // redeem_amount: SAR amount to pay using Qitaf points. Defaults to the full
-  //   transaction_amount from request-transaction. If the customer only wants
-  //   to use Qitaf for part of the invoice, pass the partial amount here.
-  //   The difference (transaction_amount - redeem_amount) is auto-submitted
-  //   to STC as an earn reward for what the customer paid in cash/card.
+  // ── otp — shared field for both program types ───────────────────────────
+  // points programs with otp_burn_required: 6-digit code from Petromin App
+  // otp-type programs (Qitaf):             4-digit PIN from STC SMS
+  // The two flows are mutually exclusive so one field covers both.
   @IsOptional()
-  @IsInt()
-  @Min(1000)
-  @Max(9999)
-  otp?: number;
+  @IsString()
+  otp?: string;
 
   @IsOptional()
   @IsNumber()

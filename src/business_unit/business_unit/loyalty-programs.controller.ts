@@ -13,6 +13,7 @@ import { Repository } from 'typeorm';
 import { BusinessUnit } from '../entities/business_unit.entity';
 import { Wallet } from 'src/wallet/entities/wallet.entity';
 import { Customer } from 'src/customers/entities/customer.entity';
+import { Tenant } from 'src/tenants/entities/tenant.entity';
 import { TenantApiTokenGuard } from 'src/tenants/guards/tenant-api-token.guard';
 import { encrypt } from 'src/helpers/encryption';
 import { CheckoutService } from 'src/business_unit/checkout.service';
@@ -47,6 +48,8 @@ export class LoyaltyController {
     private readonly walletRepo: Repository<Wallet>,
     @InjectRepository(Customer)
     private readonly customerRepo: Repository<Customer>,
+    @InjectRepository(Tenant)
+    private readonly tenantRepo: Repository<Tenant>,
     private readonly checkoutService: CheckoutService,
   ) {}
 
@@ -63,6 +66,13 @@ export class LoyaltyController {
     @Query('customer_phone') customerPhone?: string,
   ) {
     const tenantId: number = req.loyaltyTenantId;
+
+    // Fetch tenant once — needed for otp_burn_required flag on points programs
+    const tenant = await this.tenantRepo.findOne({
+      where: { id: tenantId },
+      select: ['id', 'otp_burn_required'],
+    });
+    const otpBurnRequired = tenant?.otp_burn_required ?? 0;
 
     // Resolve customer from phone if provided
     let customerId: number | null = null;
@@ -114,6 +124,7 @@ export class LoyaltyController {
             description: bu.description,
             type: 'points',
             points,
+            otp_burn_required: otpBurnRequired,
           };
         }),
     );
