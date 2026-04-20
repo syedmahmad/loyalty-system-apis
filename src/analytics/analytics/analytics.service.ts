@@ -11,6 +11,11 @@ import { Rule } from 'src/rules/entities/rules.entity';
 import { Customer } from 'src/customers/entities/customer.entity';
 import { encrypt } from 'src/helpers/encryption';
 import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
+import { QitafTransaction } from 'src/qitaf/entities/qitaf-transaction.entity';
+import { TenantPartnerIntegration } from 'src/tenant-integrations/entities/tenant-partner-integration.entity';
+
+// STC Qitaf partner ID in the tenant_partner_integrations table
+const QITAF_PARTNER_ID = 1;
 
 @Injectable()
 export class LoyaltyAnalyticsService {
@@ -41,6 +46,12 @@ export class LoyaltyAnalyticsService {
 
     @InjectRepository(BusinessUnit)
     private readonly businessUnitRepository: Repository<BusinessUnit>,
+
+    @InjectRepository(QitafTransaction)
+    private readonly qitafTransactionRepository: Repository<QitafTransaction>,
+
+    @InjectRepository(TenantPartnerIntegration)
+    private readonly tenantPartnerIntegrationRepository: Repository<TenantPartnerIntegration>,
   ) {}
 
   async pointsSplit(permission: any, startDate?: string, endDate?: string) {
@@ -656,6 +667,118 @@ export class LoyaltyAnalyticsService {
     return data.map((item) => ({
       date: `${item.date}`,
       count: parseInt(item.count, 10),
+    }));
+  }
+
+  // ─── STC QITAF ANALYTICS ────────────────────────────────────────────────────
+
+  async checkQitafEnabled(permission: any) {
+    if (!permission.canViewAnalytics) {
+      throw new BadRequestException(
+        "You don't have permission to access analytics",
+      );
+    }
+    const integration = await this.tenantPartnerIntegrationRepository.findOne({
+      where: {
+        tenant_id: permission.tenantId,
+        partner_id: QITAF_PARTNER_ID,
+        is_enabled: 1,
+      },
+    });
+    return { isEnabled: !!integration };
+  }
+
+  async getQitafRedemptionSummary(
+    permission: any,
+    startDate?: string,
+    endDate?: string,
+  ) {
+    if (!permission.canViewAnalytics) {
+      throw new BadRequestException(
+        "You don't have permission to access analytics",
+      );
+    }
+
+    const qb = this.qitafTransactionRepository
+      .createQueryBuilder('qt')
+      .select('COUNT(*)', 'totalRedemptions')
+      .addSelect('COALESCE(SUM(qt.amount), 0)', 'totalAmount')
+      .where('qt.tenant_id = :tenantId', { tenantId: permission.tenantId })
+      .andWhere('qt.transaction_type = :type', { type: 'redeem' })
+      .andWhere('qt.status = :status', { status: 'success' })
+      .andWhere(
+        `qt.global_id NOT IN (
+          SELECT rev.ref_request_id
+          FROM qitaf_transactions rev
+          WHERE rev.transaction_type = 'reverse'
+            AND rev.status = 'success'
+            AND rev.tenant_id = :tenantId
+        )`,
+        { tenantId: permission.tenantId },
+      );
+
+    if (startDate && endDate) {
+      qb.andWhere('qt.created_at BETWEEN :start AND :end', {
+        start: startDate,
+        end: endDate,
+      });
+    }
+
+    const row = await qb.getRawOne();
+    const totalRedemptions = Number(row?.totalRedemptions || 0);
+    const totalAmount = parseFloat(row?.totalAmount || 0);
+    const avgAmount =
+      totalRedemptions > 0
+        ? parseFloat((totalAmount / totalRedemptions).toFixed(2))
+        : 0;
+
+    return { totalRedemptions, totalAmount, avgAmount };
+  }
+
+  async getQitafRedemptionBarChart(
+    permission: any,
+    startDate?: string,
+    endDate?: string,
+  ) {
+    if (!permission.canViewAnalytics) {
+      throw new BadRequestException(
+        "You don't have permission to access analytics",
+      );
+    }
+
+    const qb = this.qitafTransactionRepository
+      .createQueryBuilder('qt')
+      .select('DATE(qt.created_at)', 'date')
+      .addSelect('COUNT(*)', 'count')
+      .addSelect('COALESCE(SUM(qt.amount), 0)', 'amount')
+      .where('qt.tenant_id = :tenantId', { tenantId: permission.tenantId })
+      .andWhere('qt.transaction_type = :type', { type: 'redeem' })
+      .andWhere('qt.status = :status', { status: 'success' })
+      .andWhere(
+        `qt.global_id NOT IN (
+          SELECT rev.ref_request_id
+          FROM qitaf_transactions rev
+          WHERE rev.transaction_type = 'reverse'
+            AND rev.status = 'success'
+            AND rev.tenant_id = :tenantId
+        )`,
+        { tenantId: permission.tenantId },
+      );
+
+    if (startDate && endDate) {
+      qb.andWhere('qt.created_at BETWEEN :start AND :end', {
+        start: startDate,
+        end: endDate,
+      });
+    }
+
+    qb.groupBy('DATE(qt.created_at)').orderBy('DATE(qt.created_at)', 'ASC');
+
+    const raw = await qb.getRawMany();
+    return raw.map((row) => ({
+      date: row.date ? new Date(row.date).toISOString().split('T')[0] : null,
+      count: Number(row.count || 0),
+      amount: parseFloat(row.amount || 0),
     }));
   }
 

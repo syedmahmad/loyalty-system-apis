@@ -107,4 +107,43 @@ export class LoyaltyAnalyticsController {
       endDate,
     );
   }
+
+  // ─── STC Qitaf Analytics ──────────────────────────────────────────────────
+
+  @UseGuards(AnalyticAccessGuard)
+  @ANALYTICSAccess()
+  @Get('qitaf/check')
+  checkQitafEnabled(@Req() req: any) {
+    return this.loyaltyAnalyticsService.checkQitafEnabled(req.permission);
+  }
+
+  @UseGuards(AnalyticAccessGuard)
+  @ANALYTICSAccess()
+  @Get('qitaf/summary')
+  getQitafRedemptionSummary(
+    @Req() req: any,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    return this.loyaltyAnalyticsService.getQitafRedemptionSummary(
+      req.permission,
+      startDate,
+      endDate,
+    );
+  }
+
+  @UseGuards(AnalyticAccessGuard)
+  @ANALYTICSAccess()
+  @Get('qitaf/bar-chart')
+  getQitafRedemptionBarChart(
+    @Req() req: any,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    return this.loyaltyAnalyticsService.getQitafRedemptionBarChart(
+      req.permission,
+      startDate,
+      endDate,
+    );
+  }
 }

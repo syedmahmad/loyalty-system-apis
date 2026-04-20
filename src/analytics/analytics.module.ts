@@ -14,6 +14,8 @@ import { CouponUsage } from 'src/coupons/entities/coupon-usages.entity';
 import { RestyInvoicesInfo } from 'src/petromin-it/resty/entities/resty_invoices_info.entity';
 import { Rule } from 'src/rules/entities/rules.entity';
 import { Customer } from 'src/customers/entities/customer.entity';
+import { QitafTransaction } from 'src/qitaf/entities/qitaf-transaction.entity';
+import { TenantPartnerIntegration } from 'src/tenant-integrations/entities/tenant-partner-integration.entity';
 
 @Module({
   imports: [
@@ -30,6 +32,8 @@ import { Customer } from 'src/customers/entities/customer.entity';
       RestyInvoicesInfo,
       Rule,
       Customer,
+      QitafTransaction,
+      TenantPartnerIntegration,
     ]),
   ],
   controllers: [LoyaltyAnalyticsController],
