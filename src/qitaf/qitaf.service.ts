@@ -467,6 +467,46 @@ export class QitafService {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
+  // 4b. AUTO-EARN ON PARTIAL REDEMPTION
+  // Called after a successful Qitaf redemption when autoEarnOnPartialRedemption
+  // is enabled in the integration config. Fire-and-forget — never blocks the
+  // checkout response. All errors are caught and logged internally.
+  // ═══════════════════════════════════════════════════════════════════════════
+  async tryAutoEarnRemaining(
+    tenantId: number,
+    params: {
+      Msisdn: number;
+      BranchId: string;
+      TerminalId: string;
+      totalAmount: number;
+      redeemedAmount: number;
+    },
+  ): Promise<void> {
+    try {
+      const { config } = await this.loadIntegration(tenantId);
+      if (!config.autoEarnOnPartialRedemption) return;
+
+      const remainingAmount = Math.floor(params.totalAmount) - params.redeemedAmount;
+      if (remainingAmount <= 0) return;
+
+      this.earnReward(tenantId, {
+        Msisdn: params.Msisdn,
+        BranchId: params.BranchId,
+        TerminalId: params.TerminalId,
+        Amount: remainingAmount,
+      }).catch((err) =>
+        this.logger.error(
+          `Auto-earn on partial redemption failed for tenant #${tenantId}: ${err?.message}`,
+        ),
+      );
+    } catch (err) {
+      this.logger.error(
+        `Auto-earn config load failed for tenant #${tenantId}: ${err?.message}`,
+      );
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
   // 5. EARN REWARD INCENTIVE  (Award points + capture cashier ID)
   // Same as earnReward but also sends CashierId for the cashier incentive program.
   // Same retry protocol as earnReward.

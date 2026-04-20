@@ -608,11 +608,24 @@ export class CheckoutService {
       { invoiceId: otpTx.invoice_id },
     );
 
+    const remainingAmount = Math.floor(otpTx.amount ?? 0) - redeemAmount;
+
+    // Fire-and-forget: reward STC points on the remaining cash/card amount if enabled in config
+    this.qitafService
+      .tryAutoEarnRemaining(tenantId, {
+        Msisdn: Number(otpTx.msisdn),
+        BranchId: otpTx.branch_id,
+        TerminalId: otpTx.terminal_id,
+        totalAmount: otpTx.amount,
+        redeemedAmount: redeemAmount,
+      })
+      .catch(() => {}); // errors are logged inside tryAutoEarnRemaining
+
     return {
       transaction_id: redeemResult.qitafTxUuid,
       program_type: 'otp',
       redeemed_sar: redeemAmount,
-      remaining_amount: Math.floor(otpTx.amount ?? 0) - redeemAmount,
+      remaining_amount: remainingAmount,
     };
   }
 

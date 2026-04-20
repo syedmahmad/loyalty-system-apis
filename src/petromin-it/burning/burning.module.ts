@@ -5,6 +5,7 @@ import { Wallet } from 'src/wallet/entities/wallet.entity';
 import { WalletTransaction } from 'src/wallet/entities/wallet-transaction.entity';
 import { Tier } from 'src/tiers/entities/tier.entity';
 import { BurningController } from './burning/burning.controller';
+import { BurningV1Controller } from './burning/burning-v1.controller';
 import { TiersService } from 'src/tiers/tiers/tiers.service';
 import { BurningService } from './burning/burning.service';
 import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
@@ -41,7 +42,7 @@ import { BurnOtp } from './entities/burn-otp.entity';
     NotificationModule,
     OpenaiModule,
   ],
-  controllers: [BurningController],
+  controllers: [BurningController, BurningV1Controller],
   providers: [BurningService, TiersService],
   exports: [BurningService],
 })

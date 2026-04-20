@@ -64,4 +64,12 @@ export interface QitafConfig {
 
   /** 'staging' | 'production' — determines the cert validity duration */
   sslEnvironment?: 'staging' | 'production';
+
+  /**
+   * When true, after a successful partial Qitaf redemption the system
+   * automatically calls the STC earn/reward API with the remaining cash amount
+   * (totalAmount − redeemedAmount) so the customer earns points on the portion
+   * paid via cash or card.
+   */
+  autoEarnOnPartialRedemption?: boolean;
 }
