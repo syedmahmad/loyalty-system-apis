@@ -9,9 +9,9 @@ import {
 
 export class GetOtpDto {
   @IsNotEmpty()
-  @Matches(/^(\+9665\d{8}|\+92\d{10}|\+91\d{10})$/, {
+  @Matches(/^(\+9665\d{8}|\+92\d{10}|\+91\d{10}|\+9627\d{7})$/, {
     message:
-      'Phone must be a valid number from Saudi (+9665XXXXXXXX), Pakistan (+92XXXXXXXXXX), or India (+91XXXXXXXXXX)',
+      'Phone must be a valid number from Saudi (+9665XXXXXXXX), Pakistan (+92XXXXXXXXXX), India (+91XXXXXXXXXX), or Jordan (+9627XXXXXXX)',
   })
   mobileNumber: string;
 
@@ -37,9 +37,9 @@ export class VerifyOtpDto {
   // referral_code?: string;
 
   @IsNotEmpty()
-  @Matches(/^(\+9665\d{8}|\+92\d{10}|\+91\d{10})$/, {
+  @Matches(/^(\+9665\d{8}|\+92\d{10}|\+91\d{10}|\+9627\d{7})$/, {
     message:
-      'Phone must be a valid number from Saudi (+9665XXXXXXXX), Pakistan (+92XXXXXXXXXX), or India (+91XXXXXXXXXX)',
+      'Phone must be a valid number from Saudi (+9665XXXXXXXX), Pakistan (+92XXXXXXXXXX), India (+91XXXXXXXXXX), or Jordan (+9627XXXXXXX)',
   })
   mobileNumber: string;
 }
