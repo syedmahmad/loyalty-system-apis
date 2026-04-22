@@ -19,6 +19,8 @@ import { NotificationModule } from '../notification/notification.module';
 import { DeviceToken } from 'src/petromin-it/notification/entities/device-token.entity';
 import { WalletTransaction } from 'src/wallet/entities/wallet-transaction.entity';
 import { WalletSettings } from 'src/wallet/entities/wallet-settings.entity';
+import { QitafTransaction } from 'src/qitaf/entities/qitaf-transaction.entity';
+import { TenantPartnerIntegration } from 'src/tenant-integrations/entities/tenant-partner-integration.entity';
 
 @Module({
   imports: [
@@ -35,6 +37,8 @@ import { WalletSettings } from 'src/wallet/entities/wallet-settings.entity';
       DeviceToken,
       WalletTransaction,
       WalletSettings,
+      QitafTransaction,
+      TenantPartnerIntegration,
     ]),
     VehicleModule,
     TiersModule,

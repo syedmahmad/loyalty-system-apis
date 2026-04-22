@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
+import { OciService } from 'src/oci/oci.service';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { DataSource, ILike, In, Repository } from 'typeorm';
 import { CreateBusinessUnitDto } from '../dto/create-business-unit.dto';
@@ -21,6 +22,8 @@ export class BusinessUnitsService {
 
     @InjectDataSource()
     private readonly dataSource: DataSource,
+
+    private readonly ociService: OciService,
   ) {}
 
   async create(dto: CreateBusinessUnitDto, user: string) {
@@ -241,5 +244,9 @@ export class BusinessUnitsService {
       where: { uuid: id },
       relations: { tenant: true },
     });
+  }
+
+  async uploadFile(buffer: Buffer, bucketName: string, objectName: string) {
+    return await this.ociService.uploadBufferToOci(buffer, bucketName, objectName);
   }
 }

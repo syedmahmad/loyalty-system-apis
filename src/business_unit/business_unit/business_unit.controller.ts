@@ -10,7 +10,10 @@ import {
   Query,
   UseGuards,
   BadRequestException,
+  UseInterceptors,
+  UploadedFile,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { BusinessUnitsService } from './business_unit.service';
 import { CreateBusinessUnitDto } from '../dto/create-business-unit.dto';
 import { UpdateBusinessUnitDto } from '../dto/update-business-unit.dto';
@@ -136,5 +139,27 @@ export class BusinessUnitsController {
   @Get('/tanant-info/:buId')
   async getTanantInfo(@Param('buId') buId: number) {
     return await this.service.getTanantInfo(buId);
+  }
+
+  @Post('file')
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadFile(@UploadedFile() file: any) {
+    const bucketName = process.env.OCI_BUCKET;
+    const objectName = file.originalname;
+    const buffer = file.buffer;
+    const response = await this.service.uploadFile(buffer, bucketName, objectName);
+
+    if (response) {
+      return {
+        success: true,
+        message: 'File uploaded successfully',
+        uploaded_url: `${process.env.OCI_URL}/${objectName}`,
+      };
+    }
+
+    return {
+      success: false,
+      message: 'Failed to upload file',
+    };
   }
 }

@@ -72,4 +72,12 @@ export interface QitafConfig {
    * paid via cash or card.
    */
   autoEarnOnPartialRedemption?: boolean;
+
+  /**
+   * When true, internal Petromin loyalty points are awarded when a customer claims
+   * an invoice that was (fully or partially) paid via STC Qitaf redemption.
+   * Defaults to false — admin must explicitly enable this to award internal points
+   * alongside STC points.
+   */
+  earnInternalPointsOnQitafRedemption?: boolean;
 }

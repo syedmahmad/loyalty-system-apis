@@ -32,6 +32,9 @@ import {
   WalletTransactionStatus,
 } from 'src/wallet/entities/wallet-transaction.entity';
 import { WalletTransaction } from 'src/wallet/entities/wallet-transaction.entity';
+import { QitafTransaction } from 'src/qitaf/entities/qitaf-transaction.entity';
+import { TenantPartnerIntegration } from 'src/tenant-integrations/entities/tenant-partner-integration.entity';
+import { QitafConfig } from 'src/tenant-integrations/interfaces/qitaf-config.interface';
 
 @Injectable()
 export class RestyService {
@@ -60,6 +63,10 @@ export class RestyService {
     private readonly pointsLogRepo: Repository<RestyPointsAssignmentLog>,
     @InjectRepository(WalletTransaction)
     private readonly walletTransactionRepo: Repository<WalletTransaction>,
+    @InjectRepository(QitafTransaction)
+    private readonly qitafTxRepo: Repository<QitafTransaction>,
+    @InjectRepository(TenantPartnerIntegration)
+    private readonly tenantIntegrationRepo: Repository<TenantPartnerIntegration>,
 
     private readonly notificationService: NotificationService,
     private readonly tierService: TiersService,
@@ -1355,6 +1362,46 @@ export class RestyService {
     const businessUnitId = Number(process.env.NCMC_PETROMIN_BU);
     const tenantId = parseInt(process.env.NCMC_PETROMIN_TENANT!, 10);
 
+    // 🔹 Qitaf integration config — controls whether internal points are awarded
+    //    on invoices that were paid (fully or partially) via STC Qitaf redemption.
+    //    Default: true (award internal points) — preserved for existing tenants.
+    let earnInternalOnQitaf = true;
+    const qitafRedeemedInvoiceNos = new Set<string>();
+
+    const integrations = await this.tenantIntegrationRepo.find({
+      where: { tenant_id: tenantId, is_enabled: 1 },
+    });
+    const qitafIntegration = integrations.find(
+      (i) => (i.configuration as QitafConfig)?.stcPartnerId,
+    );
+
+    if (qitafIntegration) {
+      const qitafConfig = qitafIntegration.configuration as QitafConfig;
+      earnInternalOnQitaf = qitafConfig.earnInternalPointsOnQitafRedemption === true;
+
+      if (!earnInternalOnQitaf) {
+        // Batch-fetch invoice numbers that had a successful Qitaf redemption
+        const invoiceNos = pendingInvoices
+          .map((inv) => inv.invoice_no)
+          .filter(Boolean);
+
+        if (invoiceNos.length > 0) {
+          const qitafTxns = await this.qitafTxRepo.find({
+            where: {
+              invoice_id: In(invoiceNos),
+              tenant_id: tenantId,
+              transaction_type: 'redeem',
+              status: 'success',
+            },
+            select: ['invoice_id'],
+          });
+          qitafTxns.forEach((tx) => {
+            if (tx.invoice_id) qitafRedeemedInvoiceNos.add(tx.invoice_id);
+          });
+        }
+      }
+    }
+
     const settings = await this.settingsRepo.findOne({
       where: { business_unit: { id: businessUnitId } },
     });
@@ -1419,6 +1466,17 @@ export class RestyService {
           invoice.is_claimed = true;
           invoice.claimed_points = existingTx.point_balance || 0;
           invoice.already_processed_invoice = true;
+          await this.restyIncoicesInfoRepo.save(invoice);
+          stats.skipped++;
+          continue;
+        }
+
+        // Skip internal points for invoices redeemed via Qitaf when toggle is OFF
+        if (!earnInternalOnQitaf && qitafRedeemedInvoiceNos.has(invoice.invoice_no)) {
+          invoice.is_claimed = true;
+          invoice.claimed_points = 0;
+          invoice.claim_id = uuidv4();
+          invoice.claim_date = new Date().toISOString();
           await this.restyIncoicesInfoRepo.save(invoice);
           stats.skipped++;
           continue;

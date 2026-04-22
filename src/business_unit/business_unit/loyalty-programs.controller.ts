@@ -8,6 +8,10 @@ import {
   UseGuards,
   ValidationPipe,
 } from '@nestjs/common';
+import {
+  loyaltyOk,
+  mapToLoyaltyHttpException,
+} from 'src/helpers/loyalty-error.mapper';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { BusinessUnit } from '../entities/business_unit.entity';
@@ -65,71 +69,74 @@ export class LoyaltyController {
     @Req() req: any,
     @Query('customer_phone') customerPhone?: string,
   ) {
-    const tenantId: number = req.loyaltyTenantId;
+    try {
+      const tenantId: number = req.loyaltyTenantId;
 
-    // Fetch tenant once — needed for otp_burn_required flag on points programs
-    const tenant = await this.tenantRepo.findOne({
-      where: { id: tenantId },
-      select: ['id', 'otp_burn_required'],
-    });
-    const otpBurnRequired = tenant?.otp_burn_required ?? 0;
-
-    // Resolve customer from phone if provided
-    let customerId: number | null = null;
-    if (customerPhone) {
-      const normalizedPhone = '+' + customerPhone.replace(/^[\s+]+/, '');
-      const hashedPhone = encrypt(normalizedPhone);
-      const customer = await this.customerRepo.findOne({
-        where: { hashed_number: hashedPhone },
-        select: ['id'],
+      const tenant = await this.tenantRepo.findOne({
+        where: { id: tenantId },
+        select: ['id', 'otp_burn_required'],
       });
-      customerId = customer?.id ?? null;
-    }
+      const otpBurnRequired = tenant?.otp_burn_required ?? 0;
 
-    const businessUnits = await this.buRepo.find({
-      where: { status: 1, tenant_id: tenantId },
-    });
+      let customerId: number | null = null;
+      if (customerPhone) {
+        const normalizedPhone = '+' + customerPhone.replace(/^[\s+]+/, '');
+        const hashedPhone = encrypt(normalizedPhone);
+        const customer = await this.customerRepo.findOne({
+          where: { hashed_number: hashedPhone },
+          select: ['id'],
+        });
+        customerId = customer?.id ?? null;
+      }
 
-    const programs = await Promise.all(
-      businessUnits
-        .filter((bu) => bu.name !== 'All Business Unit')
-        .map(async (bu) => {
-          // OTP-type programs (e.g. Qitaf) don't have a points balance
-          if (bu.type === 'otp') {
+      const businessUnits = await this.buRepo.find({
+        where: { status: 1, tenant_id: tenantId },
+      });
+
+      const programs = await Promise.all(
+        businessUnits
+          .filter((bu) => bu.name !== 'All Business Unit')
+          .map(async (bu) => {
+            if (bu.type === 'otp') {
+              return {
+                uuid: bu.uuid,
+                name: bu.name,
+                description: bu.description,
+                type: 'otp',
+                icon: bu.icon,
+                redemption_enabled: bu.redemption_enabled,
+                points: null,
+              };
+            }
+
+            let points: number | null = null;
+            if (customerId) {
+              const wallet = await this.walletRepo.findOne({
+                where: {
+                  customer: { id: customerId },
+                  tenant: { id: tenantId },
+                },
+              });
+              points = wallet?.available_balance ?? null;
+            }
+
             return {
               uuid: bu.uuid,
               name: bu.name,
               description: bu.description,
-              type: 'otp',
-              points: null,
+              type: 'points',
+              icon: bu.icon,
+              redemption_enabled: bu.redemption_enabled,
+              points,
+              otp_burn_required: otpBurnRequired,
             };
-          }
+          }),
+      );
 
-          // Points-type programs — fetch wallet balance if customer resolved.
-          // Wallet is tenant-scoped, not BU-scoped, so look up by tenant_id.
-          let points: number | null = null;
-          if (customerId) {
-            const wallet = await this.walletRepo.findOne({
-              where: {
-                customer: { id: customerId },
-                tenant: { id: tenantId },
-              },
-            });
-            points = wallet?.available_balance ?? null;
-          }
-
-          return {
-            uuid: bu.uuid,
-            name: bu.name,
-            description: bu.description,
-            type: 'points',
-            points,
-            otp_burn_required: otpBurnRequired,
-          };
-        }),
-    );
-
-    return { programs };
+      return loyaltyOk({ programs }, 'Programs loaded successfully');
+    } catch (err) {
+      throw mapToLoyaltyHttpException(err);
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -144,7 +151,15 @@ export class LoyaltyController {
     @Query(new ValidationPipe({ whitelist: true, transform: true }))
     dto: GetBurnRuleDto,
   ) {
-    return this.checkoutService.getBurnRule(req.loyaltyTenantId, dto);
+    try {
+      const result = await this.checkoutService.getBurnRule(
+        req.loyaltyTenantId,
+        dto,
+      );
+      return loyaltyOk(result, 'Redemption info loaded successfully');
+    } catch (err) {
+      throw mapToLoyaltyHttpException(err);
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -160,7 +175,18 @@ export class LoyaltyController {
     @Body(new ValidationPipe({ whitelist: true }))
     dto: RequestTransactionDto,
   ) {
-    return this.checkoutService.requestTransaction(req.loyaltyTenantId, dto);
+    try {
+      const result = await this.checkoutService.requestTransaction(
+        req.loyaltyTenantId,
+        dto,
+      );
+      return loyaltyOk(
+        result,
+        'OTP sent to customer. Call confirm-transaction with the OTP to finalise redemption.',
+      );
+    } catch (err) {
+      throw mapToLoyaltyHttpException(err);
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -175,7 +201,18 @@ export class LoyaltyController {
     @Body(new ValidationPipe({ whitelist: true }))
     dto: ConfirmTransactionDto,
   ) {
-    return this.checkoutService.confirmTransaction(req.loyaltyTenantId, dto);
+    try {
+      const result = await this.checkoutService.confirmTransaction(
+        req.loyaltyTenantId,
+        dto,
+      );
+      return loyaltyOk(
+        result,
+        'Transaction confirmed successfully. Points applied.',
+      );
+    } catch (err) {
+      throw mapToLoyaltyHttpException(err);
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -191,6 +228,17 @@ export class LoyaltyController {
     @Body(new ValidationPipe({ whitelist: true }))
     dto: RefundTransactionDto,
   ) {
-    return this.checkoutService.refund(req.loyaltyTenantId, dto);
+    try {
+      const result = await this.checkoutService.refund(
+        req.loyaltyTenantId,
+        dto,
+      );
+      return loyaltyOk(
+        result,
+        'Refund processed successfully. Points have been returned to the customer.',
+      );
+    } catch (err) {
+      throw mapToLoyaltyHttpException(err);
+    }
   }
 }

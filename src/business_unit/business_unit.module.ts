@@ -15,6 +15,7 @@ import { Rule } from 'src/rules/entities/rules.entity';
 import { CheckoutService } from 'src/business_unit/checkout.service';
 import { QitafModule } from 'src/qitaf/qitaf.module';
 import { BurnOtp } from 'src/petromin-it/burning/entities/burn-otp.entity';
+import { OciService } from 'src/oci/oci.service';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { BurnOtp } from 'src/petromin-it/burning/entities/burn-otp.entity';
     BusinessUnitBootstrapService,
     BusinessUnitMiddleware,
     CheckoutService,
+    OciService,
   ],
 })
 export class BusinessUnitsModule {}
