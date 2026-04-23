@@ -44,6 +44,9 @@ export class RestyPointsAssignmentLog {
   existing_customers: number;
 
   @Column({ type: 'int', default: 0 })
+  unique_phone_numbers_count: number;
+
+  @Column({ type: 'int', default: 0 })
   transactions_created: number;
 
   @Column({ type: 'int', default: 0 })

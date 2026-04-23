@@ -4,9 +4,12 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
+  Index,
 } from 'typeorm';
 
 @Entity('logs')
+@Index('idx_logs_url', ['url'])
+@Index('idx_logs_created_at', ['createdAt'])
 export class Log {
   @PrimaryGeneratedColumn()
   id: number;
@@ -17,10 +20,10 @@ export class Log {
   @Column('longtext', { nullable: true })
   responseBody: string;
 
-  @Column('text')
+  @Column({ type: 'varchar', length: 512 })
   url: string;
 
-  @Column('text')
+  @Column({ type: 'varchar', length: 10 })
   method: string;
 
   @Column('int')

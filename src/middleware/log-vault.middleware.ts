@@ -2,13 +2,18 @@ import { Injectable, NestMiddleware } from '@nestjs/common';
 import { NextFunction, Request, Response } from 'express';
 import { Log } from 'src/logs/entities/log.entity';
 import { LogService } from '../logs/log.service';
+import { NewrelicLoggerService } from '../common/services/newrelic-logger.service';
 
 @Injectable()
 export class LogVaultMiddleware implements NestMiddleware {
-  constructor(private readonly logService: LogService) {}
+  constructor(
+    private readonly logService: LogService,
+    private readonly newrelicLogger: NewrelicLoggerService,
+  ) {}
 
   async use(req: Request, res: Response, next: NextFunction) {
     let responseBody: any;
+    const startTime = Date.now();
 
     const fullPath = req.originalUrl.split('?')[0]; // remove query string
 
@@ -35,16 +40,7 @@ export class LogVaultMiddleware implements NestMiddleware {
     };
 
     res.on('finish', async () => {
-      // const combinedPayload = {
-      //   client_ip: req.ip,
-      //   clearity_id: req?.user?.id,
-      //   url: req.url,
-      //   http_method: req.method,
-      //   request_body: req.body,
-      //   // response_body: responseBody,
-      //   status_code: res.statusCode,
-      //   headers: req.headers,
-      // };
+      const duration = Date.now() - startTime;
 
       try {
         await this.logService.log({
@@ -58,7 +54,20 @@ export class LogVaultMiddleware implements NestMiddleware {
         console.error(error);
       }
 
-      // await this.sendToExternalServer(combinedPayload);
+      try {
+        this.newrelicLogger.recordLogEvent({
+          method: req.method,
+          url: req.url,
+          query: req.query,
+          requestHeader: req.headers,
+          requestBody: req.body,
+          responseBody: responseBody?.data,
+          duration,
+          statusCode: res.statusCode,
+        });
+      } catch (error) {
+        console.error('[LogVaultMiddleware] New Relic logging error:', error);
+      }
     });
 
     next();

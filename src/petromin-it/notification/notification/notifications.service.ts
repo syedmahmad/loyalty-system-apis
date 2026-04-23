@@ -126,16 +126,7 @@ export class NotificationService {
     //   throw new NotFoundException(`Customer not found`);
     // }
     // // Always save the notification to the database first
-    // TODO: will check either need to keep it or remove it.
-    await this.notificationRepo.save({
-      notification_details: {
-        title: saveNotificationPayload.title,
-        body: saveNotificationPayload.body,
-      },
-      customer_id: saveNotificationPayload.customer_id,
-      notification_type: 'general',
-      uuid: uuidv4(),
-    });
+
     // // Now try to send to device(s) if tokens exist
     // const tokens = await this.tokenRepo.find({
     //   where: { customer: { id: customer.id } },
@@ -163,10 +154,22 @@ export class NotificationService {
     //     message: `Notification saved, but failed to send to device(s)!`,
     //   };
     // }
-    const token = process.env.NCMC_COMMUNICATION_TOKEN;
     try {
+      // TODO: will check either need to keep it or remove it.
+      await this.notificationRepo.save({
+        notification_details: {
+          title: saveNotificationPayload.title,
+          body: saveNotificationPayload.body,
+        },
+        customer_id: saveNotificationPayload.customer_id,
+        notification_type: 'general',
+        uuid: uuidv4(),
+      });
+
+      const token = process.env.NCMC_COMMUNICATION_TOKEN;
+
       // Send notification request
-      axios.post(
+      await axios.post(
         process.env.NCMC_COMMUNICATION_NOTIFICATION_ENDPOINT,
         payload,
         {

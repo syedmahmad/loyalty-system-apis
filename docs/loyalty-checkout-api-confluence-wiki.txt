@@ -1,0 +1,233 @@
+h1. Loyalty Checkout API
+
+All endpoints require: *Authorization: Bearer <tenant-api-token>*
+
+Two program types exist: *points* (internal wallet) and *otp* (STC Qitaf). The same endpoints handle both. Check the {{type}} field from GET /loyalty/programs to know which flow to use.
+
+----
+
+h2. 1. GET /loyalty/programs
+
+Returns all active loyalty programs. Pass {{customer_phone}} to include the customer's points balance.
+
+{code}
+GET /loyalty/programs?customer_phone=966501234567
+{code}
+
+|| Field || Description ||
+| {{customer_phone}} | Optional. Saudi mobile e.g. {{966501234567}} |
+
+{code:language=json}
+{
+  "programs": [
+    { "uuid": "a1b2c3d4-...", "name": "Petromin Loyalty", "type": "points", "points": 1500 },
+    { "uuid": "e5f6g7h8-...", "name": "STC Qitaf", "type": "otp", "points": null }
+  ]
+}
+{code}
+
+Save the {{uuid}} — it is required in all subsequent calls.
+
+----
+
+h2. 2. GET /loyalty/redemption-info
+
+Returns the burn rule and customer balance for a *points-type* program. Pass {{transaction_amount}} to simulate how much the customer can redeem.
+
+*Not applicable for OTP programs.*
+
+{code}
+GET /loyalty/redemption-info?customer_phone=966501234567&program_uuid=a1b2c3d4-...&transaction_amount=500
+{code}
+
+|| Field || Required || Description ||
+| {{customer_phone}} | Yes | Saudi mobile |
+| {{program_uuid}} | Yes | From GET /loyalty/programs |
+| {{transaction_amount}} | Optional | Invoice total in SAR. Enables simulation. |
+
+{code:language=json}
+{
+  "customer": { "available_points": 1500, "available_in_sar": 15.00 },
+  "burn_rule": {
+    "max_burn_percent_on_invoice": 30,
+    "points_conversion_factor": 0.01,
+    "max_redeemption_points_limit": 2000,
+    "min_amount_spent": 100
+  },
+  "simulation": {
+    "eligible": true,
+    "max_points_can_burn": 1500,
+    "max_discount_sar": 15.00,
+    "min_amount_to_pay": 485.00
+  }
+}
+{code}
+
+Use {{simulation.max_points_can_burn}} to drive the points slider on the checkout page.
+
+----
+
+h2. 3. POST /loyalty/request-transaction
+
+Starts a loyalty transaction. For *points* programs creates a pending record. For *OTP* programs triggers STC to send the customer a 4-digit PIN via SMS.
+
+Returns a {{transaction_id}} — required for the confirm step.
+
+|| Field || Required || Description ||
+| {{customer_phone}} | Yes | Saudi mobile |
+| {{program_uuid}} | Yes | From GET /loyalty/programs |
+| {{transaction_amount}} | Yes | Full invoice total in SAR |
+| {{invoice_id}} | Recommended | Your ERP order/invoice reference. *Required if you need OTP refunds later.* |
+| {{branch_id}} | OTP only | STC branch code — comes from ERP config, not typed by cashier |
+| {{terminal_id}} | OTP only | STC terminal code — comes from ERP config, not typed by cashier |
+| {{remarks}} | Optional | Free-text note |
+| {{from_app}} | Optional | Caller name e.g. {{"web-checkout"}} |
+
+*Points request*
+
+{code:language=json}
+{
+  "customer_phone": "966501234567",
+  "program_uuid": "a1b2c3d4-...",
+  "transaction_amount": 500.00,
+  "invoice_id": "INV-2024-00123"
+}
+{code}
+
+*OTP request*
+
+{code:language=json}
+{
+  "customer_phone": "966501234567",
+  "program_uuid": "e5f6g7h8-...",
+  "transaction_amount": 500.00,
+  "invoice_id": "INV-2024-00123",
+  "branch_id": "BR001",
+  "terminal_id": "TRM001"
+}
+{code}
+
+*Points response*
+
+{code:language=json}
+{
+  "transaction_id": "uuid-...",
+  "program_type": "points",
+  "max_points_can_burn": 1500,
+  "max_discount_sar": 15.00
+}
+{code}
+
+*OTP response* — customer receives SMS with PIN immediately
+
+{code:language=json}
+{
+  "transaction_id": "uuid-...",
+  "program_type": "otp",
+  "transaction_amount": 500.00
+}
+{code}
+
+----
+
+h2. 4. POST /loyalty/confirm-transaction
+
+Finalises the transaction after payment is collected. For *points* deducts from wallet. For *OTP* submits the PIN to STC and redeems Qitaf points.
+
+|| Field || Required || Description ||
+| {{transaction_id}} | Yes | UUID from request-transaction |
+| {{points_to_burn}} | Yes | Points to deduct. Send {{0}} for OTP. |
+| {{otp}} | OTP only | 4-digit PIN the customer received via SMS |
+| {{redeem_amount}} | OTP only | SAR to redeem via Qitaf. Defaults to full {{transaction_amount}}. Send less for partial payment. |
+
+*Points confirm*
+
+{code:language=json}
+{
+  "transaction_id": "uuid-...",
+  "points_to_burn": 1200
+}
+{code}
+
+*OTP confirm*
+
+{code:language=json}
+{
+  "transaction_id": "uuid-...",
+  "points_to_burn": 0,
+  "otp": 4729,
+  "redeem_amount": 500.00
+}
+{code}
+
+*Points response*
+
+{code:language=json}
+{
+  "transaction_id": "uuid-...",
+  "program_type": "points",
+  "points_burned": 1200,
+  "discount_amount": 12.00,
+  "final_amount": 488.00,
+  "remaining_points": 300
+}
+{code}
+
+*OTP response*
+
+{code:language=json}
+{
+  "transaction_id": "uuid-...",
+  "program_type": "otp",
+  "redeemed_sar": 500.00,
+  "remaining_amount": 0
+}
+{code}
+
+If {{remaining_amount}} is greater than 0, STC automatically earns reward points on that cash portion — no extra call needed.
+
+----
+
+h2. 5. POST /loyalty/refund
+
+Fully reverses a completed transaction. Pass *either* {{transaction_id}} (points) *or* {{invoice_id}} (OTP) — not both.
+
+|| Field || When || Description ||
+| {{transaction_id}} | Points | UUID from confirm-transaction |
+| {{invoice_id}} | OTP | Same value sent in request-transaction |
+
+*Points refund*
+
+{code:language=json}
+{
+  "transaction_id": "uuid-..."
+}
+{code}
+
+*OTP refund*
+
+{code:language=json}
+{
+  "invoice_id": "INV-2024-00123"
+}
+{code}
+
+*Points response*
+
+{code:language=json}
+{
+  "program_type": "points",
+  "points_returned": 1200,
+  "new_available_points": 1500
+}
+{code}
+
+*OTP response*
+
+{code:language=json}
+{
+  "program_type": "otp",
+  "invoice_id": "INV-2024-00123",
+  "note": "Qitaf redemption reversed. Points returned to customer by STC."
+}
+{code}

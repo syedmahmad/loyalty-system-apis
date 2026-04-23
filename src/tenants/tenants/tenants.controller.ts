@@ -10,6 +10,7 @@ import {
   Query,
   UseGuards,
   BadRequestException,
+  HttpCode,
 } from '@nestjs/common';
 import * as jwt from 'jsonwebtoken';
 import { TenantsService } from './tenants.service';
@@ -109,6 +110,19 @@ export class TenantsController {
     }
 
     return await this.service.update(+id, dto, user.uuid);
+  }
+
+  @UseGuards(AuthTokenGuard)
+  @Post(':id/api-token')
+  @HttpCode(200)
+  async generateApiToken(@Param('id') id: string) {
+    return await this.service.generateApiToken(+id);
+  }
+
+  @UseGuards(AuthTokenGuard)
+  @Get(':id/api-token')
+  async getApiToken(@Param('id') id: string) {
+    return await this.service.getApiToken(+id);
   }
 
   @UseGuards(AuthTokenGuard)

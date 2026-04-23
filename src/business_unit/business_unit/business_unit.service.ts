@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
+import { OciService } from 'src/oci/oci.service';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { DataSource, ILike, In, Repository } from 'typeorm';
 import { CreateBusinessUnitDto } from '../dto/create-business-unit.dto';
@@ -21,6 +22,8 @@ export class BusinessUnitsService {
 
     @InjectDataSource()
     private readonly dataSource: DataSource,
+
+    private readonly ociService: OciService,
   ) {}
 
   async create(dto: CreateBusinessUnitDto, user: string) {
@@ -118,7 +121,6 @@ export class BusinessUnitsService {
     if (hasGlobalBusinessUnitAccess || isSuperAdmin) {
       return await this.repo.find({
         where: {
-          status: 1,
           tenant_id: client_id,
           ...optionalWhereClause,
         },
@@ -138,7 +140,6 @@ export class BusinessUnitsService {
       // if user has access to multiple tenants, return business units across those tenants
       return await this.repo.find({
         where: {
-          status: 1,
           tenant_id: In(tenantIds),
           ...optionalWhereClause,
         },
@@ -161,7 +162,6 @@ export class BusinessUnitsService {
 
     return await this.repo.find({
       where: {
-        status: 1,
         tenant_id: client_id,
         name: In(accessibleBusinessUnitNames),
         ...optionalWhereClause,
@@ -244,5 +244,9 @@ export class BusinessUnitsService {
       where: { uuid: id },
       relations: { tenant: true },
     });
+  }
+
+  async uploadFile(buffer: Buffer, bucketName: string, objectName: string) {
+    return await this.ociService.uploadBufferToOci(buffer, bucketName, objectName);
   }
 }

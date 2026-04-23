@@ -3,7 +3,9 @@ import { BurningService } from './burning.service';
 import {
   BurnTransactionDto,
   ConfirmBurnDto,
+  GenerateOtpDto,
   GetCustomerDataDto,
+  VerifyOtpDto,
 } from '../dto/burning.dto';
 
 @Controller('burning')
@@ -45,4 +47,37 @@ export class BurningController {
     return this.burningService.confirmBurnTransaction(body);
   }
   //#endregion
+
+  // ── OTP Burn Flow ─────────────────────────────────────────────────────────
+
+  /**
+   * POST /burning/otp/generate  (App-facing — no MAC JWT required)
+   *
+   * Customer taps "Generate Redemption Code" on the app screen.
+   * Returns a 6-digit OTP saved as unlinked (transaction_uuid = null).
+   * When the cashier later calls request-transaction, the system detects
+   * this pre-generated OTP and links it to the transaction automatically —
+   * no new OTP is created and no push notification is fired.
+   * If the customer did not pre-generate, request-transaction generates
+   * a fresh OTP and delivers it via push notification instead.
+   */
+  @Post('otp/generate')
+  async generateOtp(
+    @Body(new ValidationPipe({ whitelist: true })) dto: GenerateOtpDto,
+  ) {
+    return this.burningService.generateOtp(dto);
+  }
+
+  /**
+   * POST /burning/otp/verify  (MAC-facing — requires Rusty JWT)
+   *
+   * Legacy standalone verify endpoint — kept for backwards compatibility.
+   * In the current flow, OTP verification is handled inside confirm-transaction.
+   */
+  @Post('otp/verify')
+  async verifyOtp(
+    @Body(new ValidationPipe({ whitelist: true })) dto: VerifyOtpDto,
+  ) {
+    return this.burningService.verifyOtp(dto);
+  }
 }

@@ -4,6 +4,7 @@ import {
   Column,
   ManyToOne,
   OneToMany,
+  OneToOne,
   CreateDateColumn,
   UpdateDateColumn,
   JoinColumn,
@@ -14,6 +15,7 @@ import { CustomerSegmentMember } from 'src/customer-segment/entities/customer-se
 import { Tenant } from 'src/tenants/entities/tenant.entity';
 import { DeviceToken } from 'src/petromin-it/notification/entities/device-token.entity';
 import { Vehicle } from 'src/vehicles/entities/vehicle.entity';
+import { Wallet } from 'src/wallet/entities/wallet.entity';
 
 @Entity()
 @Index('idx_customer_uuid', ['uuid'])
@@ -22,6 +24,12 @@ import { Vehicle } from 'src/vehicles/entities/vehicle.entity';
 @Index('idx_customer_tenant', ['tenant'])
 @Index('idx_customer_bu', ['business_unit'])
 @Index('idx_customer_hashed_number', ['hashed_number'])
+@Index('idx_customer_uuid_status_bu_tenant', [
+  'uuid',
+  'status',
+  'business_unit',
+  'tenant',
+])
 export class Customer {
   @PrimaryGeneratedColumn()
   id: number;
@@ -153,6 +161,9 @@ export class Customer {
   // --- Relations ---
   @OneToMany(() => CustomerSegmentMember, (m: any) => m.customer)
   memberships: CustomerSegmentMember[];
+
+  @OneToOne(() => Wallet, (wallet) => wallet.customer)
+  wallet: Wallet;
 
   @Column({ type: 'varchar', length: 255, nullable: true })
   hashed_number: string;

@@ -2,7 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as dayjs from 'dayjs';
 import { User } from 'src/users/entities/user.entity';
-import { ILike, IsNull, Not, Repository } from 'typeorm';
+import { ILike, IsNull, Not, Repository, In } from 'typeorm';
 import { CreateWalletOrderDto } from '../dto/create-wallet-order.dto';
 import { CreateWalletSettingsDto } from '../dto/create-wallet-settings.dto';
 import { CreateWalletTransactionDto } from '../dto/create-wallet-transaction.dto';
@@ -16,6 +16,7 @@ import {
 import {
   WalletTransaction,
   WalletTransactionType,
+  WalletTransactionStatus,
 } from '../entities/wallet-transaction.entity';
 import { Wallet } from '../entities/wallet.entity';
 import { v4 as uuidv4 } from 'uuid';
@@ -161,6 +162,7 @@ export class WalletService {
       ...dto,
       customer: { id: wallet.customer.id } as any,
       business_unit: { id: dto.business_unit_id } as any,
+      tenant: { id: wallet.business_unit.tenant_id } as any,
       point_balance: dto.points_balance,
       wallet: { id: dto.wallet_id } as any,
       unlock_date: unlockDate,
@@ -225,8 +227,22 @@ export class WalletService {
     if (transactionType === 'points') {
       // points = source_type != 'coupon' OR source_type IS NULL
       whereClause = [
-        { wallet: { id: walletId }, source_type: Not('coupon') },
-        { wallet: { id: walletId }, source_type: IsNull() },
+        {
+          wallet: { id: walletId },
+          source_type: Not('coupon'),
+          status: In([
+            WalletTransactionStatus.ACTIVE,
+            WalletTransactionStatus.EXPIRED,
+          ]),
+        },
+        {
+          wallet: { id: walletId },
+          source_type: IsNull(),
+          status: In([
+            WalletTransactionStatus.ACTIVE,
+            WalletTransactionStatus.EXPIRED,
+          ]),
+        },
       ];
     } else if (transactionType === 'coupon') {
       whereClause = { wallet: { id: walletId }, source_type: 'coupon' };
@@ -258,6 +274,9 @@ export class WalletService {
       relations: ['orders'],
       take,
       skip,
+      order: {
+        created_at: 'DESC', // Ensure most recent first
+      },
     });
     return {
       data,

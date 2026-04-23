@@ -3,6 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import * as jwt from 'jsonwebtoken';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Repository } from 'typeorm';
 import { Tenant } from '../entities/tenant.entity';
@@ -212,6 +213,8 @@ export class TenantsService {
 
       tenant.name = dto.name ?? tenant.name;
       tenant.domain = dto.domain ?? tenant.domain;
+      if (dto.otp_burn_required !== undefined) tenant.otp_burn_required = dto.otp_burn_required;
+      if (dto.otp_burn_ttl_minutes !== undefined) tenant.otp_burn_ttl_minutes = dto.otp_burn_ttl_minutes;
 
       if (dto.country_id) {
         const country = await queryRunner.manager.findOne(CountryEntity, {
@@ -257,6 +260,22 @@ export class TenantsService {
     } finally {
       await queryRunner.release();
     }
+  }
+
+  async generateApiToken(id: number): Promise<{ token: string }> {
+    const tenant = await this.tenantsRepository.findOne({ where: { id } });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+
+    const token = jwt.sign({ tenantId: id }, process.env.JWT_SECRET);
+    await this.tenantsRepository.update(id, { api_token: token });
+
+    return { token };
+  }
+
+  async getApiToken(id: number): Promise<{ token: string | null }> {
+    const tenant = await this.tenantsRepository.findOne({ where: { id } });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+    return { token: tenant.api_token ?? null };
   }
 
   async remove(id: number, user: string): Promise<{ deleted: boolean }> {

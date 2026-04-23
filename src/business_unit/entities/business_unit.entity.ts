@@ -48,8 +48,19 @@ export class BusinessUnit {
   @Column({ nullable: true })
   location: string;
 
+  @Column({ type: 'varchar', length: 10, default: 'points', nullable: true })
+  type: string; // 'points' | 'otp'
+
   @Column({ type: 'int', default: 1 })
   status: number; // 1 = active, 0 = inactive
+
+  /** OCI URL of the program icon image. Uploaded via POST /business-units/file. */
+  @Column({ type: 'varchar', length: 512, nullable: true, default: null })
+  icon: string | null;
+
+  /** Whether this program is available for redemption (burn). Default: enabled. */
+  @Column({ type: 'tinyint', default: 1 })
+  redemption_enabled: number; // 1 = yes, 0 = no
 
   @CreateDateColumn()
   created_at: Date;

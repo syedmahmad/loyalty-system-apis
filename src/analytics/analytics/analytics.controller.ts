@@ -78,6 +78,21 @@ export class LoyaltyAnalyticsController {
 
   @UseGuards(AnalyticAccessGuard)
   @ANALYTICSAccess()
+  @Get('non-claimed-points')
+  getNonClaimedPoints(
+    @Req() req: any,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    return this.loyaltyAnalyticsService.getNonClaimedPoints(
+      req.permission,
+      startDate,
+      endDate,
+    );
+  }
+
+  @UseGuards(AnalyticAccessGuard)
+  @ANALYTICSAccess()
   @Get('coupon/:client_id')
   getCouponAnalytics(
     @Param('client_id') client_id: number,
@@ -87,6 +102,45 @@ export class LoyaltyAnalyticsController {
   ) {
     return this.loyaltyAnalyticsService.getCouponAnalytics(
       client_id,
+      req.permission,
+      startDate,
+      endDate,
+    );
+  }
+
+  // ─── STC Qitaf Analytics ──────────────────────────────────────────────────
+
+  @UseGuards(AnalyticAccessGuard)
+  @ANALYTICSAccess()
+  @Get('qitaf/check')
+  checkQitafEnabled(@Req() req: any) {
+    return this.loyaltyAnalyticsService.checkQitafEnabled(req.permission);
+  }
+
+  @UseGuards(AnalyticAccessGuard)
+  @ANALYTICSAccess()
+  @Get('qitaf/summary')
+  getQitafRedemptionSummary(
+    @Req() req: any,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    return this.loyaltyAnalyticsService.getQitafRedemptionSummary(
+      req.permission,
+      startDate,
+      endDate,
+    );
+  }
+
+  @UseGuards(AnalyticAccessGuard)
+  @ANALYTICSAccess()
+  @Get('qitaf/bar-chart')
+  getQitafRedemptionBarChart(
+    @Req() req: any,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    return this.loyaltyAnalyticsService.getQitafRedemptionBarChart(
       req.permission,
       startDate,
       endDate,

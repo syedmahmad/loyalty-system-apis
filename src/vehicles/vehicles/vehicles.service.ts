@@ -199,31 +199,45 @@ export class VehiclesService {
         // if (!vehicle.car_value && variantInfo?.variantId && year) {
         // If not client-provided, fetch car valuation ONLY IF not already set
         if (!('minPrice' in carValueToSet) && variantInfo?.variantId && year) {
-          try {
-            const valuation = await this.getCarValuation({
-              km: restBody?.last_mileage || 0,
-              trimId: variantInfo?.variantId || variant_id, // cannot pass modelId as bluebook does not work with it.
-              year,
-            });
-            // {
-            //   fair: { min: 61138.22472, max: 74724.49687999999 },
-            //   good: { min: 65514.6, max: 80073.4 },
-            //   vGood: { min: 68429.9997, max: 83636.6663 },
-            //   excellent: { min: 70991.62056, max: 86767.53624 }
-            // }
-            if (valuation?.data) {
-              vehicle.last_valuation_date = new Date();
-              const { good } = valuation.data;
-              vehicle.car_value = valuation.data; // store only "data" object
-              vehicle.carCondition = 'good';
-              vehicle.minPrice = good.min;
-              vehicle.maxPrice = good.max;
-            }
-          } catch (err) {
-            console.error(
-              'Car valuation integration failed:',
-              err?.message || err,
+          // Skip valuation for cars older than 20 years
+          const currentYear = new Date().getFullYear();
+          const carAge = currentYear - Number(year);
+
+          if (carAge > 20) {
+            console.log(
+              `Skipping valuation for car older than 20 years (${carAge} years old)`,
             );
+          } else {
+            try {
+              const valuation = await this.getCarValuation({
+                km: restBody?.last_mileage || 0,
+                trimId: variantInfo?.variantId || variant_id, // cannot pass modelId as bluebook does not work with it.
+                year,
+              });
+              // {
+              //   fair: { min: 61138.22472, max: 74724.49687999999 },
+              //   good: { min: 65514.6, max: 80073.4 },
+              //   vGood: { min: 68429.9997, max: 83636.6663 },
+              //   excellent: { min: 70991.62056, max: 86767.53624 }
+              // }
+              if (valuation?.data) {
+                vehicle.last_valuation_date = new Date();
+                const { good } = valuation.data;
+                const condition = good || Object.values(valuation.data)[0];
+                const conditionKey = good
+                  ? 'good'
+                  : Object.keys(valuation.data)[0];
+                vehicle.car_value = valuation.data; // store only "data" object
+                vehicle.carCondition = conditionKey;
+                vehicle.minPrice = condition.min;
+                vehicle.maxPrice = condition.max;
+              }
+            } catch (err) {
+              console.error(
+                'Car valuation integration failed:',
+                err?.message || err,
+              );
+            }
           }
         }
 
@@ -489,6 +503,7 @@ export class VehiclesService {
       }
 
       // Fetch feedbacks for all services, if any vehicleServices exist
+      // get all feedbacks provided by this customer.
       let feedbacks: any[] = [];
       if (vehicleServices.length) {
         try {
@@ -561,6 +576,180 @@ export class VehiclesService {
       }
 
       // Otherwise, return the full array
+      return {
+        success: true,
+        message: 'Successfully fetched the data!',
+        result: finalResult,
+        errors: [],
+      };
+    } catch (error: any) {
+      console.log('error in service history', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Optimized: Returns the service list for a vehicle using stored Resty IDs.
+   *
+   * Process:
+   * 1. Get active customer from local DB using uuid
+   * 2. Get active vehicle from local DB using customer.id and plate_no
+   * 3. Extract resty_customer_id and resty_vehicle_id from vehicle
+   * 4. If either ID is missing, return "Service not found"
+   * 5. Fetch service history directly using the stored IDs
+   * 6. Merge feedbacks if available
+   */
+  async getServiceListV1(bodyPayload) {
+    const { customerId, plateNo, businessUnitId, tenantId } = bodyPayload;
+    if (!customerId) throw new NotFoundException('Customer not found');
+
+    try {
+      // Step 1: Get active customer from local DB
+      const customer = await this.customerRepo.findOne({
+        where: {
+          uuid: customerId,
+          status: 1,
+          business_unit: { id: parseInt(businessUnitId) },
+          tenant: { id: parseInt(tenantId) },
+        },
+      });
+
+      if (!customer) throw new NotFoundException('Customer not found');
+
+      // Step 2: Get active vehicle from local DB
+      if (!plateNo) {
+        return {
+          success: false,
+          message: 'plateNo is required',
+          result: null,
+          errors: ['plateNo parameter is missing'],
+        };
+      }
+
+      const vehicle = await this.vehiclesRepository.findOne({
+        where: {
+          customer: { id: customer.id },
+          plate_no: plateNo,
+          status: 1,
+        },
+      });
+
+      if (!vehicle) {
+        return {
+          success: true,
+          message: 'Vehicle not found for this customer',
+          result: null,
+          errors: [],
+        };
+      }
+
+      // Step 3: Extract stored Resty IDs
+      const { resty_customer_id, resty_vehicle_id } = vehicle;
+
+      // Step 4: Return error if either ID is missing
+      if (!resty_customer_id || !resty_vehicle_id) {
+        return {
+          success: true,
+          message: 'Service history not available for this vehicle',
+          result: null,
+          errors: [],
+        };
+      }
+
+      // Step 5: Fetch service history directly using stored IDs
+      const loginInfo = await this.customerLoginInResty();
+      if (!loginInfo?.access_token) {
+        return {
+          success: true,
+          message: 'Service history not available for this vehicle',
+          result: null,
+          errors: [],
+        };
+      }
+
+      const serviceList = await this.getVehicleServiceListFromResty({
+        customer_id: resty_customer_id,
+        vehicle_id: resty_vehicle_id,
+        loginInfo,
+      });
+
+      // If no services found, return null
+      if (
+        !serviceList ||
+        !Array.isArray(serviceList) ||
+        serviceList.length === 0
+      ) {
+        return {
+          success: true,
+          message: 'No services found for this vehicle',
+          result: null,
+          errors: [],
+        };
+      }
+
+      // Add invoiceURL and feedback=null to each service
+      const servicesWithUrl = serviceList.map((val: any) => ({
+        ...val,
+        invoiceURL: 'https://www.gogomotor.com/', // need to hit another API call to get url from mac
+        feedback: null,
+      }));
+
+      const vehicleData = {
+        vehicle_id: resty_vehicle_id,
+        make: vehicle?.make,
+        model: vehicle?.model,
+        year: vehicle?.year,
+        last_mileage: vehicle?.last_mileage,
+        last_service_date: vehicle?.last_service_date,
+        vin: vehicle?.vin_number,
+        plate_no: vehicle?.plate_no,
+        services: servicesWithUrl,
+      };
+
+      // Step 6: Fetch and merge feedbacks if services exist
+      let feedbacks: any[] = [];
+      try {
+        const feedbackRes = await axios.get(
+          `${process.env.DRAGON_WORKSHOPS_URL}/feedback?customer_id=${customerId}`,
+          {
+            headers: {
+              'auth-key': process.env.DRAGON_WORKSHOPS_AUTH_KEY,
+            },
+          },
+        );
+        feedbacks = feedbackRes.data?.feedback?.workshop || [];
+      } catch (err) {
+        console.error(
+          'Error fetching feedbacks:',
+          err?.response?.data || err.message || err,
+        );
+      }
+
+      // Merge feedback onto services
+      let finalResult = vehicleData;
+      if (feedbacks.length) {
+        finalResult = {
+          ...vehicleData,
+          services: vehicleData.services.map((service) => {
+            const feedback = feedbacks.find(
+              (fb) =>
+                fb.workstation_code === service.BranchCode &&
+                fb.workstation_name === service.BranchName &&
+                fb.invoice_number === service.InvoiceNumber,
+            );
+
+            return {
+              ...service,
+              feedback: feedback
+                ? {
+                    rating: feedback.rating || '',
+                  }
+                : null,
+            };
+          }),
+        };
+      }
+
       return {
         success: true,
         message: 'Successfully fetched the data!',
@@ -805,6 +994,271 @@ export class VehiclesService {
    * - To ensure updates, code fetches `existingVehicle` using customer, plate_no, and status:1, and when found passes the whole object (with id) to .save() with potential field modifications.
    * - This means for any (customer, plate_no) with active status, duplicates are never created. If the plate_no is not present for active status, it may save a new one, but it explicitly checks for prior deactivated/deleted by this customer and skips in that case.
    */
+  async getCustomerVehicleV1({ customerId, tenantId, businessUnitId }) {
+    try {
+      // 1. Validate Customer
+      const customer = await this.customerRepo.findOne({
+        where: {
+          uuid: customerId,
+          status: 1,
+          business_unit: { id: parseInt(businessUnitId) },
+          tenant: { id: parseInt(tenantId) },
+        },
+      });
+      if (!customer) throw new NotFoundException('Customer not found');
+
+      // 3. Login to Resty
+      const loginInfo = await this.customerLoginInResty();
+      if (loginInfo?.access_token) {
+        // it could return multiple customers profile, after merging, so we need to take decision here.
+        // but for now, we are only getting first profile.
+        // 4. Get Customer Info from Resty
+        const customerInfoFromResty = await this.getCustomerInfoFromResty({
+          customer,
+          loginInfo,
+        });
+
+        let restyVehicles = null;
+        if (customerInfoFromResty.length) {
+          // 5. Get Vehicles from Resty
+          restyVehicles = await this.getVehicleInfoFromResty({
+            customer_id: customerInfoFromResty[0].customer_id,
+            loginInfo,
+          });
+
+          if (!restyVehicles.length) {
+            restyVehicles = null;
+          }
+        }
+
+        if (restyVehicles) {
+          // need to update logic here because
+          // what if same vehicle is already added by someone else.
+          // what if same vehicle is already added by the same customer.
+          // what if same vehicle present in local but it status in inactive.
+          // what if same customer deleted this vehicle, now not need to show him again.
+          // what if customer deleted his account of his vehicle and wanted join us agian. In this case
+          // we need to add his vehicle again.
+
+          // 2. Get local vehicles, if customer re-add vehicles, these will come here, don't need to check
+          // either he has deleted or not.
+          const localVehicles = await this.vehiclesRepository.find({
+            where: { customer: { id: customer.id }, status: 1 },
+          });
+
+          // This line creates a Set of plate numbers (plate_no) from the localVehicles array.
+          // It is used to quickly check if a vehicle from Resty is already present locally by its plate number.
+          const localVinSet = new Set(localVehicles.map((v) => v.plate_no));
+          // 6. Compare and sync
+          for (const eachVehicle of restyVehicles) {
+            // if new record comes from resty which does not exist in local vehicles
+            // add them in local vehicles but
+            // do not again add deleted or inactive vehicles.
+            if (!localVinSet.has(eachVehicle.plate_no)) {
+              // we have deleted or inactive vehicles but resty does not have deleted or inactive funcitonlaity
+              // in this case, we do nothing, will not include these vehicles.
+              // Find all vehicles with this plate_no and status (deactivated/deleted), regardless of customer,
+              // and also get associated customer(s) for each vehicle.
+              const deactivatedVehicles = await this.vehiclesRepository.find({
+                where: {
+                  plate_no: eachVehicle.plate_no,
+                  status: In([0, 3]), // look for deactivated or deleted vehicles
+                },
+                relations: ['customer'], // get all customer(s) related to these vehicles
+              });
+
+              if (deactivatedVehicles.length > 0) {
+                const customerMobileHash = deactivatedVehicles.map(
+                  (v) => v.customer.hashed_number,
+                );
+                if (customerMobileHash.includes(customer.hashed_number)) {
+                  continue; // Skip adding this vehicle as it's deactivated by the same customer.
+                }
+              }
+              // Fetch make, model, and variant info in parallel
+              const [makeInfo, modelInfo] = await Promise.all([
+                this.makeRepository.findOne({
+                  where: { name: eachVehicle?.make?.trim() },
+                }),
+                this.modelRepository.findOne({
+                  where: {
+                    name: eachVehicle?.model?.trim(),
+                    // year: eachVehicle.model_year,
+                    year: Number(eachVehicle.model_year),
+                  },
+                }),
+              ]);
+
+              let variantInfo = null;
+              if (modelInfo) {
+                variantInfo = await this.variantRepository.findOne({
+                  where: { model: { id: modelInfo.id } },
+                });
+              }
+
+              const prePareData: any = {
+                make: makeInfo?.name ?? null,
+                make_ar: makeInfo?.nameAr ?? null,
+                make_id: makeInfo?.makeId ?? null,
+                image: modelInfo?.logo
+                  ? modelInfo?.logo
+                  : `${process.env.VEHICLE_IMAGES_URL}${makeInfo?.logo}`,
+                model: modelInfo?.name ? modelInfo?.name : eachVehicle.model,
+                model_ar: modelInfo?.nameAr ?? null,
+                model_id: modelInfo?.modelId ? modelInfo?.modelId : -1,
+                variant: variantInfo?.name ?? null,
+                variant_ar: variantInfo?.nameAr ?? null,
+                variant_id: variantInfo?.variantId
+                  ? variantInfo?.variantId
+                  : -1,
+                vin_number: eachVehicle?.vin ?? null,
+                plate_no: eachVehicle?.plate_no ?? null,
+                year: modelInfo?.year
+                  ? modelInfo?.year
+                  : eachVehicle.model_year,
+                fuel_type: variantInfo?.fuelTypeId?.toString() ?? null,
+                fuel_type_name_en: variantInfo?.fuelType?.toString() ?? null,
+                fuel_type_name_ar: variantInfo?.fuelTypeAr?.toString() ?? null,
+                transmission: variantInfo?.transmissionId?.toString() ?? null,
+                transmission_en: variantInfo?.transmission?.toString() ?? null,
+                transmission_ar:
+                  variantInfo?.transmissionAr?.toString() ?? null,
+                // color: eachVehicle?.color ?? null,
+                // engine: eachVehicle?.engine ?? null,
+                // body_type: eachVehicle?.body_type ?? null,
+                // owner_name: eachVehicle?.owner_name ?? null,
+                // owner_id: eachVehicle?.owner_id ?? null,
+                // user_id: eachVehicle?.user_id ?? null,
+                // registeration_type: eachVehicle?.registeration_type ?? null,
+                // registeration_date: eachVehicle?.registeration_date ?? null,
+                // registeration_no: eachVehicle?.registeration_no ?? null,
+                // sequence_no: eachVehicle?.sequence_no ?? null,
+                // national_id: eachVehicle?.national_id ?? null,
+              };
+
+              await this.vehiclesRepository.save({
+                ...prePareData,
+                customer: { id: customer.id },
+                last_mileage: eachVehicle.last_mileage || null,
+                last_service_date: eachVehicle.last_service_date || null,
+                last_invoice_no: eachVehicle?.last_invoice_no || null,
+                workstation_code: eachVehicle?.last_branch_code || null,
+                workstation_name: eachVehicle?.last_branch_name || null,
+                resty_vehicle_id: eachVehicle?.vehicle_id || null,
+                resty_customer_id:
+                  customerInfoFromResty[0]?.customer_id || null,
+              });
+            } else {
+              // Attempt to find an existing vehicle with the same plate_no and customer
+              const existingVehicle = await this.vehiclesRepository.findOne({
+                where: {
+                  customer: { id: customer.id },
+                  plate_no: eachVehicle?.plate_no ?? null,
+                  status: 1,
+                },
+              });
+
+              if (existingVehicle) {
+                // Update the existing vehicle with the new data
+                await this.vehiclesRepository.save({
+                  ...existingVehicle,
+                  vin_number: eachVehicle?.vin ?? existingVehicle.vin_number,
+                  year: eachVehicle?.model_year
+                    ? eachVehicle?.model_year
+                    : eachVehicle.model_year,
+                  last_mileage: eachVehicle.last_mileage,
+                  last_service_date: eachVehicle.last_service_date,
+                  last_invoice_no: eachVehicle?.last_invoice_no || null,
+                  workstation_code: eachVehicle?.last_branch_code || null,
+                  workstation_name: eachVehicle?.last_branch_name || null,
+                  resty_vehicle_id: eachVehicle?.vehicle_id || null,
+                  resty_customer_id:
+                    customerInfoFromResty[0]?.customer_id || null,
+                });
+              }
+            }
+          }
+        }
+      }
+
+      // 7. Prepare response list (union of local + newResty)
+      const combineVehicles = await this.vehiclesRepository.find({
+        where: { customer: { id: customer.id }, status: 1 },
+      });
+
+      this.updateMissingCarValuations(combineVehicles);
+
+      // let isFetchAgain = false;
+
+      // // 🔹 Step: Ensure valuation exists or fetch missing valuation
+      // for (const vehicle of combineVehicles) {
+      //   const variantId = vehicle?.variant_id;
+      //   const year = vehicle?.year;
+
+      //   if (!variantId || !year) {
+      //     continue; // Cannot fetch valuation without these
+      //   }
+
+      //   if (Number(variantId) === -1) {
+      //     continue;
+      //   }
+
+      //   // CASE 1: No car_value → fetch valuation
+      //   if (!vehicle.car_value) {
+      //     const valuation = await this.getCarValuation({
+      //       km: vehicle.last_mileage || 0,
+      //       trimId: Number(variantId),
+      //       year: Number(year),
+      //     });
+      //     isFetchAgain = true;
+
+      //     if (valuation?.data) {
+      //       const { good } = valuation.data;
+
+      //       vehicle.last_valuation_date = new Date();
+      //       vehicle.car_value = valuation.data;
+      //       vehicle.carCondition = 'good';
+      //       vehicle.minPrice = good.min;
+      //       vehicle.maxPrice = good.max;
+
+      //       await this.vehiclesRepository.save(vehicle);
+      //     }
+
+      //     continue;
+      //   }
+      // }
+
+      // let finalVehicles: any[] = [];
+      // if (isFetchAgain) {
+      //   finalVehicles = await this.vehiclesRepository.find({
+      //     where: { customer: { id: customer.id }, status: 1 },
+      //   });
+      // } else {
+      //   finalVehicles = combineVehicles;
+      // }
+
+      return {
+        success: true,
+        message: 'Successfully fetched the data!',
+        result: { vehicles: combineVehicles },
+        errors: [],
+      };
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Fetches vehicles for a customer, syncing local and Resty data.
+   *
+   * Does this method create multiple vehicles locally if they already exist?
+   * - No, this method does not create duplicate vehicles for the same plate_no and customer (with status 1).
+   * - It first loads all local vehicles with status:1 (active) for the customer to a Set for easy lookup.
+   * - For each vehicle coming from Resty, if a local vehicle (same plate_no, active) exists, it updates instead of inserting.
+   * - The `.save()` method in TypeORM can both insert and update records. If you pass an entity object with a primary key (`id`), it performs an UPDATE. If no id is present, it does an INSERT.
+   * - To ensure updates, code fetches `existingVehicle` using customer, plate_no, and status:1, and when found passes the whole object (with id) to .save() with potential field modifications.
+   * - This means for any (customer, plate_no) with active status, duplicates are never created. If the plate_no is not present for active status, it may save a new one, but it explicitly checks for prior deactivated/deleted by this customer and skips in that case.
+   */
   async getCustomerVehicle({ customerId, tenantId, businessUnitId }) {
     try {
       // 1. Validate Customer
@@ -818,20 +1272,20 @@ export class VehiclesService {
       });
       if (!customer) throw new NotFoundException('Customer not found');
 
-      // 2. Try to fetch local vehicles first
-      const localVehicles = await this.vehiclesRepository.find({
-        where: { customer: { id: customer.id }, status: 1 },
-      });
+      // // 2. Try to fetch local vehicles first
+      // const localVehicles = await this.vehiclesRepository.find({
+      //   where: { customer: { id: customer.id }, status: 1 },
+      // });
 
-      // If local vehicles exist, immediately return them (prevent slow vendor call)
-      if (localVehicles && localVehicles.length > 0) {
-        return {
-          success: true,
-          message: 'Successfully fetched the data!',
-          result: { vehicles: localVehicles },
-          errors: [],
-        };
-      }
+      // // If local vehicles exist, immediately return them (prevent slow vendor call)
+      // if (localVehicles && localVehicles.length > 0) {
+      //   return {
+      //     success: true,
+      //     message: 'Successfully fetched the data!',
+      //     result: { vehicles: localVehicles },
+      //     errors: [],
+      //   };
+      // }
 
       // 3. Login to Resty
       const loginInfo = await this.customerLoginInResty();
@@ -1015,6 +1469,16 @@ export class VehiclesService {
           continue;
         }
 
+        // Skip valuation for cars older than 20 years
+        const currentYear = new Date().getFullYear();
+        const carAge = currentYear - Number(year);
+        if (carAge > 20) {
+          console.log(
+            `Skipping valuation for car older than 20 years (${carAge} years old)`,
+          );
+          continue;
+        }
+
         // CASE 1: No car_value → fetch valuation
         if (!vehicle.car_value) {
           const valuation = await this.getCarValuation({
@@ -1026,12 +1490,14 @@ export class VehiclesService {
 
           if (valuation?.data) {
             const { good } = valuation.data;
+            const condition = good || Object.values(valuation.data)[0];
+            const conditionKey = good ? 'good' : Object.keys(valuation.data)[0];
 
             vehicle.last_valuation_date = new Date();
             vehicle.car_value = valuation.data;
-            vehicle.carCondition = 'good';
-            vehicle.minPrice = good.min;
-            vehicle.maxPrice = good.max;
+            vehicle.carCondition = conditionKey;
+            vehicle.minPrice = condition.min;
+            vehicle.maxPrice = condition.max;
 
             await this.vehiclesRepository.save(vehicle);
           }
@@ -1633,5 +2099,70 @@ export class VehiclesService {
         typeof img.type === 'string' &&
         img.url.startsWith('http'),
     );
+  }
+
+  async updateMissingCarValuations(vehiclesWithoutValuation: any) {
+    try {
+      if (!vehiclesWithoutValuation.length) {
+        console.log('✅ No vehicles found without car valuation.');
+        return;
+      }
+
+      for (const vehicle of vehiclesWithoutValuation) {
+        const variantId = vehicle?.variant_id;
+        const year = vehicle?.year;
+
+        // Skip if missing required fields
+        if (!variantId || !year) {
+          continue;
+        }
+
+        // Skip if variant_id is -1
+        if (Number(variantId) === -1) {
+          continue;
+        }
+
+        // Skip valuation for cars older than 20 years
+        const currentYear = new Date().getFullYear();
+        const carAge = currentYear - Number(year);
+        if (carAge > 20) {
+          console.log(
+            `Skipping valuation for car older than 20 years (${carAge} years old)`,
+          );
+          continue;
+        }
+
+        if (
+          !vehicle.minPrice &&
+          !vehicle.maxPrice &&
+          !vehicle.carCondition &&
+          !vehicle.car_value
+        ) {
+          // Fetch car valuation using the vehicles service
+          const valuation = await this.getCarValuation({
+            km: vehicle.last_mileage || 0,
+            trimId: Number(variantId),
+            year: Number(year),
+          });
+
+          if (valuation?.data) {
+            const { good } = valuation.data;
+            const condition = good || Object.values(valuation.data)[0];
+            const conditionKey = good ? 'good' : Object.keys(valuation.data)[0];
+
+            // Update vehicle with valuation data
+            vehicle.last_valuation_date = new Date();
+            vehicle.car_value = valuation.data;
+            vehicle.carCondition = conditionKey;
+            vehicle.minPrice = condition.min;
+            vehicle.maxPrice = condition.max;
+
+            await this.vehiclesRepository.save(vehicle);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('❌ Car valuation cron failed:', error);
+    }
   }
 }

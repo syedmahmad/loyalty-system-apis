@@ -4,6 +4,9 @@ import {
   IsArray,
   IsUUID,
   ArrayMinSize,
+  IsOptional,
+  IsInt,
+  Min,
 } from 'class-validator';
 
 export class CreateTenantDto {
@@ -27,4 +30,13 @@ export class CreateTenantDto {
   @IsUUID('4', { each: true })
   @ArrayMinSize(1)
   currencyIds?: string[];
+
+  @IsOptional()
+  @IsInt()
+  otp_burn_required?: number; // 0 = disabled, 1 = enabled
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  otp_burn_ttl_minutes?: number;
 }

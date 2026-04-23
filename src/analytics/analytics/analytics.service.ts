@@ -2,11 +2,20 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Wallet } from 'src/wallet/entities/wallet.entity';
 import { WalletTransaction } from 'src/wallet/entities/wallet-transaction.entity';
-import { WalletOrder } from 'src/wallet/entities/wallet-order.entity';
-import { Between, IsNull, Not, Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { Coupon } from 'src/coupons/entities/coupon.entity';
 import { UserCoupon } from 'src/wallet/entities/user-coupon.entity';
 import { CouponUsage } from 'src/coupons/entities/coupon-usages.entity';
+import { RestyInvoicesInfo } from 'src/petromin-it/resty/entities/resty_invoices_info.entity';
+import { Rule } from 'src/rules/entities/rules.entity';
+import { Customer } from 'src/customers/entities/customer.entity';
+import { encrypt } from 'src/helpers/encryption';
+import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
+import { QitafTransaction } from 'src/qitaf/entities/qitaf-transaction.entity';
+import { TenantPartnerIntegration } from 'src/tenant-integrations/entities/tenant-partner-integration.entity';
+
+// STC Qitaf partner ID in the tenant_partner_integrations table
+const QITAF_PARTNER_ID = 1;
 
 @Injectable()
 export class LoyaltyAnalyticsService {
@@ -17,9 +26,6 @@ export class LoyaltyAnalyticsService {
     @InjectRepository(WalletTransaction)
     private readonly walletTransactionRepository: Repository<WalletTransaction>,
 
-    @InjectRepository(WalletOrder)
-    private readonly walletOrderRepository: Repository<WalletOrder>,
-
     @InjectRepository(Coupon)
     private readonly couponRepository: Repository<Coupon>,
 
@@ -28,6 +34,24 @@ export class LoyaltyAnalyticsService {
 
     @InjectRepository(CouponUsage)
     private couponUsageRepo: Repository<CouponUsage>,
+
+    @InjectRepository(RestyInvoicesInfo)
+    private readonly restyInvoicesRepository: Repository<RestyInvoicesInfo>,
+
+    @InjectRepository(Rule)
+    private readonly rulesRepository: Repository<Rule>,
+
+    @InjectRepository(Customer)
+    private readonly customerRepository: Repository<Customer>,
+
+    @InjectRepository(BusinessUnit)
+    private readonly businessUnitRepository: Repository<BusinessUnit>,
+
+    @InjectRepository(QitafTransaction)
+    private readonly qitafTransactionRepository: Repository<QitafTransaction>,
+
+    @InjectRepository(TenantPartnerIntegration)
+    private readonly tenantPartnerIntegrationRepository: Repository<TenantPartnerIntegration>,
   ) {}
 
   async pointsSplit(permission: any, startDate?: string, endDate?: string) {
@@ -38,7 +62,11 @@ export class LoyaltyAnalyticsService {
     }
     // Fetch each analytic serially to prevent Out Of Memory (OOM) errors.
     // Note: This mitigates memory spikes, but may increase response time since metrics are not loaded in parallel.
-    const pointSplits = await this.getPointsSplit(startDate, endDate);
+    const pointSplits = await this.getPointsSplit(
+      permission.tenantId,
+      startDate,
+      endDate,
+    );
     return {
       pointSplits,
     };
@@ -50,7 +78,9 @@ export class LoyaltyAnalyticsService {
         "You don't have permission to access analytics",
       );
     }
-    const customerByPoints = await this.getCustomerPointDistribution();
+    const customerByPoints = await this.getCustomerPointDistribution(
+      permission.tenantId,
+    );
     return {
       customerByPoints,
     };
@@ -62,7 +92,11 @@ export class LoyaltyAnalyticsService {
         "You don't have permission to access analytics",
       );
     }
-    const summary = await this.getPointSummary(startDate, endDate);
+    const summary = await this.getPointSummary(
+      permission.tenantId,
+      startDate,
+      endDate,
+    );
     return {
       summary,
     };
@@ -74,7 +108,11 @@ export class LoyaltyAnalyticsService {
         "You don't have permission to access analytics",
       );
     }
-    const itemUsage = await this.getItemUsage(startDate, endDate);
+    const itemUsage = await this.getItemUsage(
+      permission.tenantId,
+      startDate,
+      endDate,
+    );
     return {
       itemUsage,
     };
@@ -86,19 +124,28 @@ export class LoyaltyAnalyticsService {
         "You don't have permission to access analytics",
       );
     }
-    const barChart = await this.getBarChartData(startDate, endDate);
+    const barChart = await this.getBarChartData(
+      permission.tenantId,
+      startDate,
+      endDate,
+    );
     return {
       barChart,
     };
   }
 
-  private async getPointsSplit(startDate?: string, endDate?: string) {
+  private async getPointsSplit(
+    tenantId: number,
+    startDate?: string,
+    endDate?: string,
+  ) {
     const qb = this.walletTransactionRepository
       .createQueryBuilder('tx')
       .select('tx.source_type', 'sourceType')
       .addSelect('SUM(tx.point_balance)', 'totalPoints')
       .where('tx.type IN (:...types)', { types: ['earn', 'adjustment'] })
-      .andWhere('tx.status = :status', { status: 'active' });
+      .andWhere('tx.status = :status', { status: 'active' })
+      .andWhere('tx.tenant = :tenantId', { tenantId });
 
     if (startDate && endDate) {
       qb.andWhere('tx.created_at BETWEEN :start AND :end', {
@@ -110,24 +157,39 @@ export class LoyaltyAnalyticsService {
     return qb.groupBy('tx.source_type').getRawMany();
   }
 
-  private async getCustomerPointDistribution() {
+  private async getCustomerPointDistribution(tenantId: number) {
     const { total } = await this.walletRepository
       .createQueryBuilder('wallet')
       .select('COUNT(*)', 'total')
+      .where('wallet.tenant = :tenantId', { tenantId })
       .getRawOne();
 
-    const ranges = await this.walletRepository.query(`
-      SELECT 
+    const ranges = await this.walletRepository
+      .createQueryBuilder('wallet')
+      .select(
+        `
         CASE
-          WHEN total_balance BETWEEN 0 AND 1000 THEN '0-1,000'
-          WHEN total_balance BETWEEN 1001 AND 2000 THEN '1,001-2,000'
-          WHEN total_balance BETWEEN 2001 AND 5000 THEN '2,001-5,000'
+          WHEN wallet.total_balance BETWEEN 0 AND 1000 THEN '0-1,000'
+          WHEN wallet.total_balance BETWEEN 1001 AND 2000 THEN '1,001-2,000'
+          WHEN wallet.total_balance BETWEEN 2001 AND 5000 THEN '2,001-5,000'
           ELSE '5,001+'
-        END AS \`range\`,
-        COUNT(*) AS count
-      FROM wallet
-      GROUP BY \`range\`
-    `);
+        END
+      `,
+        'range',
+      )
+      .addSelect('COUNT(*)', 'count')
+      .where('wallet.tenant = :tenantId', { tenantId })
+      .groupBy(
+        `
+        CASE
+          WHEN wallet.total_balance BETWEEN 0 AND 1000 THEN '0-1,000'
+          WHEN wallet.total_balance BETWEEN 1001 AND 2000 THEN '1,001-2,000'
+          WHEN wallet.total_balance BETWEEN 2001 AND 5000 THEN '2,001-5,000'
+          ELSE '5,001+'
+        END
+      `,
+      )
+      .getRawMany();
 
     return ranges.map((r: any) => ({
       ...r,
@@ -135,74 +197,116 @@ export class LoyaltyAnalyticsService {
     }));
   }
 
-  private async getPointSummary(startDate?: string, endDate?: string) {
-    // Get aggregated data directly from wallet table
-    const qb = this.walletRepository
-      .createQueryBuilder('wallet')
-      .select('SUM(wallet.total_earned_points)', 'totalEarned')
-      .addSelect('SUM(wallet.total_burned_points)', 'totalBurnt')
-      .addSelect('SUM(wallet.available_balance)', 'totalRemaining');
+  private async getPointSummary(
+    tenantId: number,
+    startDate?: string,
+    endDate?: string,
+  ) {
+    const earnQb = this.walletTransactionRepository
+      .createQueryBuilder('tx')
+      .select('SUM(tx.point_balance)', 'totalEarned')
+      .where('tx.type = :type', { type: 'earn' })
+      .andWhere('tx.status = :status', { status: 'active' })
+      .andWhere('tx.tenant = :tenantId', { tenantId });
 
-    // Filter wallets created between startDate and endDate
+    const activeBurnQb = this.walletTransactionRepository
+      .createQueryBuilder('tx')
+      .select('SUM(tx.point_balance)', 'totalBurnt')
+      .where('tx.type = :type', { type: 'burn' })
+      .andWhere('tx.status = :status', { status: 'active' })
+      .andWhere('tx.tenant = :tenantId', { tenantId });
+
+    const notConfirmedBurnQb = this.walletTransactionRepository
+      .createQueryBuilder('tx')
+      .select('SUM(tx.point_balance)', 'totalNotConfirmedBurnt')
+      .where('tx.type = :type', { type: 'burn' })
+      .andWhere('tx.status = :status', { status: 'not_confirmed' })
+      .andWhere('tx.tenant = :tenantId', { tenantId });
+
     if (startDate && endDate) {
-      qb.where('wallet.created_at BETWEEN :start AND :end', {
+      earnQb.andWhere('tx.created_at BETWEEN :start AND :end', {
+        start: startDate,
+        end: endDate,
+      });
+      activeBurnQb.andWhere('tx.created_at BETWEEN :start AND :end', {
+        start: startDate,
+        end: endDate,
+      });
+      notConfirmedBurnQb.andWhere('tx.created_at BETWEEN :start AND :end', {
         start: startDate,
         end: endDate,
       });
     }
 
-    const summary = await qb.getRawOne();
+    const [
+      earnedResult,
+      remainingResult,
+      activeBurnResult,
+      notConfirmedBurnResult,
+    ] = await Promise.all([
+      earnQb.getRawOne(),
+      this.walletRepository
+        .createQueryBuilder('wallet')
+        .select('SUM(wallet.available_balance)', 'totalRemaining')
+        .where('wallet.tenant = :tenantId', { tenantId })
+        .getRawOne(),
+      activeBurnQb.getRawOne(),
+      notConfirmedBurnQb.getRawOne(),
+    ]);
 
-    const totalEarned = parseFloat(summary?.totalEarned || 0);
-    const totalBurnt = parseFloat(summary?.totalBurnt || 0);
-    const totalRemaining = parseFloat(summary?.totalRemaining || 0);
+    const totalEarned = parseFloat(earnedResult?.totalEarned || 0);
+    const totalRemaining = parseFloat(remainingResult?.totalRemaining || 0);
+    const totalBurnt = parseFloat(activeBurnResult?.totalBurnt || 0);
+    const totalNotConfirmedBurnt = Math.abs(
+      parseFloat(notConfirmedBurnResult?.totalNotConfirmedBurnt || 0),
+    );
 
     return {
       totalEarnedPoints: totalEarned,
       totalBurntPoints: totalBurnt,
+      totalNotConfirmedBurntPoints: totalNotConfirmedBurnt,
       totalLoyaltyPoints: totalEarned - totalBurnt,
       totalRemainingPoints: totalRemaining,
     };
   }
 
-  private async getItemUsage(startDate?: string, endDate?: string) {
-    const where: any = {
-      items: Not(IsNull()),
-    };
+  private async getItemUsage(
+    tenantId: number,
+    startDate?: string,
+    endDate?: string,
+  ) {
+    const qb = this.walletTransactionRepository
+      .createQueryBuilder('tx')
+      .select('tx.source_type', 'sourceType')
+      .addSelect('COUNT(*)', 'transactionCount')
+      .addSelect('SUM(tx.point_balance)', 'totalPoints')
+      .addSelect('SUM(tx.amount)', 'totalAmount')
+      .where('tx.type IN (:...types)', { types: ['earn', 'adjustment'] })
+      .andWhere('tx.status = :status', { status: 'active' })
+      .andWhere('tx.tenant = :tenantId', { tenantId });
 
     if (startDate && endDate) {
-      where.order_date = Between(new Date(startDate), new Date(endDate));
+      qb.andWhere('tx.created_at BETWEEN :start AND :end', {
+        start: startDate,
+        end: endDate,
+      });
     }
 
-    const orders = await this.walletOrderRepository.find({ where });
+    const rows = await qb.groupBy('tx.source_type').getRawMany();
 
-    const itemMap = new Map<string, number>();
-    for (const order of orders) {
-      const items = Array.isArray(order.items)
-        ? order.items
-        : JSON.parse(order.items || '[]');
-      const seen = new Set();
-
-      for (const item of items) {
-        if (item?.name && !seen.has(item.name)) {
-          seen.add(item.name);
-          itemMap.set(item.name, (itemMap.get(item.name) || 0) + 1);
-        }
-      }
-    }
-
-    const totalOrders = orders.length;
-
-    return Array.from(itemMap.entries()).map(([itemName, count]) => ({
-      itemName,
-      invoiceCount: count,
-      percentage: totalOrders
-        ? `${((count / totalOrders) * 100).toFixed(2)}%`
-        : '0.00%',
+    return rows.map((r) => ({
+      sourceType: r.sourceType,
+      transactionCount: Number(r.transactionCount),
+      totalPoints: Number(r.totalPoints || 0),
+      totalAmount: r.totalAmount != null ? Number(r.totalAmount) : null,
     }));
   }
 
-  private async getBarChartData(startDate?: string, endDate?: string) {
+  private async getBarChartData(
+    tenantId: number,
+    startDate?: string,
+    endDate?: string,
+  ) {
     /*
     const whereClause: any = {};
     if (startDate && endDate) {
@@ -264,7 +368,8 @@ export class LoyaltyAnalyticsService {
   `,
         'burnt',
       )
-      .where('tx.status = :status', { status: 'active' });
+      .where('tx.status = :status', { status: 'active' })
+      .andWhere('tx.tenant = :tenantId', { tenantId });
 
     if (startDate && endDate) {
       query.andWhere('tx.created_at BETWEEN :start AND :end', {
@@ -282,6 +387,155 @@ export class LoyaltyAnalyticsService {
       earned: Number(row.earned || 0),
       burnt: Number(row.burnt || 0),
     }));
+  }
+
+  async getNonClaimedPoints(
+    permission: any,
+    startDate?: string,
+    endDate?: string,
+  ) {
+    if (!permission.canViewAnalytics) {
+      throw new BadRequestException(
+        "You don't have permission to access analytics",
+      );
+    }
+    return this.getUnclaimedPointsSummary(
+      permission.tenantId,
+      startDate,
+      endDate,
+    );
+  }
+
+  /**
+   * Aggregates unclaimed points summary for invoice data (one row per unique phone).
+   * Returns the number of unclaimed invoices, total unclaimed amount, estimated points,
+   * and points-per-SAR (Saudi Riyal) rate for active customers only.
+   *
+   * NOTE: this will pick invoices only for active customers, all other invoices amount, not calculate here.
+   */
+  private async getUnclaimedPointsSummary(
+    tenantId: number,
+    startDate?: string,
+    endDate?: string,
+  ) {
+    // 1. Get earning rule (same as in getPendingPointsForCustomer in resty.service)
+    const businessUnitId = Number(process.env.NCMC_PETROMIN_BU);
+
+    // This data only applies to the NCMC tenant. Return zeros for any other tenant.
+    const ncmcBu = await this.businessUnitRepository.findOne({
+      where: { id: businessUnitId },
+      select: ['tenant_id'],
+    });
+    if (!ncmcBu || ncmcBu.tenant_id !== tenantId) {
+      return {
+        unclaimedCount: 0,
+        totalAmount: 0,
+        estimatedPoints: 0,
+        pointsPerSar: 0,
+      };
+    }
+    const earnRule = await this.rulesRepository.findOne({
+      where: {
+        business_unit: { id: businessUnitId },
+        rule_type: 'spend and earn',
+        reward_condition: 'perAmount',
+      },
+    });
+
+    // Earning rule: minimum amount to spend for a reward, and reward points per 'step'
+    const minAmountSpent = Number(earnRule?.min_amount_spent) || 1;
+    const rewardPoints = earnRule?.reward_points || 0;
+    // Compute conversion rate for points earned per SAR spent
+    const pointsPerSar = rewardPoints / minAmountSpent;
+
+    // 2. Aggregate RESTY invoices by phone (where points should be assigned, not claimed, and not already processed)
+    //    Only include invoices tied to a non-null phone value.
+    const qb = this.restyInvoicesRepository
+      .createQueryBuilder('inv')
+      .select('inv.phone', 'phone')
+      .addSelect('COUNT(inv.id)', 'invoiceCount')
+      .addSelect('COALESCE(SUM(inv.invoice_amount), 0)', 'totalAmount')
+      .where('inv.is_claimed = :claimed', { claimed: false })
+      .andWhere('inv.should_assign_points_after_migration = :sap', {
+        sap: true,
+      })
+      .andWhere('inv.already_processed_invoice = :ap', { ap: false })
+      .andWhere('inv.phone IS NOT NULL');
+
+    // 3. Optionally filter by creation date, if both range values are provided
+    if (startDate && endDate) {
+      qb.andWhere('inv.created_at BETWEEN :start AND :end', {
+        start: startDate,
+        end: endDate,
+      });
+    }
+
+    // 4. Get the result as an array of {phone, invoiceCount, totalAmount}
+    const phoneRows: {
+      phone: string;
+      invoiceCount: string;
+      totalAmount: string;
+    }[] = await qb.groupBy('inv.phone').getRawMany();
+
+    // Return zeroes if there are no matching invoice rows
+    if (!phoneRows.length) {
+      return {
+        unclaimedCount: 0,
+        totalAmount: 0,
+        estimatedPoints: 0,
+        pointsPerSar,
+      };
+    }
+
+    // 5. Encrypt each unique phone (to match with hashed_number field of customers)
+    const phoneToHash = new Map<string, string>();
+    for (const row of phoneRows) {
+      try {
+        phoneToHash.set(row.phone, encrypt(row.phone));
+      } catch {
+        // skip phones that fail encryption (invalid, etc)
+      }
+    }
+
+    // 6. Only proceed if there are phones that could be encrypted
+    const hashedPhones = [...phoneToHash.values()];
+    if (!hashedPhones.length) {
+      return {
+        unclaimedCount: 0,
+        totalAmount: 0,
+        estimatedPoints: 0,
+        pointsPerSar,
+      };
+    }
+
+    // 7. Find active customer records (status 1) whose hashed_number matches encrypted phone
+    const activeCustomers = await this.customerRepository.find({
+      where: { hashed_number: In(hashedPhones), status: 1 },
+      select: ['hashed_number'],
+    });
+
+    // Store the set of hashes for active customers for fast lookup
+    const activeHashSet = new Set(activeCustomers.map((c) => c.hashed_number));
+
+    // 8. For each phone in aggregation, if phone's encrypted hash is an active customer:
+    //    - include their invoice count and total amount in stats
+    let unclaimedCount = 0;
+    let totalAmount = 0;
+    for (const row of phoneRows) {
+      const hash = phoneToHash.get(row.phone);
+      if (hash && activeHashSet.has(hash)) {
+        unclaimedCount += Number(row.invoiceCount);
+        totalAmount += Number(row.totalAmount || 0);
+      }
+    }
+
+    // 9. Package summary result
+    return {
+      unclaimedCount,
+      totalAmount: parseFloat(totalAmount.toFixed(2)), // round to two decimals
+      estimatedPoints: Math.round(totalAmount * pointsPerSar), // estimate points earned
+      pointsPerSar,
+    };
   }
 
   async getCouponAnalytics(
@@ -414,6 +668,198 @@ export class LoyaltyAnalyticsService {
       date: `${item.date}`,
       count: parseInt(item.count, 10),
     }));
+  }
+
+  // ─── STC QITAF ANALYTICS ────────────────────────────────────────────────────
+
+  async checkQitafEnabled(permission: any) {
+    if (!permission.canViewAnalytics) {
+      throw new BadRequestException(
+        "You don't have permission to access analytics",
+      );
+    }
+    const integration = await this.tenantPartnerIntegrationRepository.findOne({
+      where: {
+        tenant_id: permission.tenantId,
+        partner_id: QITAF_PARTNER_ID,
+        is_enabled: 1,
+      },
+    });
+    return { isEnabled: !!integration };
+  }
+
+  async getQitafRedemptionSummary(
+    permission: any,
+    startDate?: string,
+    endDate?: string,
+  ) {
+    if (!permission.canViewAnalytics) {
+      throw new BadRequestException(
+        "You don't have permission to access analytics",
+      );
+    }
+
+    const redeemQb = this.qitafTransactionRepository
+      .createQueryBuilder('qt')
+      .select('COUNT(*)', 'totalRedemptions')
+      .addSelect('COALESCE(SUM(qt.amount), 0)', 'totalAmount')
+      .where('qt.tenant_id = :tenantId', { tenantId: permission.tenantId })
+      .andWhere('qt.transaction_type = :type', { type: 'redeem' })
+      .andWhere('qt.status = :status', { status: 'success' })
+      .andWhere(
+        `qt.global_id NOT IN (
+          SELECT rev.ref_request_id
+          FROM qitaf_transactions rev
+          WHERE rev.transaction_type = 'reverse'
+            AND rev.status = 'success'
+            AND rev.tenant_id = :tenantId
+        )`,
+        { tenantId: permission.tenantId },
+      );
+
+    const earnQb = this.qitafTransactionRepository
+      .createQueryBuilder('qt')
+      .select('COUNT(*)', 'totalEarns')
+      .addSelect('COALESCE(SUM(qt.amount), 0)', 'totalAmount')
+      .where('qt.tenant_id = :tenantId', { tenantId: permission.tenantId })
+      .andWhere('qt.transaction_type = :type', { type: 'earn' })
+      .andWhere('qt.status = :status', { status: 'success' });
+
+    if (startDate && endDate) {
+      redeemQb.andWhere('qt.created_at BETWEEN :start AND :end', {
+        start: startDate,
+        end: endDate,
+      });
+      earnQb.andWhere('qt.created_at BETWEEN :start AND :end', {
+        start: startDate,
+        end: endDate,
+      });
+    }
+
+    const [redeemRow, earnRow] = await Promise.all([
+      redeemQb.getRawOne(),
+      earnQb.getRawOne(),
+    ]);
+
+    const totalRedemptions = Number(redeemRow?.totalRedemptions || 0);
+    const totalAmount = parseFloat(redeemRow?.totalAmount || 0);
+    const avgAmount =
+      totalRedemptions > 0
+        ? parseFloat((totalAmount / totalRedemptions).toFixed(2))
+        : 0;
+
+    const totalEarns = Number(earnRow?.totalEarns || 0);
+    const earnTotalAmount = parseFloat(earnRow?.totalAmount || 0);
+    const earnAvgAmount =
+      totalEarns > 0
+        ? parseFloat((earnTotalAmount / totalEarns).toFixed(2))
+        : 0;
+
+    return {
+      totalRedemptions,
+      totalAmount,
+      avgAmount,
+      earn: {
+        totalEarns,
+        totalAmount: earnTotalAmount,
+        avgAmount: earnAvgAmount,
+      },
+    };
+  }
+
+  async getQitafRedemptionBarChart(
+    permission: any,
+    startDate?: string,
+    endDate?: string,
+  ) {
+    if (!permission.canViewAnalytics) {
+      throw new BadRequestException(
+        "You don't have permission to access analytics",
+      );
+    }
+
+    const redeemQb = this.qitafTransactionRepository
+      .createQueryBuilder('qt')
+      .select('DATE(qt.created_at)', 'date')
+      .addSelect('COUNT(*)', 'count')
+      .addSelect('COALESCE(SUM(qt.amount), 0)', 'amount')
+      .where('qt.tenant_id = :tenantId', { tenantId: permission.tenantId })
+      .andWhere('qt.transaction_type = :type', { type: 'redeem' })
+      .andWhere('qt.status = :status', { status: 'success' })
+      .andWhere(
+        `qt.global_id NOT IN (
+          SELECT rev.ref_request_id
+          FROM qitaf_transactions rev
+          WHERE rev.transaction_type = 'reverse'
+            AND rev.status = 'success'
+            AND rev.tenant_id = :tenantId
+        )`,
+        { tenantId: permission.tenantId },
+      );
+
+    const earnQb = this.qitafTransactionRepository
+      .createQueryBuilder('qt')
+      .select('DATE(qt.created_at)', 'date')
+      .addSelect('COUNT(*)', 'count')
+      .addSelect('COALESCE(SUM(qt.amount), 0)', 'amount')
+      .where('qt.tenant_id = :tenantId', { tenantId: permission.tenantId })
+      .andWhere('qt.transaction_type = :type', { type: 'earn' })
+      .andWhere('qt.status = :status', { status: 'success' });
+
+    if (startDate && endDate) {
+      redeemQb.andWhere('qt.created_at BETWEEN :start AND :end', {
+        start: startDate,
+        end: endDate,
+      });
+      earnQb.andWhere('qt.created_at BETWEEN :start AND :end', {
+        start: startDate,
+        end: endDate,
+      });
+    }
+
+    redeemQb.groupBy('DATE(qt.created_at)').orderBy('DATE(qt.created_at)', 'ASC');
+    earnQb.groupBy('DATE(qt.created_at)').orderBy('DATE(qt.created_at)', 'ASC');
+
+    const [redeemRaw, earnRaw] = await Promise.all([
+      redeemQb.getRawMany(),
+      earnQb.getRawMany(),
+    ]);
+
+    // Index earn rows by date for O(1) merge
+    const earnByDate = new Map(
+      earnRaw.map((row) => [
+        row.date ? new Date(row.date).toISOString().split('T')[0] : null,
+        row,
+      ]),
+    );
+
+    // Collect all unique dates across both sets
+    const allDates = new Set([
+      ...redeemRaw.map((r) =>
+        r.date ? new Date(r.date).toISOString().split('T')[0] : null,
+      ),
+      ...earnRaw.map((r) =>
+        r.date ? new Date(r.date).toISOString().split('T')[0] : null,
+      ),
+    ]);
+
+    return Array.from(allDates)
+      .filter(Boolean)
+      .sort()
+      .map((date) => {
+        const r = redeemRaw.find(
+          (row) =>
+            (row.date ? new Date(row.date).toISOString().split('T')[0] : null) === date,
+        );
+        const e = earnByDate.get(date);
+        return {
+          date,
+          count: Number(r?.count || 0),
+          amount: parseFloat(r?.amount || 0),
+          earnCount: Number(e?.count || 0),
+          earnAmount: parseFloat(e?.amount || 0),
+        };
+      });
   }
 
   async getCouponBarData(startDate, endDate) {

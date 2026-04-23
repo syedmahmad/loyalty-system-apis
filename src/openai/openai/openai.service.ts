@@ -177,4 +177,42 @@ export class OpenAIService {
       return { error: 'Translation failed', raw: error };
     }
   }
+
+  async summarize(text: string, charLimit: number): Promise<string> {
+    const response = await this.openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'system',
+          content: `Summarize the text in maximum ${charLimit} characters.`,
+        },
+        {
+          role: 'user',
+          content: text,
+        },
+      ],
+      temperature: 0.3,
+    });
+
+    return response.choices[0].message.content.trim();
+  }
+
+  async formatToBullets(text: string, charLimit: number): Promise<string> {
+    const response = await this.openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'system',
+          content: `Format the text into clear bullet points. Maximum ${charLimit} characters.`,
+        },
+        {
+          role: 'user',
+          content: text,
+        },
+      ],
+      temperature: 0.2,
+    });
+
+    return response.choices[0].message.content.trim();
+  }
 }

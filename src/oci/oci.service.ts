@@ -62,7 +62,7 @@ export class OciService {
       const encryptResponse = await this.kmsClient.encrypt(encryptRequest);
       return encryptResponse.encryptedData.ciphertext; // Return the encrypted response
     } catch (error) {
-      console.error('Encryption failed with error:', error);
+      // console.error('Encryption failed with error:', error);
       throw new HttpException(
         'Encryption failed',
         HttpStatus.INTERNAL_SERVER_ERROR,
@@ -105,8 +105,12 @@ export class OciService {
 
       return decryptedData;
     } catch (error) {
-      console.error('Decryption failed with error:', error);
-      throw new Error('Decryption failed');
+      // console.error('Decryption failed with error:', error);
+      // throw new Error('Decryption failed');
+      throw new HttpException(
+        'Decryption failed',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
     }
   }
 

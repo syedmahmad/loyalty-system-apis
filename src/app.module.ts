@@ -32,6 +32,7 @@ import { SchedulerModule } from './schedule/schedule.module';
 import { OpenaiModule } from './openai/openai.module';
 import { AuthModule } from 'src/petromin-it/auth/auth.module';
 import { AxiosLoggerInterceptor } from 'src/interceptos/axios-request-log.interceptor';
+import { NewrelicLoggerService } from './common/services/newrelic-logger.service';
 import { HttpModule } from '@nestjs/axios';
 import { CustomerProfileModule } from './petromin-it/profile/profile.module';
 import { ReferralModule } from './petromin-it/referral/referral.module';
@@ -47,6 +48,10 @@ import { RestyInvoicesInfoModule } from 'src/petromin-it/resty/resty.module';
 import { GvrTransactionModule } from './gvr/gvr.module';
 import { OffersModule } from './offers/offers.module';
 import { MasterModule } from './master/master.module';
+import { PartnersModule } from './partners/partners.module';
+import { TenantIntegrationsModule } from './tenant-integrations/tenant-integrations.module';
+import { TenantPartnerTerminalsModule } from './tenant-partner-terminals/tenant-partner-terminals.module';
+import { QitafModule } from './qitaf/qitaf.module';
 
 @Module({
   imports: [
@@ -54,7 +59,10 @@ import { MasterModule } from './master/master.module';
     TypeOrmModule.forRootAsync({
       inject: [],
       useFactory: async () => {
-        const host = await decrypt(process.env.DB_HOST || '');
+        const masterHost = await decrypt(process.env.DB_HOST || '');
+        const slaveHostEnc =
+          process.env.DB_SLAVE_HOST || process.env.DB_HOST || '';
+        const slaveHost = await decrypt(slaveHostEnc);
         const port = parseInt(await decrypt(process.env.DB_PORT || ''), 10);
         const username = await decrypt(process.env.DB_USERNAME || '');
         const password = await decrypt(process.env.DB_PASSWORD || '');
@@ -62,19 +70,18 @@ import { MasterModule } from './master/master.module';
 
         return {
           type: 'mysql',
-          host,
-          port,
-          username,
-          password,
-          database,
+          replication: {
+            master: { host: masterHost, port, username, password, database },
+            slaves: [{ host: slaveHost, port, username, password, database }],
+          },
           autoLoadEntities: true,
           synchronize: true,
 
           // 🔥 POOL CONFIG
           extra: {
-            connectionLimit: 20, // 👈 pool size
+            connectionLimit: 20,
             waitForConnections: true,
-            queueLimit: 0, // unlimited queue
+            queueLimit: 0,
           },
 
           // subscribers: [GlobalAuditSubscriber, TransactionSyncLogsSubscriber],
@@ -120,9 +127,13 @@ import { MasterModule } from './master/master.module';
     NotificationModule,
     OffersModule,
     MasterModule,
+    PartnersModule,
+    TenantIntegrationsModule,
+    TenantPartnerTerminalsModule,
+    QitafModule,
   ],
   controllers: [AppController],
-  providers: [AppService, AxiosLoggerInterceptor],
+  providers: [AppService, AxiosLoggerInterceptor, NewrelicLoggerService],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {

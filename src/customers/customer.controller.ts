@@ -26,6 +26,7 @@ import { BurnWithEvent } from 'src/customers/dto/burn-with-event.dto';
 import { GvrEarnBurnWithEventsDto } from 'src/customers/dto/gvr_earn_burn_with_event.dto';
 import { CustomerDto } from './dto/customer.dto';
 import { CustomerEarnHistoryDto } from './dto/customer-earn-history.dto';
+import { RewardHistoryDto } from './dto/reward-history.dto';
 import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { CustomerAccessGuard } from './customers-access.guard';
 import { CUSTOMERSAccess } from './customers-access.decorator';
@@ -192,6 +193,14 @@ export class CustomerController {
       page,
       pageSize,
       language_code,
+    );
+  }
+
+  @Post('/reward-history')
+  async rewardHistory(@Body() body: RewardHistoryDto) {
+    return this.customerService.rewardHistory(
+      body.mobile_number,
+      body.lang_code,
     );
   }
 

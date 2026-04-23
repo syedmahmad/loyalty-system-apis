@@ -12,6 +12,7 @@ import { Wallet } from './wallet.entity';
 import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
 import { WalletOrder } from './wallet-order.entity';
 import { Customer } from 'src/customers/entities/customer.entity';
+import { Tenant } from 'src/tenants/entities/tenant.entity';
 // import { v4 as uuidv4 } from 'uuid';
 
 export enum WalletTransactionType {
@@ -35,7 +36,34 @@ export enum WalletTransactionStatus {
 @Index('idx_wallet_transactions_wallet', ['wallet'])
 @Index('idx_wallet_transactions_orders', ['orders'])
 @Index('idx_wallet_transactions_status', ['status'])
+@Index('idx_wallet_transactions_created_at', ['created_at'])
+@Index('idx_wallet_transactions_type', ['type'])
+@Index('idx_wallet_transactions_expiry_date', ['expiry_date'])
+@Index('idx_wallet_transactions_expires_at', ['expires_at'])
 @Index('idx_wallet_transactions_customer', ['customer'])
+@Index('idx_wallet_transactions_tenant', ['tenant'])
+@Index('idx_wallet_transactions_invoice_no', ['invoice_no'])
+@Index('idx_wallet_transactions_invoice_id', ['invoice_id'])
+@Index('idx_wallet_transactions_type_wallet_type_created_at', [
+  'wallet',
+  'type',
+  'created_at',
+])
+@Index('idx_wallet_transactions_type_status_expiry_date', [
+  'type',
+  'status',
+  'expiry_date',
+])
+@Index('idx_wallet_transactions_type_status_expires_at', [
+  'type',
+  'status',
+  'expires_at',
+])
+@Index('idx_wallet_transactions_type_status_created_at', [
+  'type',
+  'status',
+  'created_at',
+])
 export class WalletTransaction {
   @PrimaryGeneratedColumn()
   id: number;
@@ -47,7 +75,7 @@ export class WalletTransaction {
   @JoinColumn({ name: 'wallet_order_id' })
   orders?: WalletOrder;
 
-  @ManyToOne(() => Wallet)
+  @ManyToOne(() => Wallet, { nullable: true })
   @JoinColumn({ name: 'wallet_id' })
   wallet: Wallet;
 
@@ -151,4 +179,8 @@ export class WalletTransaction {
   @ManyToOne(() => Customer, { nullable: true })
   @JoinColumn({ name: 'customer_id' })
   customer: Customer;
+
+  @ManyToOne(() => Tenant, { nullable: true })
+  @JoinColumn({ name: 'tenant_id' })
+  tenant: Tenant;
 }

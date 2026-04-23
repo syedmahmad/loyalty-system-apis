@@ -2,6 +2,7 @@ import {
   IsNumber,
   IsNotEmpty,
   IsOptional,
+  IsPositive,
   IsString,
   IsUUID,
   IsInt,
@@ -68,4 +69,46 @@ export class ConfirmBurnDto {
   @IsOptional()
   @IsString()
   coupon_code?: string;
+
+  /**
+   * Required when the tenant has otp_burn_required = 1.
+   * The customer receives this OTP via push notification after request-transaction.
+   */
+  @IsOptional()
+  @IsString()
+  otp?: string;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// OTP BURN FLOW
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * POST /burning/otp/generate  (App → Loyalty API)
+ *
+ * Customer taps "Generate Redemption Code" on the app screen.
+ * Saves an unlinked OTP (transaction_uuid = null). When the cashier later
+ * calls request-transaction, the system links this OTP to the transaction
+ * automatically — no new code generated, no push notification fired.
+ */
+export class GenerateOtpDto {
+  @IsNotEmpty()
+  @IsString()
+  customer_id: string;
+}
+
+/**
+ * POST /burning/otp/verify  (MAC → Loyalty API)
+ *
+ * Legacy standalone verify — kept for backwards compatibility.
+ * In the current flow, OTP verification is handled inside confirm-transaction.
+ */
+export class VerifyOtpDto {
+  @IsNotEmpty()
+  @IsString()
+  otp: string;
+
+  @IsNotEmpty()
+  @IsString()
+  customer_phone: string;
 }

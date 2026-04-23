@@ -28,12 +28,17 @@ lerna-debug.log*
 .settings/
 *.sublime-workspace
 
+CLAUDE.md
+certs/
 # IDE - VSCode
 .vscode/*
 !.vscode/settings.json
 !.vscode/tasks.json
 !.vscode/launch.json
 !.vscode/extensions.json
+
+# SSL certificates (never commit private keys)
+/certs/
 
 # dotenv environment variable files
 .env
