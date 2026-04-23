@@ -17,7 +17,7 @@ import { Rule } from 'src/rules/entities/rules.entity';
 import { BusinessUnit } from 'src/business_unit/entities/business_unit.entity';
 import { Tenant } from 'src/tenants/entities/tenant.entity';
 import { BurnOtp } from 'src/petromin-it/burning/entities/burn-otp.entity';
-import { encrypt } from 'src/helpers/encryption';
+import { decrypt, encrypt } from 'src/helpers/encryption';
 import {
   ConfirmTransactionDto,
   GetBurnRuleDto,
@@ -25,6 +25,8 @@ import {
   RequestTransactionDto,
 } from './dto/checkout.dto';
 import { QitafService } from 'src/qitaf/qitaf.service';
+import { DeviceToken } from 'src/petromin-it/notification/entities/device-token.entity';
+import { NotificationService } from 'src/petromin-it/notification/notification/notifications.service';
 
 @Injectable()
 export class CheckoutService {
@@ -50,7 +52,11 @@ export class CheckoutService {
     @InjectRepository(BurnOtp)
     private readonly burnOtpRepo: Repository<BurnOtp>,
 
+    @InjectRepository(DeviceToken)
+    private readonly deviceTokenRepo: Repository<DeviceToken>,
+
     private readonly qitafService: QitafService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -449,13 +455,52 @@ export class CheckoutService {
     const tenant = await this.resolveTenant(tenantId);
     const otpBurnRequired = tenant.otp_burn_required === 1;
     if (otpBurnRequired) {
-      await this.generateAndSaveBurnOtp(
+      const ttlMinutes = tenant.otp_burn_ttl_minutes ?? 5;
+      const otp = await this.generateAndSaveBurnOtp(
         tenantId,
         saved.uuid,
         customer.id,
         bu.id,
-        tenant.otp_burn_ttl_minutes ?? 5,
+        ttlMinutes,
       );
+
+      const deviceTokens = await this.deviceTokenRepo.find({
+        where: { customer: { id: customer.id } },
+        order: { createdAt: 'DESC' },
+      });
+
+      if (deviceTokens.length) {
+        const tokensString = deviceTokens.map((t) => t.token).join(',');
+        try {
+          await this.notificationService.sendToUser(
+            {
+              template_id: process.env.OTP_BURN_TEMPLATE_ID,
+              language_code: 'en',
+              business_name: 'PETROMINit',
+              to: [
+                {
+                  user_device_token: tokensString,
+                  customer_mobile: decrypt(customer.hashed_number),
+                  dynamic_fields: {
+                    otp,
+                    ttlMinutes: ttlMinutes.toString(),
+                  },
+                },
+              ],
+            },
+            {
+              title: 'Redemption OTP',
+              body: `Your redemption OTP is ${otp}. Share it with the cashier. Expires in ${ttlMinutes} minutes.`,
+              customer_id: customer.id,
+            },
+          );
+        } catch (err) {
+          console.error(
+            'Failed to send OTP notification:',
+            err.response?.data || err.message,
+          );
+        }
+      }
     }
 
     return {

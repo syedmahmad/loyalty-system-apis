@@ -16,6 +16,8 @@ import { CheckoutService } from 'src/business_unit/checkout.service';
 import { QitafModule } from 'src/qitaf/qitaf.module';
 import { BurnOtp } from 'src/petromin-it/burning/entities/burn-otp.entity';
 import { OciService } from 'src/oci/oci.service';
+import { NotificationModule } from 'src/petromin-it/notification/notification.module';
+import { DeviceToken } from 'src/petromin-it/notification/entities/device-token.entity';
 
 @Module({
   imports: [
@@ -28,8 +30,10 @@ import { OciService } from 'src/oci/oci.service';
       WalletTransaction,
       Rule,
       BurnOtp,
+      DeviceToken,
     ]),
     QitafModule, // provides QitafService for OTP-based program routing
+    NotificationModule,
   ],
   controllers: [BusinessUnitsController, LoyaltyController],
   providers: [
