@@ -699,7 +699,7 @@ export class LoyaltyAnalyticsService {
       );
     }
 
-    const qb = this.qitafTransactionRepository
+    const redeemQb = this.qitafTransactionRepository
       .createQueryBuilder('qt')
       .select('COUNT(*)', 'totalRedemptions')
       .addSelect('COALESCE(SUM(qt.amount), 0)', 'totalAmount')
@@ -717,22 +717,54 @@ export class LoyaltyAnalyticsService {
         { tenantId: permission.tenantId },
       );
 
+    const earnQb = this.qitafTransactionRepository
+      .createQueryBuilder('qt')
+      .select('COUNT(*)', 'totalEarns')
+      .addSelect('COALESCE(SUM(qt.amount), 0)', 'totalAmount')
+      .where('qt.tenant_id = :tenantId', { tenantId: permission.tenantId })
+      .andWhere('qt.transaction_type = :type', { type: 'earn' })
+      .andWhere('qt.status = :status', { status: 'success' });
+
     if (startDate && endDate) {
-      qb.andWhere('qt.created_at BETWEEN :start AND :end', {
+      redeemQb.andWhere('qt.created_at BETWEEN :start AND :end', {
+        start: startDate,
+        end: endDate,
+      });
+      earnQb.andWhere('qt.created_at BETWEEN :start AND :end', {
         start: startDate,
         end: endDate,
       });
     }
 
-    const row = await qb.getRawOne();
-    const totalRedemptions = Number(row?.totalRedemptions || 0);
-    const totalAmount = parseFloat(row?.totalAmount || 0);
+    const [redeemRow, earnRow] = await Promise.all([
+      redeemQb.getRawOne(),
+      earnQb.getRawOne(),
+    ]);
+
+    const totalRedemptions = Number(redeemRow?.totalRedemptions || 0);
+    const totalAmount = parseFloat(redeemRow?.totalAmount || 0);
     const avgAmount =
       totalRedemptions > 0
         ? parseFloat((totalAmount / totalRedemptions).toFixed(2))
         : 0;
 
-    return { totalRedemptions, totalAmount, avgAmount };
+    const totalEarns = Number(earnRow?.totalEarns || 0);
+    const earnTotalAmount = parseFloat(earnRow?.totalAmount || 0);
+    const earnAvgAmount =
+      totalEarns > 0
+        ? parseFloat((earnTotalAmount / totalEarns).toFixed(2))
+        : 0;
+
+    return {
+      totalRedemptions,
+      totalAmount,
+      avgAmount,
+      earn: {
+        totalEarns,
+        totalAmount: earnTotalAmount,
+        avgAmount: earnAvgAmount,
+      },
+    };
   }
 
   async getQitafRedemptionBarChart(
@@ -746,7 +778,7 @@ export class LoyaltyAnalyticsService {
       );
     }
 
-    const qb = this.qitafTransactionRepository
+    const redeemQb = this.qitafTransactionRepository
       .createQueryBuilder('qt')
       .select('DATE(qt.created_at)', 'date')
       .addSelect('COUNT(*)', 'count')
@@ -765,21 +797,69 @@ export class LoyaltyAnalyticsService {
         { tenantId: permission.tenantId },
       );
 
+    const earnQb = this.qitafTransactionRepository
+      .createQueryBuilder('qt')
+      .select('DATE(qt.created_at)', 'date')
+      .addSelect('COUNT(*)', 'count')
+      .addSelect('COALESCE(SUM(qt.amount), 0)', 'amount')
+      .where('qt.tenant_id = :tenantId', { tenantId: permission.tenantId })
+      .andWhere('qt.transaction_type = :type', { type: 'earn' })
+      .andWhere('qt.status = :status', { status: 'success' });
+
     if (startDate && endDate) {
-      qb.andWhere('qt.created_at BETWEEN :start AND :end', {
+      redeemQb.andWhere('qt.created_at BETWEEN :start AND :end', {
+        start: startDate,
+        end: endDate,
+      });
+      earnQb.andWhere('qt.created_at BETWEEN :start AND :end', {
         start: startDate,
         end: endDate,
       });
     }
 
-    qb.groupBy('DATE(qt.created_at)').orderBy('DATE(qt.created_at)', 'ASC');
+    redeemQb.groupBy('DATE(qt.created_at)').orderBy('DATE(qt.created_at)', 'ASC');
+    earnQb.groupBy('DATE(qt.created_at)').orderBy('DATE(qt.created_at)', 'ASC');
 
-    const raw = await qb.getRawMany();
-    return raw.map((row) => ({
-      date: row.date ? new Date(row.date).toISOString().split('T')[0] : null,
-      count: Number(row.count || 0),
-      amount: parseFloat(row.amount || 0),
-    }));
+    const [redeemRaw, earnRaw] = await Promise.all([
+      redeemQb.getRawMany(),
+      earnQb.getRawMany(),
+    ]);
+
+    // Index earn rows by date for O(1) merge
+    const earnByDate = new Map(
+      earnRaw.map((row) => [
+        row.date ? new Date(row.date).toISOString().split('T')[0] : null,
+        row,
+      ]),
+    );
+
+    // Collect all unique dates across both sets
+    const allDates = new Set([
+      ...redeemRaw.map((r) =>
+        r.date ? new Date(r.date).toISOString().split('T')[0] : null,
+      ),
+      ...earnRaw.map((r) =>
+        r.date ? new Date(r.date).toISOString().split('T')[0] : null,
+      ),
+    ]);
+
+    return Array.from(allDates)
+      .filter(Boolean)
+      .sort()
+      .map((date) => {
+        const r = redeemRaw.find(
+          (row) =>
+            (row.date ? new Date(row.date).toISOString().split('T')[0] : null) === date,
+        );
+        const e = earnByDate.get(date);
+        return {
+          date,
+          count: Number(r?.count || 0),
+          amount: parseFloat(r?.amount || 0),
+          earnCount: Number(e?.count || 0),
+          earnAmount: parseFloat(e?.amount || 0),
+        };
+      });
   }
 
   async getCouponBarData(startDate, endDate) {
