@@ -120,9 +120,10 @@ export class ConfirmTransactionDto {
   @IsNotEmpty()
   transaction_id: string; // UUID returned by request-transaction
 
+  @IsOptional()
   @IsInt()
   @Min(0)
-  points_to_burn: number; // points to deduct from wallet (0 for OTP programs)
+  points_to_burn?: number; // points to deduct from wallet; omit or 0 for OTP programs
 
   // ── otp — shared field for both program types ───────────────────────────
   // points programs with otp_burn_required: 6-digit code from Petromin App
@@ -134,7 +135,7 @@ export class ConfirmTransactionDto {
 
   @IsOptional()
   @IsNumber()
-  @Min(1)
+  @Min(0)
   redeem_amount?: number; // SAR to redeem via Qitaf (defaults to full invoice amount)
 }
 

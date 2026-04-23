@@ -611,6 +611,44 @@ export class CheckoutService {
       wallet.total_burned_points += pointsToBurn;
       await this.walletRepo.save(wallet);
 
+      const deviceTokens = await this.deviceTokenRepo.find({
+        where: { customer: { id: tx.customer.id } },
+        order: { createdAt: 'DESC' },
+      });
+
+      if (deviceTokens.length) {
+        const tokensString = deviceTokens.map((t) => t.token).join(',');
+        try {
+          await this.notificationService.sendToUser(
+            {
+              template_id: process.env.BURNED_POINTS_TEMPLATE_ID,
+              language_code: 'en',
+              business_name: 'PETROMINit',
+              to: [
+                {
+                  user_device_token: tokensString,
+                  customer_mobile: decrypt(tx.customer.hashed_number),
+                  dynamic_fields: {
+                    appliedBurnPoints: pointsToBurn.toString(),
+                    discountAmount: discountAmount.toString(),
+                  },
+                },
+              ],
+            },
+            {
+              title: 'Points Burned',
+              body: `You've Burned ${pointsToBurn} points and got a discount of ${discountAmount} SAR`,
+              customer_id: tx.customer.id,
+            },
+          );
+        } catch (err) {
+          console.error(
+            'Error while sending notification:',
+            err.response?.data || err.message,
+          );
+        }
+      }
+
       return {
         transaction_id: tx.uuid,
         program_type: 'points',
